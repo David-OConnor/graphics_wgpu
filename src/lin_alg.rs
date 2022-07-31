@@ -1,0 +1,737 @@
+//! Module for matrices, vectors, and quaternions, as used in 3d graphics. Similar to the
+//! `cgmath` and `glam` crates, but with a more transparent UI, and no dependencies.
+//! Note that this doesn't handle things like constructing a camera view matrix
+//! using up, forward, side - handle that in application code, or use a rotation matrix.
+
+use std::{
+    fmt,
+    ops::{Add, AddAssign, Mul, Neg},
+};
+
+#[derive(Clone, Copy, Debug)]
+/// A len-3 column vector
+pub struct Vec3 {
+    pub x: f32,
+    pub y: f32,
+    pub z: f32,
+}
+
+impl From<[f32; 3]> for Vec3 {
+    fn from(v: [f32; 3]) -> Self {
+        Self {
+            x: v[0],
+            y: v[1],
+            z: v[2],
+        }
+    }
+}
+
+impl Add<Self> for Vec3 {
+    type Output = Self;
+
+    fn add(self, rhs: Self) -> Self::Output {
+        Self {
+            x: self.x + rhs.x,
+            y: self.y + rhs.y,
+            z: self.z + rhs.z,
+        }
+    }
+}
+
+impl AddAssign<Self> for Vec3 {
+    fn add_assign(&mut self, rhs: Self) {
+        self.x = self.x + rhs.x;
+        self.y = self.y + rhs.y;
+        self.z = self.z + rhs.z;
+    }
+}
+
+impl Mul<f32> for Vec3 {
+    type Output = Self;
+
+    fn mul(self, rhs: f32) -> Self::Output {
+        Self {
+            x: self.x * rhs,
+            y: self.y * rhs,
+            z: self.z * rhs,
+        }
+    }
+}
+
+impl Neg for Vec3 {
+    type Output = Self;
+
+    fn neg(self) -> Self::Output {
+        Self {
+            x: -self.x,
+            y: -self.y,
+            z: -self.z,
+        }
+    }
+}
+
+impl Vec3 {
+    pub fn new(x: f32, y: f32, z: f32) -> Self {
+        Self { x, y, z }
+    }
+
+    pub fn mag(&self) -> f32 {
+        (self.x.powi(2) + self.y.powi(2) + self.z.powi(2)).sqrt()
+    }
+
+    /// Normalize, modifying in place
+    pub fn normalize(&mut self) {
+        let mag_recip = 1. / self.mag();
+
+        self.x *= mag_recip;
+        self.y *= mag_recip;
+        self.z *= mag_recip;
+    }
+
+    /// Returns the normalised version of the vector
+    pub fn to_normalized(&self) -> Self {
+        let mag_recip = 1. / self.mag();
+        // const float magnitudeReciprocal = FusionFastInverseSselfrt(self.w * self.w + self.x * self.x + self.y * self.y + self.z * self.z);
+        Self {
+            x: self.x * mag_recip,
+            y: self.y * mag_recip,
+            z: self.z * mag_recip,
+        }
+    }
+
+    /// Calculate the cross product.
+    pub fn cross(&self, rhs: Self) -> Self {
+        Self {
+            x: self.y * rhs.z - self.z * rhs.y,
+            y: self.z * rhs.x - self.x * rhs.z,
+            z: self.x * rhs.y - self.y * rhs.x,
+        }
+    }
+
+    pub fn dot(&self, rhs: Self) -> f32 {
+        self.x * rhs.x + self.y * rhs.y + self.z * rhs.z
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
+/// A len-4 column vector
+pub struct Vec4 {
+    pub x: f32,
+    pub y: f32,
+    pub z: f32,
+    pub w: f32,
+}
+
+impl Vec4 {
+    pub fn new(x: f32, y: f32, z: f32, u: f32) -> Self {
+        Self { x, y, z, w: u }
+    }
+
+    pub fn normalize(&mut self) {
+        let len = (self.x.powi(2) + self.y.powi(2) + self.z.powi(2) + self.w.powi(2)).sqrt();
+
+        self.x /= len;
+        self.y /= len;
+        self.z /= len;
+        self.w /= len;
+    }
+
+    /// Remove the 3rd element. Used in our inverse calulations.
+    pub fn truncate_n(&self, n: usize) -> Vec3 {
+        match n {
+            0 => Vec3::new(self.y, self.z, self.w),
+            1 => Vec3::new(self.x, self.z, self.w),
+            2 => Vec3::new(self.x, self.y, self.w),
+            3 => Vec3::new(self.x, self.y, self.z),
+            _ => panic!("{:?} is out of range", n),
+        }
+    }
+}
+
+#[derive(Clone, Copy)]
+pub struct Quaternion {
+    pub w: f32,
+    pub x: f32,
+    pub y: f32,
+    pub z: f32,
+}
+
+impl Add<Self> for Quaternion {
+    type Output = Self;
+
+    fn add(self, rhs: Self) -> Self::Output {
+        Self {
+            w: self.w + rhs.w,
+            x: self.x + rhs.x,
+            y: self.y + rhs.y,
+            z: self.z + rhs.z,
+        }
+    }
+}
+
+impl Mul<Self> for Quaternion {
+    type Output = Self;
+
+    fn mul(self, rhs: Self) -> Self::Output {
+        Self {
+            w: self.w * rhs.w - self.x * rhs.x - self.y * rhs.y - self.z * rhs.z,
+            x: self.w * rhs.x + self.x * rhs.w + self.y * rhs.z - self.z * rhs.y,
+            y: self.w * rhs.y - self.x * rhs.z + self.y * rhs.w + self.z * rhs.x,
+            z: self.w * rhs.z + self.x * rhs.y - self.y * rhs.x + self.z * rhs.w,
+        }
+    }
+}
+
+impl Mul<Vec3> for Quaternion {
+    type Output = Self;
+
+    /// Returns the multiplication of a Quaternion with a vector.  This is a
+    /// normal Quaternion multiplication where the vector is treated a
+    /// Quaternion with a W element value of zero.  The Quaternion is post-
+    /// multiplied by the vector.
+    fn mul(self, rhs: Vec3) -> Self::Output {
+        Self {
+            w: -self.x * rhs.x - self.y * rhs.y - self.z * rhs.z,
+            x: self.w * rhs.x + self.y * rhs.z - self.z * rhs.y,
+            y: self.w * rhs.y - self.x * rhs.z + self.z * rhs.x,
+            z: self.w * rhs.z + self.x * rhs.y - self.y * rhs.x,
+        }
+    }
+}
+
+/// Euler angles.
+pub struct EulerAngle {
+    roll: f32,
+    pitch: f32,
+    yaw: f32,
+}
+
+impl EulerAngle {
+    /// Euler angles of zero.
+    pub fn zero() -> Self {
+        Self {
+            roll: 0.,
+            pitch: 0.,
+            yaw: 0.,
+        }
+    }
+}
+
+impl Quaternion {
+    pub fn new_identity() -> Self {
+        Self {
+            w: 1.,
+            x: 0.,
+            y: 0.,
+            z: 0.,
+        }
+    }
+
+    /// Converts a Quaternion to Euler angles, in radians.
+    pub fn to_euler(&self) -> EulerAngle {
+        let qwqw_minus_half = self.w * self.w - 0.5; // calculate common terms to avoid repeated operations
+
+        EulerAngle {
+            roll: (self.y * self.z - self.w * self.x).atan2(qwqw_minus_half + self.z * self.z),
+            pitch: -1.0 * (2.0 * (self.x * self.z + self.w * self.y)).asin(),
+            yaw: (self.x * self.y - self.w * self.z).atan2(qwqw_minus_half + self.x * self.x),
+        }
+    }
+
+    /// Converts a Quaternion to a rotation matrix
+    #[rustfmt::skip]
+    pub fn to_matrix(&self) -> Mat3 {
+        let qwqw = self.w * self.w; // calculate common terms to avoid repeated operations
+        let qwqx = self.w * self.x;
+        let qwqy = self.w * self.y;
+        let qwqz = self.w * self.z;
+        let qxqy = self.x * self.y;
+        let qxqz = self.x * self.z;
+        let qyqz = self.y * self.z;
+
+        Mat3 {
+            data: [
+                2.0 * (qwqw - 0.5 + self.x * self.x),
+                2.0 * (qxqy + qwqz),
+                2.0 * (qxqz - qwqy),
+                2.0 * (qxqy - qwqz),
+                2.0 * (qwqw - 0.5 + self.y * self.y),
+                2.0 * (qyqz + qwqx),
+                2.0 * (qxqz + qwqy),
+                2.0 * (qyqz - qwqx),
+                2.0 * (qwqw - 0.5 + self.z * self.z),
+            ]
+        }
+    }
+
+    /// Returns the Quaternion conjugate.
+    pub fn conjugate(&self) -> Self {
+        Self {
+            w: self.w,
+            x: -1.0 * self.x,
+            y: -1.0 * self.y,
+            z: -1.0 * self.z,
+        }
+    }
+
+    pub fn mag(&self) -> f32 {
+        (self.w.powi(2) + self.x.powi(2) + self.y.powi(2) + self.z.powi(2)).sqrt()
+    }
+
+    /// Returns the normalised quaternion
+    pub fn to_normalized(&self) -> Self {
+        let mag_recip = 1. / self.mag();
+
+        Self {
+            w: self.w * mag_recip,
+            x: self.x * mag_recip,
+            y: self.y * mag_recip,
+            z: self.z * mag_recip,
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+/// A 3x3 matrix. Data and operations are column-major.
+pub struct Mat3 {
+    pub data: [f32; 9],
+}
+
+// todo: temp?
+impl From<[[f32; 3]; 3]> for Mat3 {
+    #[rustfmt::skip]
+    fn from(m: [[f32; 3]; 3]) -> Self {
+        Self {
+            data: [
+                m[0][0], m[0][1], m[0][2],
+                m[1][0], m[1][1], m[1][2],
+                m[2][0], m[2][1], m[2][2],
+            ]
+        }
+    }
+}
+
+// todo: temp?
+impl From<Mat3> for [[f32; 3]; 3] {
+    #[rustfmt::skip]
+    fn from(m: Mat3) -> Self {
+        let d = m.data;
+        [
+            [d[0], d[1], d[2]],
+            [d[3], d[4], d[5]],
+            [d[6], d[7], d[8]]
+        ]
+    }
+}
+
+impl Mat3 {
+    pub fn new(data: [f32; 9]) -> Self {
+        Self { data }
+    }
+
+    /// Create a matrix from column vectors
+    #[rustfmt::skip]
+    pub fn from_cols(x: Vec3, y: Vec3, z: Vec3) -> Self {
+        Self::new([
+            x.x, x.y, x.z,
+            y.x, y.y, y.z,
+            z.x, z.y, z.z
+        ])
+    }
+
+
+    #[rustfmt::skip]
+    /// Calculate the matrix's determinant.
+    pub fn determinant(&self) -> f32 {
+        let d = self.data; // code shortener.
+
+        d[0] * d[4] * d[8] +
+        d[3] * d[7] * d[2] +
+        d[6] * d[1] * d[5] -
+        d[0] * d[7] * d[5] -
+        d[3] * d[1] * d[8] -
+        d[6] * d[4] * d[2]
+    }
+
+    #[rustfmt::skip]
+    pub fn new_identity() -> Self {
+        Self {
+            data: [
+                1., 0., 0.,
+                0., 1., 0.,
+                0., 0., 1.,
+            ]
+        }
+    }
+}
+
+impl Mul<Self> for Mat3 {
+    type Output = Self;
+
+    fn mul(self, rhs: Self) -> Self::Output {
+        let d = self.data; // code shortener.
+        let rd = rhs.data;
+
+        // `acr` means a(column)(row)
+        let a00 = d[0] * rd[0] + d[3] * rd[1] + d[6] * rd[2];
+        let a01 = d[0] * rd[3] + d[3] * rd[4] + d[6] * rd[5];
+        let a02 = d[0] * rd[6] + d[3] * rd[7] + d[6] * rd[8];
+
+        let a10 = d[1] * rd[0] + d[4] * rd[1] + d[7] * rd[2];
+        let a11 = d[1] * rd[3] + d[4] * rd[4] + d[7] * rd[5];
+        let a12 = d[1] * rd[6] + d[4] * rd[7] + d[7] * rd[8];
+
+        let a20 = d[2] * rd[0] + d[5] * rd[1] + d[8] * rd[2];
+        let a21 = d[2] * rd[3] + d[5] * rd[4] + d[8] * rd[5];
+        let a22 = d[2] * rd[6] + d[5] * rd[7] + d[8] * rd[8];
+
+        Self {
+            data: [a00, a01, a02, a10, a11, a12, a20, a21, a22],
+        }
+    }
+}
+
+impl Mul<Vec3> for Mat3 {
+    type Output = Vec3;
+
+    fn mul(self, rhs: Vec3) -> Self::Output {
+        Vec3 {
+            x: rhs.x * self.data[0] + rhs.y * self.data[3] + rhs.z * self.data[6],
+            y: rhs.x * self.data[1] + rhs.y * self.data[4] + rhs.z * self.data[7],
+            z: rhs.x * self.data[2] + rhs.y * self.data[5] + rhs.z * self.data[8],
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+/// A 4x4 matrix. Data and operations are column-major.
+pub struct Mat4 {
+    pub data: [f32; 16],
+}
+
+// todo temp?
+impl From<[[f32; 4]; 4]> for Mat4 {
+    #[rustfmt::skip]
+    fn from(m: [[f32; 4]; 4]) -> Self {
+        Self {
+            data: [
+                m[0][0], m[0][1], m[0][2], m[0][3],
+                m[1][0], m[1][1], m[1][2], m[0][3],
+                m[2][0], m[2][1], m[2][2], m[0][3],
+                m[3][0], m[3][1], m[3][2], m[3][3],
+            ]
+        }
+    }
+}
+
+// todo temp?
+impl From<Mat4> for [[f32; 4]; 4] {
+    #[rustfmt::skip]
+    fn from(m: Mat4) -> Self {
+        let d = m.data;
+        [
+            [d[0], d[1], d[2], d[3]],
+            [d[4], d[5], d[6], d[7]],
+            [d[8], d[9], d[10], d[11]],
+            [d[12], d[13], d[14], d[15]],
+        ]
+    }
+}
+
+// todo: DRY. Call above instead?
+// todo temp?
+impl From<&Mat4> for [[f32; 4]; 4] {
+    #[rustfmt::skip]
+    fn from(m: &Mat4) -> Self {
+        let d = m.data;
+        [
+            [d[0], d[1], d[2], d[3]],
+            [d[4], d[5], d[6], d[7]],
+            [d[8], d[9], d[10], d[11]],
+            [d[12], d[13], d[14], d[15]],
+        ]
+    }
+}
+
+impl Mat4 {
+    pub fn new(data: [f32; 16]) -> Self {
+        Self { data }
+    }
+
+    /// Field of view is in radians. Aspect is width / height.
+    /// https://developer.mozilla.org/en-US/docs/Web/API/WebGL_API/WebGL_model_view_projection
+    /// https://docs.microsoft.com/en-us/windows/win32/direct3d9/d3dxmatrixperspectivefovlh
+    /// There seems to be suble differences depending on the source. Various combinations of the
+    /// non-0/1 items in cols 2 and 3. Multiplies of 2 yes/no, signs, far or far and near etc.
+    #[rustfmt::skip]
+    pub fn new_perspective_rh(fov_y: f32, aspect_ratio: f32, near: f32, far: f32) -> Self {
+        let f = 1. / (fov_y / 2.).tan();
+        let range_inv = 1. / (near - far);
+
+        // todo: Still needs work and QC!!
+        Self {
+            data: [
+                f / aspect_ratio, 0., 0., 0.,
+                0., f, 0., 0.,
+                // 0., 0., (near + far) * range_inv, -1.,
+                0., 0., far * range_inv, -1.,
+                // 0., 0., (2. * far * near) * range_inv, 0.
+                0., 0., (far * near) * range_inv, 0.
+            ]
+        }
+    }
+
+    // "Note that we first do a translation and then a scale transformation when multiplying matrices.
+    // Matrix multiplication is not commutative, which means their order is important. When
+    // multiplying matrices the right-most matrix is first multiplied with the vector so you should
+    // read the multiplications from right to left. It is advised to first do scaling operations,
+    // then rotations and lastly translations when combining matrices otherwise they may (negatively)
+    // affect each other. For example, if you would first do a translation and then scale, the translation
+    // vector would also scale!"
+
+    /// https://learnopengl.com/Getting-started/Transformations
+    #[rustfmt::skip]
+    pub fn new_rotation(val: Vec3) -> Self {
+        let (sin_x, cos_x) = val.x.sin_cos();
+        let (sin_y, cos_y) = val.y.sin_cos();
+        let (sin_z, cos_z) = val.z.sin_cos();
+
+        let rot_x = Self {
+            data: [
+                1., 0., 0., 0.,
+                0., cos_x, sin_x, 0.,
+                0., -sin_x, cos_x, 0.,
+                0., 0., 0., 1.
+            ]
+        };
+
+        let rot_y = Self {
+            data: [
+                cos_y, 0., -sin_y, 0.,
+                0., 1., 0., 0.,
+                sin_y, 0., cos_y, 0.,
+                0., 0., 0., 1.
+            ]
+        };
+
+        let rot_z = Self {
+            data: [
+                cos_z, sin_z, 0., 0.,
+                -sin_z, cos_z, 0., 0.,
+                0., 0., 1., 0.,
+                0., 0., 0., 1.
+            ]
+        };
+
+        // todo: What order to apply these three ?
+        // todo: TO avoid gimbal lock, consider rotating aroudn an arbitrary unit axis immediately.
+
+        rot_x * rot_y * rot_z
+    }
+
+
+    #[rustfmt::skip]
+    pub fn new_scaler(scale: f32) -> Self {
+        Self {
+            data: [
+                scale, 0., 0., 0.,
+                0., scale, 0., 0.,
+                0., 0., scale, 0.,
+                0., 0., 0., 1.,
+            ]
+        }
+    }
+
+    #[rustfmt::skip]
+    /// Create a translation matrix. Note that the matrix is 4x4, but it takes len-3 vectors -
+    /// this is so we can compose it with other 4x4 matrices.
+    pub fn new_translation(val: Vec3) -> Self {
+        Self {
+            data: [
+                1., 0., 0., 0.,
+                0., 1., 0., 0.,
+                0., 0., 1., 0.,
+                val.x, val.y, val.z, 1.
+            ]
+        }
+    }
+
+    #[rustfmt::skip]
+    pub fn new_identity() -> Self {
+        Self {
+            data: [
+                1., 0., 0., 0.,
+                0., 1., 0., 0.,
+                0., 0., 1., 0.,
+                0., 0., 0., 1.,
+            ]
+        }
+    }
+
+    #[rustfmt::skip]
+    /// Calculate the matrix's determinant.
+    pub fn determinant(&self) -> f32 {
+        let d = self.data; // code shortener.
+
+        d[0] * d[5] * d[10] * d[15] +
+        d[4] * d[9] * d[14] * d[3] +
+        d[8] * d[13] * d[2] * d[7] +
+        d[12] * d[1] * d[6] * d[11] -
+        d[0] * d[13] * d[10] * d[7] -
+        d[4] * d[1] * d[14] * d[11] -
+        d[8] * d[5] * d[2] * d[15] -
+        d[12] * d[9] * d[6] * d[3]
+    }
+
+    /// Transpose the matrix
+    #[rustfmt::skip]
+    pub fn transpose(&self) -> Self {
+        let d = self.data; // code shortener.
+        Self {
+            data: [
+                d[0], d[4], d[8], d[12],
+                d[1], d[5], d[9], d[13],
+                d[2], d[6], d[10], d[14],
+                d[3], d[7], d[11], d[15]
+            ]
+        }
+    }
+
+    /// Returns cols: x, y, z, w
+    pub fn to_cols(&self) -> (Vec4, Vec4, Vec4, Vec4) {
+        let d = self.data; // code shortener.
+        (
+            Vec4::new(d[0], d[1], d[2], d[3]),
+            Vec4::new(d[4], d[5], d[6], d[7]),
+            Vec4::new(d[8], d[9], d[10], d[11]),
+            Vec4::new(d[12], d[13], d[14], d[15]),
+        )
+    }
+
+    /// See cgmath's impl.
+    #[rustfmt::skip]
+    pub fn inverse(&self) -> Option<Self> {
+        let det = self.determinant();
+        if det == 0. {
+            None
+        } else {
+            let inv_det = 1. / det;
+            let t = self.transpose();
+            let (t_x, t_y, t_z, t_w) = t.to_cols();
+
+            // todo!!
+            let cf = |i, j| {
+                let mat = match i {
+                    0 => {
+                        Mat3::from_cols(t_y.truncate_n(j), t_z.truncate_n(j), t_w.truncate_n(j))
+                    }
+                    1 => {
+                        Mat3::from_cols(t_x.truncate_n(j), t_z.truncate_n(j), t_w.truncate_n(j))
+                    }
+                    2 => {
+                        Mat3::from_cols(t_x.truncate_n(j), t_y.truncate_n(j), t_w.truncate_n(j))
+                    }
+                    3 => {
+                        Mat3::from_cols(t_x.truncate_n(j), t_y.truncate_n(j), t_z.truncate_n(j))
+                    }
+                    _ => panic!("out of range"),
+                };
+                let sign = if (i + j) & 1 == 1 {
+                    -1.
+                } else {
+                    1.
+                };
+                mat.determinant() * sign * inv_det
+            };
+
+            Some(Mat4::new([
+                cf(0, 0), cf(0, 1), cf(0, 2), cf(0, 3),
+                cf(1, 0), cf(1, 1), cf(1, 2), cf(1, 3),
+                cf(2, 0), cf(2, 1), cf(2, 2), cf(2, 3),
+                cf(3, 0), cf(3, 1), cf(3, 2), cf(3, 3),
+            ]))
+        }
+    }
+}
+
+impl Mul<Self> for Mat4 {
+    type Output = Self;
+
+    fn mul(self, rhs: Self) -> Self::Output {
+        let d = self.data; // code shortener
+        let rd = rhs.data;
+
+        // acr means a(column)(row)
+        let a00 = d[0] * rd[0] + d[4] * rd[1] + d[8] * rd[2] + d[12] * rd[3];
+        let a01 = d[0] * rd[4] + d[4] * rd[5] + d[8] * rd[6] + d[12] * rd[7];
+        let a02 = d[0] * rd[8] + d[4] * rd[9] + d[8] * rd[10] + d[12] * rd[11];
+        let a03 = d[0] * rd[12] + d[4] * rd[13] + d[8] * rd[14] + d[12] * rd[15];
+
+        let a10 = d[1] * rd[0] + d[5] * rd[1] + d[9] * rd[2] + d[13] * rd[3];
+        let a11 = d[1] * rd[4] + d[5] * rd[5] + d[9] * rd[6] + d[13] * rd[7];
+        let a12 = d[1] * rd[8] + d[5] * rd[9] + d[9] * rd[10] + d[13] * rd[11];
+        let a13 = d[1] * rd[12] + d[5] * rd[13] + d[9] * rd[14] + d[13] * rd[15];
+
+        let a20 = d[2] * rd[0] + d[6] * rd[1] + d[10] * rd[2] + d[14] * rd[3];
+        let a21 = d[2] * rd[4] + d[6] * rd[5] + d[10] * rd[6] + d[14] * rd[7];
+        let a22 = d[2] * rd[8] + d[6] * rd[9] + d[10] * rd[10] + d[14] * rd[11];
+        let a23 = d[2] * rd[12] + d[6] * rd[13] + d[10] * rd[14] + d[14] * rd[15];
+
+        let a30 = d[3] * rd[0] + d[7] * rd[1] + d[11] * rd[2] + d[15] * rd[3];
+        let a31 = d[3] * rd[4] + d[7] * rd[5] + d[11] * rd[6] + d[15] * rd[7];
+        let a32 = d[3] * rd[8] + d[7] * rd[9] + d[11] * rd[10] + d[15] * rd[11];
+        let a33 = d[3] * rd[12] + d[7] * rd[13] + d[11] * rd[14] + d[15] * rd[15];
+
+        Self {
+            data: [
+                a00, a01, a02, a03, a10, a11, a12, a13, a20, a21, a22, a23, a30, a31, a32, a33,
+            ],
+        }
+    }
+}
+
+impl Mul<Vec4> for Mat4 {
+    type Output = Vec4;
+
+    fn mul(self, rhs: Vec4) -> Self::Output {
+        Vec4 {
+            x: rhs.x * self.data[0]
+                + rhs.y * self.data[4]
+                + rhs.z * self.data[8]
+                + self.data[12] * rhs.w,
+            y: rhs.x * self.data[1]
+                + rhs.y * self.data[5]
+                + rhs.z * self.data[9]
+                + self.data[13] * rhs.w,
+            z: rhs.x * self.data[2]
+                + rhs.y * self.data[6]
+                + rhs.z * self.data[10]
+                + self.data[14] * rhs.w,
+            w: rhs.x * self.data[3]
+                + rhs.y * self.data[7]
+                + rhs.z * self.data[11]
+                + self.data[15] * rhs.w,
+        }
+    }
+}
+
+impl fmt::Display for Mat4 {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let d = self.data;
+        write!(f, "\n|{:.2} {:.2} {:.2} {:.2}|\n", d[0], d[4], d[8], d[12])?;
+        write!(f, "|{:.2} {:.2} {:.2} {:.2}|\n", d[1], d[5], d[9], d[13])?;
+        write!(f, "|{:.2} {:.2} {:.2} {:.2}|\n", d[2], d[6], d[10], d[14])?;
+        write!(f, "|{:.2} {:.2} {:.2} {:.2}|\n", d[3], d[7], d[11], d[15])?;
+
+        Ok(())
+    }
+}
+
+#[derive(Clone, Debug, Default)]
+/// A quaternion
+pub struct Quat {
+    pub a: f32,
+    pub b: f32,
+    pub c: f32,
+    pub d: f32,
+}
