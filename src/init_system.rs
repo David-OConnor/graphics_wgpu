@@ -3,7 +3,7 @@
 #[cfg(not(target_arch = "wasm32"))]
 use std::time::{Duration, Instant};
 
-use crate::render_3d::init_graphics;
+use crate::init_graphics;
 use winit::{
     event::{self, WindowEvent},
     event_loop::{ControlFlow, EventLoop},
@@ -11,7 +11,7 @@ use winit::{
 
 use super::init_graphics::GameState;
 
-const WINDOW_TITLE: &str = "Metaverse";
+const WINDOW_TITLE: &str = "Graphics";
 
 pub struct System {
     window: winit::window::Window,
@@ -82,11 +82,11 @@ impl System {
 
         let mut surface_cfg = wgpu::SurfaceConfiguration {
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
-            format: surface.get_preferred_format(&adapter).unwrap(),
+            format: surface.get_supported_formats(&adapter)[0],
             width: size.width,
             height: size.height,
-            // https://docs.rs/wgpu/0.12.0/wgpu/enum.PresentMode.html
-            present_mode: wgpu::PresentMode::Mailbox,
+            // https://docs.rs/wgpu/latest/wgpu/enum.PresentMode.html
+            present_mode: wgpu::PresentMode::Fifo,
         };
 
         let trace_dir = std::env::var("WGPU_TRACE");
@@ -95,9 +95,9 @@ impl System {
             .request_device(
                 &wgpu::DeviceDescriptor {
                     label: None,
-                    // https://docs.rs/wgpu/0.12.0/wgpu/struct.Features.html
+                    // https://docs.rs/wgpu/latest/wgpu/struct.Features.html
                     features: wgpu::Features::empty(),
-                    // https://docs.rs/wgpu/0.12.0/wgpu/struct.Limits.html
+                    // https://docs.rs/wgpu/latest/wgpu/struct.Limits.html
                     limits: wgpu::Limits::default(),
                 },
                 trace_dir.ok().as_ref().map(std::path::Path::new),
@@ -210,7 +210,7 @@ pub fn start(
             event::Event::DeviceEvent { event, .. } => {
                 // todo: Evaluate how you handle DT; this is quick +dirty
                 let dt = last_frame_inst.elapsed().as_secs_f32();
-                state.update(event, dt);
+                state.update(event);
             }
             event::Event::RedrawRequested(_) => {
                 #[cfg(not(target_arch = "wasm32"))]

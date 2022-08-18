@@ -19,13 +19,11 @@ use wgpu::{self, util::DeviceExt, BindGroup, BindGroupLayout, Surface, SurfaceCo
 
 use super::{
     input,
-    lin_alg::{Quat, Vec3},
+    lin_alg::{Quaternion, Vec3},
     texture,
     types::{Brush, Camera, Entity, Mesh, Scene, Vertex},
     types_wgpu::{self, CameraUniform, Instance, Material, MeshWgpu, Model},
 };
-
-use cgmath::{self, Quaternion, Rotation3, Vector3}; // todo: Replace with your own.
 
 use winit::event::DeviceEvent;
 
@@ -33,6 +31,24 @@ static MESH_I: AtomicUsize = AtomicUsize::new(0);
 
 const DEPTH_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Depth24Plus;
 const IMAGE_SIZE: u32 = 128;
+
+pub const DT: f32 = 1. / 60.; //ie the inverse of frame rate.
+
+pub const UP_VEC: Vec3 = Vec3 {
+    x: 0.,
+    y: 1.,
+    z: 0.,
+};
+pub const RIGHT_VEC: Vec3 = Vec3 {
+    x: 1.,
+    y: 0.,
+    z: 0.,
+};
+pub const FWD_VEC: Vec3 = Vec3 {
+    x: 0.,
+    y: 0.,
+    z: 1.,
+};
 
 pub struct GameState {
     // Buffers
@@ -53,10 +69,8 @@ pub struct GameState {
     depth_texture: texture::Texture,
     // staging_belt: wgpu::util::StagingBelt,
     /// Movement, camera rotation, zoom.
-    input_sensitivity: (f32, f32, f32),
     // todo: Split out control and game-state into a separate struct?
     // Game state
-    button_state: input::ButtonState,
     active_scene: Scene,
     entities: Vec<Entity>,
     meshes: Vec<Mesh>,
@@ -108,32 +122,10 @@ impl GameState {
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
         });
 
-        let num_per_row = 10;
-        const SPACE_BETWEEN: f32 = 3.0;
-        let instances = (0..num_per_row)
-            .flat_map(|z| {
-                (0..num_per_row).map(move |x| {
-                    let x = SPACE_BETWEEN * (x as f32 - num_per_row as f32 / 2.0);
-                    let z = SPACE_BETWEEN * (z as f32 - num_per_row as f32 / 2.0);
-
-                    let mut position = Vec3 { x, y: 0., z };
-
-                    let rotation = if position.x == 0. && position.y == 0. && position.z == 0. {
-                        Quaternion::from_axis_angle(cgmath::Vector3::unit_z(), cgmath::Deg(0.0))
-                    } else {
-                        position.normalize();
-                        let position_temp: Vector3<f32> = Vector3 {
-                            x: position.x,
-                            y: position.y,
-                            z: position.z,
-                        };
-                        Quaternion::from_axis_angle(position_temp, cgmath::Deg(45.0))
-                    };
-
-                    Instance { position, rotation }
-                })
-            })
-            .collect::<Vec<_>>();
+        let instances = vec![Instance {
+            position: Vec3::new(0., 0., 0.),
+            orientation: Quaternion::new_identity(),
+        }];
 
         let instance_data = instances.iter().map(Instance::to_raw).collect::<Vec<_>>();
         let instance_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
@@ -217,8 +209,6 @@ impl GameState {
             light_buffer,
             // depth_view,
             // staging_belt: wgpu::util::StagingBelt::new(0x100),
-            button_state: Default::default(),
-            input_sensitivity: (10., 0.7, 1.),
             active_scene: Scene::default(),
             entities,
             meshes,
@@ -232,15 +222,8 @@ impl GameState {
     }
 
     #[allow(clippy::single_match)]
-    pub fn update(&mut self, event: DeviceEvent, dt: f32) {
-        // dt is in seconds.
-        input::handle_event(
-            event,
-            &mut self.button_state,
-            &mut self.camera,
-            &self.input_sensitivity,
-            dt,
-        );
+    pub fn update(&mut self, event: DeviceEvent) {
+        input::handle_event(event, &mut self.camera);
     }
 
     // pub fn resize(&mut self, new_size: winit::dpi::PhysicalSize<u32>) {
@@ -274,7 +257,7 @@ impl GameState {
         {
             let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("Render Pass"),
-                color_attachments: &[wgpu::RenderPassColorAttachment {
+                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                     view: &view,
                     resolve_target: None,
                     ops: wgpu::Operations {
@@ -286,7 +269,7 @@ impl GameState {
                         }),
                         store: true,
                     },
-                }],
+                })],
                 depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
                     view: &self.depth_texture.view,
                     depth_ops: Some(wgpu::Operations {
@@ -366,7 +349,7 @@ fn load_model(model_source: &[u8], entities: &mut Vec<Entity>, meshes: &mut Vec<
             entities.push(Entity {
                 mesh: MESH_I.fetch_add(1, Ordering::Relaxed),
                 position: Vec3::new(0., 0., 0.),
-                rotation: Quat::default(),
+                rotation: Quaternion::new_identity(),
                 scale: 1.,
             });
         }
@@ -382,7 +365,7 @@ fn create_render_pipeline(
     vertex_layouts: &[wgpu::VertexBufferLayout],
     shader: wgpu::ShaderModuleDescriptor,
 ) -> wgpu::RenderPipeline {
-    let shader = device.create_shader_module(&shader);
+    let shader = device.create_shader_module(shader);
 
     device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
         label: Some(&format!("{:?}", shader)),
@@ -395,14 +378,14 @@ fn create_render_pipeline(
         fragment: Some(wgpu::FragmentState {
             module: &shader,
             entry_point: "fs_main",
-            targets: &[wgpu::ColorTargetState {
+            targets: &[Some(wgpu::ColorTargetState {
                 format: color_format,
                 blend: Some(wgpu::BlendState {
                     alpha: wgpu::BlendComponent::REPLACE,
                     color: wgpu::BlendComponent::REPLACE,
                 }),
                 write_mask: wgpu::ColorWrites::ALL,
-            }],
+            })],
         }),
         primitive: wgpu::PrimitiveState {
             topology: wgpu::PrimitiveTopology::TriangleList,
@@ -696,7 +679,7 @@ fn add_scene_entities(entities: &mut Vec<Entity>, meshes: &mut Vec<Mesh>) {
     let entity1 = Entity {
         mesh: MESH_I.fetch_add(1, Ordering::Release),
         position: Vec3::new(70., 5., 20.),
-        rotation: Quat::default(),
+        rotation: Quaternion::new_identity(),
         scale: 1.,
     };
 
@@ -709,7 +692,7 @@ fn add_scene_entities(entities: &mut Vec<Entity>, meshes: &mut Vec<Mesh>) {
     let floor_entity = Entity {
         mesh: MESH_I.fetch_add(1, Ordering::Release),
         position: Vec3::new(0., -0.5, 0.),
-        rotation: Quat::default(),
+        rotation: Quaternion::new_identity(),
         scale: 1.,
     };
 

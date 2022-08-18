@@ -2,7 +2,10 @@
 
 use std::f32::consts::TAU;
 
-use super::lin_alg::{Mat4, Quat, Vec3};
+use crate::{
+    init_graphics::{FWD_VEC, RIGHT_VEC, UP_VEC},
+    lin_alg::{Mat4, Quaternion, Vec3},
+};
 
 // todo: How can we remove Pod and repr c?
 // #[derive(Clone, Copy, Debug, Pod, Zeroable)]
@@ -40,9 +43,7 @@ impl Vertex {
     }
 }
 
-/// Represents an entity in the world.
-/// See [Bevy ECS](https://github.com/bevyengine/bevy/tree/main/crates/bevy_ecs)
-/// todo: Use `bevy_ecs` as a dependency?
+/// Represents an entity in the world. This is not fundamental to the WGPU system.
 #[derive(Clone, Debug)]
 pub struct Entity {
     /// Index of the mesh this entity references. (or perhaps its index?)
@@ -50,7 +51,7 @@ pub struct Entity {
     /// Position in the world, relative to world origin
     pub position: Vec3,
     /// Rotation, relative to up.
-    pub rotation: Quat,
+    pub rotation: Quaternion,
     pub scale: f32, // 1.0 is original.
 }
 
@@ -167,9 +168,10 @@ pub struct Camera {
     // Position shifts all points prior to the camera transform; this is what
     // we adjust with move keys.
     pub position: Vec3,
-    pub yaw: f32,   // radians
-    pub pitch: f32, // radians
-    pub up: Vec3,
+    // pub yaw: f32,   // radians
+    // pub pitch: f32, // radians
+    // pub up: Vec3,
+    pub orientation: Quaternion,
 
     pub fov_y: f32,  // Vertical field of view in radians.
     pub aspect: f32, // width / height.
@@ -201,6 +203,7 @@ impl Camera {
         let t = opengl_conv
             * cgmath::perspective(cgmath::Rad(self.fov_y), self.aspect, self.near, self.far);
         let t_inv = t.invert().unwrap();
+
         self.projection_mat_inv = Mat4::new([
             t_inv.x.x, t_inv.x.y, t_inv.x.z, t_inv.x.w, t_inv.y.x, t_inv.y.y, t_inv.y.z, t_inv.y.w,
             t_inv.z.x, t_inv.z.y, t_inv.z.z, t_inv.z.w, t_inv.w.x, t_inv.w.y, t_inv.w.z, t_inv.w.w,
@@ -213,28 +216,13 @@ impl Camera {
     /// rotation matrices.
     #[rustfmt::skip]
     pub fn view_mat(&self) -> Mat4 {
-        // "It's pretty common to have a convention known as "eye/target/roll", where you have two points and bank roll.
-        // Your resulting matrix is the combination of a side vector, an up vector, and a forward vector.
-        // The forward vector is simply norm(target - eye). To figure out the other two vectors, usually
-        // you pick some reference "up", then do side = norm(cross(forward, reference up)), and up = norm(cross(side, forward))
-        // (The cross products I spell out might be backwards depending whether you want a left-handed or right-handed result)
-        //  - jasperriz on Matrix.
-        let mut fwd = Vec3::new(self.yaw.cos(), self.pitch.sin(), self.yaw.sin());
-        fwd.normalize();
-
-        let up_ref = Vec3::new(0., 1., 0.);
-
-        let mut side = fwd.cross(up_ref);
-        side.normalize();
-
-        // We don't need to normalize up; already 1.
-        let up = side.cross(fwd);
+        let mat = self.orientation.to_matrix();
 
         Mat4::new([
-            side.x, up.x, -fwd.x, 0.,
-            side.y, up.y, -fwd.y, 0.,
-            side.z, up.z, -fwd.z, 0.,
-            -self.position.dot(side), -self.position.dot(up), self.position.dot(fwd), 1.,
+            mat.data[0], mat.data[3], mat.data[6], 0.,
+            mat.data[1], mat.data[4], mat.data[7], 0.,
+            mat.data[2], mat.data[5], mat.data[8], 0.,
+            -self.position.dot(RIGHT_VEC), -self.position.dot(UP_VEC), self.position.dot(FWD_VEC), 1.,
         ])
     }
 
@@ -265,9 +253,7 @@ impl Default for Camera {
     fn default() -> Self {
         Self {
             position: Vec3::new(0., 2., -10.),
-            yaw: 0.,
-            pitch: 0.,
-            up: Vec3::new(0., 1., 0.),
+            orientation: Quaternion::new_identity(),
             fov_y: TAU / 3., // Vertical field of view in radians.
             aspect: 4. / 3., // width / height.
             near: 1.,
@@ -298,7 +284,6 @@ pub struct Light {
 
 #[derive(Clone, Debug, Default)]
 pub struct Scene {
-    // pub brushes: Vec<Brush>,
     pub entities: Vec<Entity>,
     pub lights: Vec<Light>,
 }

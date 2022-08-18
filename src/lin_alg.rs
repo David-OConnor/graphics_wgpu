@@ -4,9 +4,12 @@
 //! using up, forward, side - handle that in application code, or use a rotation matrix.
 
 use std::{
+    f32::consts::TAU,
     fmt,
     ops::{Add, AddAssign, Mul, Neg},
 };
+
+const EPS: f32 = 0.0000001;
 
 #[derive(Clone, Copy, Debug)]
 /// A len-3 column vector
@@ -73,6 +76,14 @@ impl Neg for Vec3 {
 impl Vec3 {
     pub fn new(x: f32, y: f32, z: f32) -> Self {
         Self { x, y, z }
+    }
+
+    pub fn zero() -> Self {
+        Self {
+            x: 0.,
+            y: 0.,
+            z: 0.,
+        }
     }
 
     pub fn mag(&self) -> f32 {
@@ -148,7 +159,7 @@ impl Vec4 {
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub struct Quaternion {
     pub w: f32,
     pub x: f32,
@@ -199,20 +210,15 @@ impl Mul<Vec3> for Quaternion {
     }
 }
 
-/// Euler angles.
-pub struct EulerAngle {
-    roll: f32,
-    pitch: f32,
-    yaw: f32,
-}
+impl Mul<f32> for Quaternion {
+    type Output = Self;
 
-impl EulerAngle {
-    /// Euler angles of zero.
-    pub fn zero() -> Self {
+    fn mul(self, rhs: f32) -> Self::Output {
         Self {
-            roll: 0.,
-            pitch: 0.,
-            yaw: 0.,
+            w: self.w * rhs,
+            x: self.x * rhs,
+            y: self.y * rhs,
+            z: self.z * rhs,
         }
     }
 }
@@ -227,15 +233,144 @@ impl Quaternion {
         }
     }
 
-    /// Converts a Quaternion to Euler angles, in radians.
-    pub fn to_euler(&self) -> EulerAngle {
-        let qwqw_minus_half = self.w * self.w - 0.5; // calculate common terms to avoid repeated operations
+    /// Create the quaternion that creates the shortest (great circle) rotation from vec0
+    /// to vec1.
+    pub fn from_unit_vecs(v0: Vec3, v1: Vec3) -> Self {
+        const ONE_MINUS_EPS: f32 = 1.0 - 2.0 * EPS;
 
-        EulerAngle {
-            roll: (self.y * self.z - self.w * self.x).atan2(qwqw_minus_half + self.z * self.z),
-            pitch: -1.0 * (2.0 * (self.x * self.z + self.w * self.y)).asin(),
-            yaw: (self.x * self.y - self.w * self.z).atan2(qwqw_minus_half + self.x * self.x),
+        let dot = v0.dot(v1);
+        if dot > ONE_MINUS_EPS {
+            return Self::new_identity();
+        } else if dot < -ONE_MINUS_EPS {
+            // Rotate along any orthonormal vec to vec1 or vec2 as the axis.
+            return Self::from_axis_angle(Vec3::new(1., 0., 0.).cross(v0), TAU / 2.);
         }
+
+        let w = 1. + dot;
+        let v = v0.cross(v1);
+
+        (Self {
+            w,
+            x: v.x,
+            y: v.y,
+            z: v.z,
+        })
+        .to_normalized()
+    }
+
+    pub fn from_euler(phi: f32, psi: f32, theta: f32) -> Self {
+        let cy = (theta * 0.5).cos();
+        let sy = (theta * 0.5).sin();
+        let cp = (psi * 0.5).cos();
+        let sp = (psi * 0.5).sin();
+        let cr = (phi * 0.5).cos();
+        let sr = (phi * 0.5).sin();
+
+        Self {
+            w: cr * cp * cy + sr * sp * sy,
+            x: sr * cp * cy - cr * sp * sy,
+            y: cr * sp * cy + sr * cp * sy,
+            z: cr * cp * sy - sr * sp * cy,
+        }
+    }
+
+    /// Convert this quaternion to Euler angles.
+    /// https://en.wikipedia.org/wiki/Conversion_between_quaternions_and_Euler_angles
+    pub fn to_euler(&self) -> (f32, f32, f32) {
+        // roll, pitch, yaw, (x, y, z axes)
+        // roll (x-axis rotation)
+        let sinr_cosp = 2. * (self.w * self.x + self.y * self.z);
+        let cosr_cosp = 1. - 2. * (self.x * self.x + self.y * self.y);
+
+        let roll = sinr_cosp.atan2(cosr_cosp);
+
+        // pitch (y-axis rotation)
+        let sinp = 2. * (self.w * self.y - self.z * self.x);
+        let pitch = if sinp.abs() >= 1. {
+            (TAU / 4.).copysign(sinp) // use 90 degrees if out of range
+        } else {
+            sinp.asin()
+        };
+
+        // yaw (z-axis rotation)
+        let siny_cosp = 2. * (self.w * self.z + self.x * self.y);
+        let cosy_cosp = 1. - 2. * (self.y * self.y + self.z * self.z);
+        let yaw = siny_cosp.atan2(cosy_cosp);
+
+        (roll, pitch, yaw)
+    }
+
+    // /// Creates an orientation that point towards a vector, with a given up direction defined.
+    // pub fn from_vec_direction(dir: Vec3, up: Vec3) -> Self {
+    //     let forward_vector = dir;
+    //
+    //     let forward = Vec3::new(0., 0., 1.);
+    //
+    //     let dot = forward.dot(forward_vector);
+    //
+    //     if (dot - (-1.0)).abs() < 0.000001 {
+    //         // return Self: { x:  Quaternion(Vector3.up.x, Vector3.up.y, Vector3.up.z, 3.1415926535897932f);
+    //         Self::new_identity(); // todo! adapt the above.
+    //     }
+    //     if (dot - (1.0)).abs() < 0.000001 {
+    //         return Self::new_identity();
+    //     }
+    //
+    //     let rot_angle = dot.acos();
+    //     let rot_axis = forward.cross(forward_vector).to_normalized();
+    //
+    //     Self::from_axis_angle(rot_axis, rot_angle)
+    // }
+
+    pub fn inverse(self) -> Self {
+        Self {
+            w: self.w,
+            x: -self.x,
+            y: -self.y,
+            z: -self.z,
+        }
+    }
+
+    /// Rotate a vector using this quaternion. Note that our multiplication Q * v
+    /// operation is effectively quaternion multiplication, with a quaternion
+    /// created by a vec with w=0.
+    pub fn rotate_vec(self, vec: Vec3) -> Vec3 {
+        (self * vec * self.inverse()).to_vec()
+    }
+
+    /// Create a rotation quaternion from an axis and angle.
+    pub fn from_axis_angle(axis: Vec3, angle: f32) -> Self {
+        // Here we calculate the sin( theta / 2) once for optimization
+        let factor = (angle / 2.).sin();
+
+        Self {
+            // Calcualte the w value by cos( theta / 2 )
+            w: (angle / 2.).cos(),
+            // Calculate the x, y and z of the quaternion
+            x: axis.x * factor,
+            y: axis.y * factor,
+            z: axis.z * factor,
+        }
+    }
+
+    /// Convert to a 3D vector, discarding `w`.
+    pub fn to_vec(self) -> Vec3 {
+        Vec3 {
+            x: self.x,
+            y: self.y,
+            z: self.z,
+        }
+    }
+
+    /// Returns the vector magnitude.
+    pub fn magnitude(&self) -> f32 {
+        (self.w.powi(2) + self.x.powi(2) + self.y.powi(2) + self.z.powi(2)).sqrt()
+    }
+
+    /// Returns the normalised version of the vector
+    pub fn to_normalized(self) -> Self {
+        let mag_recip = 1. / self.magnitude();
+        self * mag_recip
     }
 
     /// Converts a Quaternion to a rotation matrix
@@ -263,30 +398,22 @@ impl Quaternion {
             ]
         }
     }
+}
 
-    /// Returns the Quaternion conjugate.
-    pub fn conjugate(&self) -> Self {
+/// Euler angles.
+pub struct EulerAngle {
+    roll: f32,
+    pitch: f32,
+    yaw: f32,
+}
+
+impl EulerAngle {
+    /// Euler angles of zero.
+    pub fn zero() -> Self {
         Self {
-            w: self.w,
-            x: -1.0 * self.x,
-            y: -1.0 * self.y,
-            z: -1.0 * self.z,
-        }
-    }
-
-    pub fn mag(&self) -> f32 {
-        (self.w.powi(2) + self.x.powi(2) + self.y.powi(2) + self.z.powi(2)).sqrt()
-    }
-
-    /// Returns the normalised quaternion
-    pub fn to_normalized(&self) -> Self {
-        let mag_recip = 1. / self.mag();
-
-        Self {
-            w: self.w * mag_recip,
-            x: self.x * mag_recip,
-            y: self.y * mag_recip,
-            z: self.z * mag_recip,
+            roll: 0.,
+            pitch: 0.,
+            yaw: 0.,
         }
     }
 }
@@ -725,13 +852,4 @@ impl fmt::Display for Mat4 {
 
         Ok(())
     }
-}
-
-#[derive(Clone, Debug, Default)]
-/// A quaternion
-pub struct Quat {
-    pub a: f32,
-    pub b: f32,
-    pub c: f32,
-    pub d: f32,
 }

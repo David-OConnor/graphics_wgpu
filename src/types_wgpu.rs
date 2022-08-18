@@ -5,12 +5,10 @@ use bytemuck::{Pod, Zeroable};
 use wgpu::{self, util::DeviceExt};
 
 use super::{
-    lin_alg::{Mat3, Mat4, Vec3},
+    lin_alg::{Mat3, Mat4, Quaternion, Vec3},
     texture,
     types::{Camera, Mesh, Vertex},
 };
-
-use cgmath::Quaternion; // todo: Replace with your own
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
@@ -277,19 +275,15 @@ impl CameraUniform {
 
 pub struct Instance {
     pub position: Vec3,
-    pub rotation: Quaternion<f32>,
+    pub orientation: Quaternion,
 }
 
 impl Instance {
     pub fn to_raw(&self) -> InstanceRaw {
         InstanceRaw {
             model: (Mat4::new_translation(self.position)).into(), // todo: Times self.rotation Mat4.
+            // todo: From orientation quaternion somehow?
             normal: Mat3::new_identity().into(), // todo: This should be a Mat3 from rotation.
-
-                                                 // model: (cgmath::Matrix4::from_translation(self.position)
-                                                 //     * cgmath::Matrix4::from(self.rotation))
-                                                 // .into(),
-                                                 // normal: cgmath::Matrix3::from(self.rotation).into(),
         }
     }
 }
@@ -304,7 +298,6 @@ pub struct InstanceRaw {
 
 impl InstanceRaw {
     pub fn desc<'a>() -> wgpu::VertexBufferLayout<'a> {
-        use std::mem;
         wgpu::VertexBufferLayout {
             array_stride: mem::size_of::<InstanceRaw>() as wgpu::BufferAddress,
             // We need to switch from using a step mode of Vertex to Instance

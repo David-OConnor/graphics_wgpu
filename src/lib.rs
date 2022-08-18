@@ -1,14 +1,9 @@
-pub fn add(left: usize, right: usize) -> usize {
-    left + right
-}
+mod init_graphics;
+pub mod init_system;
+mod input;
+mod lin_alg;
+mod texture;
+mod types;
+mod types_wgpu;
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn it_works() {
-        let result = add(2, 2);
-        assert_eq!(result, 4);
-    }
-}
+pub use init_system::run;

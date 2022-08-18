@@ -1,117 +1,153 @@
-// Handles keyboard and mouse input.
+//! Handles keyboard and mouse input, eg for moving the camera.
+
 use std::f32::consts::TAU;
 
-use super::lin_alg::{Mat3, Vec3};
-
-use super::types::Camera;
+use crate::{
+    init_graphics::{DT, FWD_VEC, RIGHT_VEC, UP_VEC},
+    lin_alg::{Quaternion, Vec3},
+    types::Camera,
+};
 
 // todo: remove Winit from this module if you can, and make it agnostic?
 use winit::event::{DeviceEvent, ElementState};
 
-#[derive(Copy, Clone, Debug)]
-pub enum MoveDirection {
-    Forward,
-    Back,
-    Left,
-    Right,
-    Up,
-    Down,
+// These sensitivities are in units (position), or radians (orientation) per second.
+pub const CAM_MOVE_SENS: f32 = 1.1;
+pub const CAM_ROTATE_SENS: f32 = 0.3;
+pub const CAM_ROTATE_KEY_SENS: f32 = 0.5;
+
+#[derive(Default)]
+struct InputsCommanded {
+    fwd: bool,
+    back: bool,
+    left: bool,
+    right: bool,
+    up: bool,
+    down: bool,
+    roll_ccw: bool,
+    roll_cw: bool,
+    mouse_delta_x: f32,
+    mouse_delta_y: f32,
 }
 
-#[derive(Default, Debug)]
-pub struct ButtonState {
-    pub w_pressed: bool,
-    pub s_pressed: bool,
-    pub a_pressed: bool,
-    pub d_pressed: bool,
-}
-
-/// Find the vector representing how we move the camera, for a given direction.
-/// Uses euler angles, which works for the user-controlled camera.
-pub fn find_mv_vec(direction: MoveDirection, yaw: f32, pitch: f32, amount: f32) -> Vec3 {
-    // Move the camera to a new position, based on where it's pointing.
-    let unit_vec = match direction {
-        MoveDirection::Forward => Vec3::new(0., 0., 1.),
-        MoveDirection::Back => -Vec3::new(0., 0., 1.),
-        // Not sure why we need to make left positive here, but it seems to be the case.
-        MoveDirection::Left => Vec3::new(1., 0., 0.),
-        MoveDirection::Right => -Vec3::new(1., 0., 0.),
-        MoveDirection::Up => Vec3::new(0., 1., 0.),
-        MoveDirection::Down => -Vec3::new(0., 1., 0.),
-    };
-    // Move in 2d plane only. Ie, only take yaw into account.
-
-    // let (y_sin, y_cos) = yaw.sin_cos();
-    let (y_sin, y_cos) = (yaw - TAU / 4.).sin_cos();
-    #[rustfmt::skip]
-    let rotation_mat = Mat3::new([
-        y_cos, 0., y_sin,
-         0., 1., 0.,
-         -y_sin, 0., y_cos,
-    ]);
-
-    rotation_mat * (unit_vec * amount)
-}
-
-/// Handle a device event, eg input from keyboard or mouse.
-pub fn handle_event(
-    event: DeviceEvent,
-    button_state: &mut ButtonState,
-    cam: &mut Camera,
-    sensitivities: &(f32, f32, f32),
-    dt: f32,
-) {
-    let move_amount = sensitivities.0 * dt;
-    let rotate_amount = sensitivities.1 * dt;
-    // let zoom_amount = sensitivities.2 * dt;
+pub fn handle_event(event: DeviceEvent, cam: &mut Camera) {
+    let mut inputs = InputsCommanded::default();
 
     match event {
         DeviceEvent::Key(key) => match key.scancode {
             17 => {
-                button_state.w_pressed = key.state == ElementState::Pressed;
+                // E
+                inputs.fwd = true;
             }
             31 => {
-                button_state.s_pressed = key.state == ElementState::Pressed;
-            }
-            30 => {
-                button_state.a_pressed = key.state == ElementState::Pressed;
+                // S
+                inputs.back = true;
             }
             32 => {
-                button_state.d_pressed = key.state == ElementState::Pressed;
+                // D
+                inputs.right = true;
+            }
+            30 => {
+                // A
+                inputs.left = true;
+            }
+            57 => {
+                // Space
+                inputs.up = true;
+            }
+            46 => {
+                // C
+                inputs.down = true;
+            }
+            16 => {
+                // Q
+                inputs.roll_ccw = true;
+            }
+            18 => {
+                // E
+                inputs.roll_cw = true;
             }
             _ => (),
         },
 
         DeviceEvent::MouseMotion { delta } => {
-            cam.yaw += delta.0 as f32 * rotate_amount;
-            cam.pitch += -delta.1 as f32 * rotate_amount;
-
-            let eps = 0.0001;
-
-            // Clamp pitch, so you can't look past up or down.
-            if cam.pitch > (TAU / 4.) - eps {
-                cam.pitch = TAU / 4. - eps;
-            } else if cam.pitch < -TAU / 4. + eps {
-                cam.pitch = -TAU / 4. + eps;
-            }
+            inputs.mouse_delta_x = delta.0 as f32;
+            inputs.mouse_delta_y = delta.1 as f32;
         }
-
-        _ => {}
+        _ => (),
     }
 
-    if button_state.w_pressed {
-        cam.position += find_mv_vec(MoveDirection::Forward, cam.yaw, cam.pitch, move_amount);
+    adjust_camera(cam, &inputs);
+}
+
+/// Adjust the camera orientation and position.
+/// todo: copyied from `peptide`'s Bevy interface.
+fn adjust_camera(cam: &mut Camera, inputs: &InputsCommanded) {
+    const MOVE_AMT: f32 = CAM_MOVE_SENS * DT;
+    const ROTATE_AMT: f32 = CAM_ROTATE_SENS * DT;
+    const ROTATE_KEY_AMT: f32 = CAM_ROTATE_KEY_SENS * DT;
+
+    // todo: This split is where you can decouple WGPU-specific code from general code.
+
+    let mut cam_moved = false;
+    let mut cam_rotated = false;
+
+    let mut movement_vec = Vec3::zero();
+
+    if inputs.fwd {
+        movement_vec.z -= MOVE_AMT; // todo: Backwards; why?
+        cam_moved = true;
+    } else if inputs.back {
+        movement_vec.z += MOVE_AMT;
+        cam_moved = true;
     }
 
-    if button_state.s_pressed {
-        cam.position += find_mv_vec(MoveDirection::Back, cam.yaw, cam.pitch, move_amount);
+    if inputs.right {
+        movement_vec.x += MOVE_AMT;
+        cam_moved = true;
+    } else if inputs.left {
+        movement_vec.x -= MOVE_AMT;
+        cam_moved = true;
     }
 
-    if button_state.a_pressed {
-        cam.position += find_mv_vec(MoveDirection::Left, cam.yaw, cam.pitch, move_amount);
+    if inputs.up {
+        movement_vec.y += MOVE_AMT;
+        cam_moved = true;
+    } else if inputs.down {
+        movement_vec.y -= MOVE_AMT;
+        cam_moved = true;
     }
 
-    if button_state.d_pressed {
-        cam.position += find_mv_vec(MoveDirection::Right, cam.yaw, cam.pitch, move_amount);
+    let fwd = cam.orientation.rotate_vec(FWD_VEC);
+    // todo: Why do we need to reverse these?
+    let up = cam.orientation.rotate_vec(UP_VEC * -1.);
+    let right = cam.orientation.rotate_vec(RIGHT_VEC * -1.);
+
+    let mut rotation = Quaternion::new_identity();
+
+    // todo: Why do we need to reverse these?
+    if inputs.roll_cw {
+        rotation = Quaternion::from_axis_angle(fwd, -ROTATE_KEY_AMT);
+        cam_rotated = true;
+    } else if inputs.roll_ccw {
+        rotation = Quaternion::from_axis_angle(fwd, ROTATE_KEY_AMT);
+        cam_rotated = true;
+    }
+
+    let eps = 0.00001;
+    if inputs.mouse_delta_x.abs() > eps || inputs.mouse_delta_y.abs() > eps {
+        rotation = Quaternion::from_axis_angle(up, inputs.mouse_delta_x * ROTATE_AMT)
+            * Quaternion::from_axis_angle(right, inputs.mouse_delta_y * ROTATE_AMT)
+            * rotation;
+
+        cam_rotated = true;
+    }
+
+    if cam_moved {
+        cam.position = cam.position + cam.orientation.rotate_vec(movement_vec);
+    }
+
+    if cam_rotated {
+        cam.orientation = rotation * cam.orientation;
     }
 }
