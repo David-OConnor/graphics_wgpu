@@ -78,7 +78,7 @@ impl Vec3 {
         Self { x, y, z }
     }
 
-    pub fn zero() -> Self {
+    pub fn new_zero() -> Self {
         Self {
             x: 0.,
             y: 0.,

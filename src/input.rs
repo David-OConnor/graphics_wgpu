@@ -12,9 +12,11 @@ use crate::{
 use winit::event::{DeviceEvent, ElementState};
 
 // These sensitivities are in units (position), or radians (orientation) per second.
-pub const CAM_MOVE_SENS: f32 = 1.1;
-pub const CAM_ROTATE_SENS: f32 = 0.3;
-pub const CAM_ROTATE_KEY_SENS: f32 = 0.5;
+const CAM_MOVE_SENS: f32 = 1.1;
+const CAM_ROTATE_SENS: f32 = 0.3;
+const CAM_ROTATE_KEY_SENS: f32 = 0.5;
+// Move speed multiplier when the run modifier key is held.
+const RUN_FACTOR: f32 = 3.;
 
 #[derive(Default)]
 struct InputsCommanded {
@@ -28,6 +30,7 @@ struct InputsCommanded {
     roll_cw: bool,
     mouse_delta_x: f32,
     mouse_delta_y: f32,
+    run: bool,
 }
 
 pub fn handle_event(event: DeviceEvent, cam: &mut Camera) {
@@ -67,6 +70,10 @@ pub fn handle_event(event: DeviceEvent, cam: &mut Camera) {
                 // E
                 inputs.roll_cw = true;
             }
+            42 => {
+                // Shift
+                inputs.run = true;
+            }
             _ => (),
         },
 
@@ -83,38 +90,43 @@ pub fn handle_event(event: DeviceEvent, cam: &mut Camera) {
 /// Adjust the camera orientation and position.
 /// todo: copyied from `peptide`'s Bevy interface.
 fn adjust_camera(cam: &mut Camera, inputs: &InputsCommanded) {
-    const MOVE_AMT: f32 = CAM_MOVE_SENS * DT;
+    let mut move_amt: f32 = CAM_MOVE_SENS * DT;
     const ROTATE_AMT: f32 = CAM_ROTATE_SENS * DT;
-    const ROTATE_KEY_AMT: f32 = CAM_ROTATE_KEY_SENS * DT;
+    let mut rotate_key_amt: f32 = CAM_ROTATE_KEY_SENS * DT;
 
     // todo: This split is where you can decouple WGPU-specific code from general code.
 
     let mut cam_moved = false;
     let mut cam_rotated = false;
 
-    let mut movement_vec = Vec3::zero();
+    let mut movement_vec = Vec3::new_zero();
+
+    if inputs.run {
+        move_amt *= RUN_FACTOR;
+        rotate_key_amt *= RUN_FACTOR;
+    }
 
     if inputs.fwd {
-        movement_vec.z -= MOVE_AMT; // todo: Backwards; why?
+        movement_vec.z -= move_amt; // todo: Backwards; why?
         cam_moved = true;
     } else if inputs.back {
-        movement_vec.z += MOVE_AMT;
+        movement_vec.z += move_amt;
         cam_moved = true;
     }
 
     if inputs.right {
-        movement_vec.x += MOVE_AMT;
+        movement_vec.x += move_amt;
         cam_moved = true;
     } else if inputs.left {
-        movement_vec.x -= MOVE_AMT;
+        movement_vec.x -= move_amt;
         cam_moved = true;
     }
 
     if inputs.up {
-        movement_vec.y += MOVE_AMT;
+        movement_vec.y += move_amt;
         cam_moved = true;
     } else if inputs.down {
-        movement_vec.y -= MOVE_AMT;
+        movement_vec.y -= move_amt;
         cam_moved = true;
     }
 
@@ -127,10 +139,10 @@ fn adjust_camera(cam: &mut Camera, inputs: &InputsCommanded) {
 
     // todo: Why do we need to reverse these?
     if inputs.roll_cw {
-        rotation = Quaternion::from_axis_angle(fwd, -ROTATE_KEY_AMT);
+        rotation = Quaternion::from_axis_angle(fwd, -rotate_key_amt);
         cam_rotated = true;
     } else if inputs.roll_ccw {
-        rotation = Quaternion::from_axis_angle(fwd, ROTATE_KEY_AMT);
+        rotation = Quaternion::from_axis_angle(fwd, rotate_key_amt);
         cam_rotated = true;
     }
 

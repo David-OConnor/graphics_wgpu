@@ -7,9 +7,6 @@ use crate::{
     lin_alg::{Mat4, Quaternion, Vec3},
 };
 
-// todo: How can we remove Pod and repr c?
-// #[derive(Clone, Copy, Debug, Pod, Zeroable)]
-// #[repr(C)]
 #[derive(Clone, Copy, Debug)]
 /// Example attributes: https://github.com/bevyengine/bevy/blob/main/crates/bevy_render/src/mesh/mesh/mod.rs#L56
 /// // todo: Vec3 vs arrays?
@@ -34,7 +31,6 @@ impl Vertex {
     pub fn new(x: f32, y: f32, z: f32) -> Self {
         Self {
             position: [x, y, z],
-            // position: Vec3::new(x, y, z),
             tex_coords: [0., 0.],    // todo
             normal: [0., 0., 0.],    // todo
             tangent: [0., 0., 0.],   // todo
@@ -51,25 +47,20 @@ pub struct Entity {
     /// Position in the world, relative to world origin
     pub position: Vec3,
     /// Rotation, relative to up.
-    pub rotation: Quaternion,
+    pub orientation: Quaternion,
     pub scale: f32, // 1.0 is original.
 }
 
 /// Mesh - represents geometry, and contains vertex and index buffers.
 /// As a reference: https://github.com/bevyengine/bevy/blob/main/crates/bevy_render/src/mesh/mesh/mod.rs
 #[derive(Debug)]
-// pub struct Mesh<const N: usize> {
 pub struct Mesh {
     pub vertices: Vec<Vertex>,
     /// Each consecutive triplet of indices defines a triangle.
     pub indices: Vec<usize>,
-    // todo: Expterimenting with const generics
-    // pub vertex_buf_temp: [Vertex; N],
-    // pub index_buf_temp: [usize; N],
 }
 
 // todo: You don't really want this bytemuck and WGPU buffer stuff here; use a vec etc.
-// impl From<Brush> for Mesh {
 impl Mesh {
     pub fn from_brush(brush: Brush) -> Self {
         // Create triangles from faces, which in turn reference vertex indices.
@@ -134,6 +125,7 @@ impl Brush {
                 Vertex::new(-x, -y, -z),
                 Vertex::new(-x, -y, z),
             ],
+
             faces: vec![
                 // top
                 vec![0, 1, 2, 3],
@@ -150,6 +142,10 @@ impl Brush {
             ],
         }
     }
+
+    // pub fn make_cuboid(x: f32, y: f32, z: f32) -> Self {
+
+    // }
 
     // pub fn compute_normals(&mut self) {
     //     for face in &self.faces_vert {
@@ -177,8 +173,8 @@ pub struct Camera {
     pub aspect: f32, // width / height.
     pub near: f32,
     pub far: f32,
-    /// The projection matrix only changes when camera properties (the fields above) change, so
-    /// store it.
+    /// The projection matrix only changes when camera properties (fov, aspect, near, far)
+    /// change, store it.
     pub projection_mat: Mat4,
     pub projection_mat_inv: Mat4,
 }
@@ -193,27 +189,26 @@ impl Camera {
         // todo: CLean this up once you sort out your proj mat logic!!
         self.projection_mat =
             Mat4::new_perspective_rh(self.fov_y, self.aspect, self.near, self.far);
+
+        // todo: I'm not sure if this will work.
         // self.projection_mat_inv = self.projection_mat.inverse().unwrap();
 
         // todo: How does the inverted proj mat work?
-
-        let opengl_conv = cgmath::Matrix4::new(
-            1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.5, 0.0, 0.0, 0.0, 0.5, 1.0,
-        );
-        let t = opengl_conv
-            * cgmath::perspective(cgmath::Rad(self.fov_y), self.aspect, self.near, self.far);
-        let t_inv = t.invert().unwrap();
-
-        self.projection_mat_inv = Mat4::new([
-            t_inv.x.x, t_inv.x.y, t_inv.x.z, t_inv.x.w, t_inv.y.x, t_inv.y.y, t_inv.y.z, t_inv.y.w,
-            t_inv.z.x, t_inv.z.y, t_inv.z.z, t_inv.z.w, t_inv.w.x, t_inv.w.y, t_inv.w.z, t_inv.w.w,
-        ]);
+        //
+        // let opengl_conv = cgmath::Matrix4::new(
+        //     1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.5, 0.0, 0.0, 0.0, 0.5, 1.0,
+        // );
+        // let t = opengl_conv
+        //     * cgmath::perspective(cgmath::Rad(self.fov_y), self.aspect, self.near, self.far);
+        // let t_inv = t.invert().unwrap();
+        //
+        // self.projection_mat_inv = Mat4::new([
+        //     t_inv.x.x, t_inv.x.y, t_inv.x.z, t_inv.x.w, t_inv.y.x, t_inv.y.y, t_inv.y.z, t_inv.y.w,
+        //     t_inv.z.x, t_inv.z.y, t_inv.z.z, t_inv.z.w, t_inv.w.x, t_inv.w.y, t_inv.w.z, t_inv.w.w,
+        // ]);
     }
 
-    /// Calculate the view matrix. See also cgmath's [`Matrix4::look_to_rh`]
-    /// (https://github.com/rustgd/cgmath/blob/master/src/matrix.rs). Uses a right-hand coordinate
-    /// system. This is a (more efficient? Less prone to gimbal lock?) alternative to composing
-    /// rotation matrices.
+    /// Calculate the view matrix.
     #[rustfmt::skip]
     pub fn view_mat(&self) -> Mat4 {
         let mat = self.orientation.to_matrix();

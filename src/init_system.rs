@@ -9,7 +9,7 @@ use winit::{
     event_loop::{ControlFlow, EventLoop},
 };
 
-use super::init_graphics::GameState;
+use super::init_graphics::State;
 
 const WINDOW_TITLE: &str = "Graphics";
 
@@ -23,7 +23,6 @@ pub struct System {
     device: wgpu::Device,
     queue: wgpu::Queue,
     surface_cfg: wgpu::SurfaceConfiguration,
-    // game_state: init_graphics::GameState,
 }
 
 impl System {
@@ -150,7 +149,7 @@ pub fn start(
 ) {
     surface.configure(&device, &surface_cfg);
 
-    let mut state = GameState::new(&device, &queue, &surface_cfg);
+    let mut state = State::new(&device, &queue, &surface_cfg);
 
     #[cfg(not(target_arch = "wasm32"))]
     let mut last_update_inst = Instant::now();
