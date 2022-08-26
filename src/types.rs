@@ -7,6 +7,14 @@ use crate::{
     lin_alg::{Mat4, Quaternion, Vec3},
 };
 
+// These sizes are in bytes. We do this, since that's the data format expected by the shader.
+pub const VERTEX_SIZE: usize = 14 * 4;
+
+pub const MAT4_SIZE: usize = 16 * 4;
+// cam size is only the parts we pass to the shader.
+// For each of the 4 matrices in the camera, plus a padded vec3 for position.
+pub const CAM_SIZE: usize = 3 * MAT4_SIZE + 4 * 4;
+
 #[derive(Clone, Copy, Debug)]
 /// Example attributes: https://github.com/bevyengine/bevy/blob/main/crates/bevy_render/src/mesh/mesh/mod.rs#L56
 /// // todo: Vec3 vs arrays?
@@ -35,6 +43,47 @@ impl Vertex {
             normal: [0., 0., 0.],    // todo
             tangent: [0., 0., 0.],   // todo
             bitangent: [0., 0., 0.], // todo
+        }
+    }
+
+    pub fn to_bytes(&self) -> [u8; VERTEX_SIZE] {
+        let mut result = [0; VERTEX_SIZE];
+
+        result[0..4].clone_from_slice(&self.position[0].to_le_bytes());
+        result[4..8].clone_from_slice(&self.position[1].to_le_bytes());
+        result[8..12].clone_from_slice(&self.position[2].to_le_bytes());
+        result[12..16].clone_from_slice(&self.tex_coords[0].to_le_bytes());
+        result[16..20].clone_from_slice(&self.tex_coords[1].to_le_bytes());
+        result[20..24].clone_from_slice(&self.normal[0].to_le_bytes());
+        result[24..28].clone_from_slice(&self.normal[1].to_le_bytes());
+        result[28..32].clone_from_slice(&self.normal[2].to_le_bytes());
+        result[32..36].clone_from_slice(&self.tangent[0].to_le_bytes());
+        result[36..40].clone_from_slice(&self.tangent[1].to_le_bytes());
+        result[40..44].clone_from_slice(&self.tangent[2].to_le_bytes());
+        result[44..48].clone_from_slice(&self.bitangent[0].to_le_bytes());
+        result[48..52].clone_from_slice(&self.bitangent[1].to_le_bytes());
+        result[52..56].clone_from_slice(&self.bitangent[2].to_le_bytes());
+
+        result
+    }
+
+    pub fn desc<'a>() -> wgpu::VertexBufferLayout<'a> {
+        wgpu::VertexBufferLayout {
+            array_stride: std::mem::size_of::<Vertex>() as wgpu::BufferAddress,
+            step_mode: wgpu::VertexStepMode::Vertex,
+            attributes: &[
+                wgpu::VertexAttribute {
+                    offset: 0,
+                    shader_location: 0,
+                    format: wgpu::VertexFormat::Float32x3,
+                },
+                wgpu::VertexAttribute {
+                    // todo: Should this be of the prev (3), or this? (2)
+                    offset: std::mem::size_of::<[f32; 3]>() as wgpu::BufferAddress,
+                    shader_location: 1,
+                    format: wgpu::VertexFormat::Float32x2,
+                },
+            ],
         }
     }
 }
@@ -161,21 +210,21 @@ impl Brush {
 
 #[derive(Clone, Debug)]
 pub struct Camera {
-    // Position shifts all points prior to the camera transform; this is what
-    // we adjust with move keys.
-    pub position: Vec3,
-    // pub yaw: f32,   // radians
-    // pub pitch: f32, // radians
-    // pub up: Vec3,
-    pub orientation: Quaternion,
-
+    // todo: Consider a substruct either of the uniform data fields, or the non-uniform
+    // todo data fields.
     pub fov_y: f32,  // Vertical field of view in radians.
     pub aspect: f32, // width / height.
     pub near: f32,
     pub far: f32,
+    /// Position shifts all points prior to the camera transform; this is what
+    /// we adjust with move keys.
+    pub position: Vec3,
+    pub orientation: Quaternion,
     /// The projection matrix only changes when camera properties (fov, aspect, near, far)
     /// change, store it.
+    /// By contrast, the view matrix changes whenever we changed position or orientation.
     pub projection_mat: Mat4,
+    /// We us the inverse project matrix for... lighting?
     pub projection_mat_inv: Mat4,
 }
 
@@ -187,22 +236,9 @@ impl Camera {
         self.projection_mat =
             Mat4::new_perspective_rh(self.fov_y, self.aspect, self.near, self.far);
 
-        // todo: I'm not sure if this will work.
         // self.projection_mat_inv = self.projection_mat.inverse().unwrap();
 
         // todo: How does the inverted proj mat work?
-        //
-        // let opengl_conv = cgmath::Matrix4::new(
-        //     1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.5, 0.0, 0.0, 0.0, 0.5, 1.0,
-        // );
-        // let t = opengl_conv
-        //     * cgmath::perspective(cgmath::Rad(self.fov_y), self.aspect, self.near, self.far);
-        // let t_inv = t.invert().unwrap();
-        //
-        // self.projection_mat_inv = Mat4::new([
-        //     t_inv.x.x, t_inv.x.y, t_inv.x.z, t_inv.x.w, t_inv.y.x, t_inv.y.y, t_inv.y.z, t_inv.y.w,
-        //     t_inv.z.x, t_inv.z.y, t_inv.z.z, t_inv.z.w, t_inv.w.x, t_inv.w.y, t_inv.w.z, t_inv.w.w,
-        // ]);
     }
 
     /// Calculate the view matrix.
@@ -218,15 +254,20 @@ impl Camera {
         ])
     }
 
-    pub fn to_uniform_data(&self) -> [f32; 16 * 3 + 4] {
+    pub fn to_bytes(&self) -> [u8; CAM_SIZE] {
         let view = self.view_mat();
 
-        let mut result = [0.; 16 * 3 + 4];
+        let mut result = [0; CAM_SIZE];
 
-        result[..16].copy_from_slice(&self.projection_mat.data);
-        result[16..32].copy_from_slice(&self.projection_mat_inv.data);
-        result[32..48].copy_from_slice(&view.data);
-        result[48..52].copy_from_slice(&[self.position.x, self.position.y, self.position.z, 1.]);
+        result[0..MAT4_SIZE].clone_from_slice(&self.projection_mat.to_bytes());
+        result[MAT4_SIZE..2 * MAT4_SIZE].clone_from_slice(&self.projection_mat_inv.to_bytes());
+        result[2 * MAT4_SIZE..3 * MAT4_SIZE].clone_from_slice(&self.view_mat().to_bytes());
+
+        result[3 * MAT4_SIZE..CAM_SIZE - 12].clone_from_slice(&self.position.y.to_le_bytes());
+        result[3 * MAT4_SIZE - 12..CAM_SIZE - 8].clone_from_slice(&self.position.y.to_le_bytes());
+        result[3 * CAM_SIZE - 8..CAM_SIZE - 4].clone_from_slice(&self.position.z.to_le_bytes());
+        result[3 * CAM_SIZE - 4..CAM_SIZE].clone_from_slice(&1.0_f32.to_le_bytes());
+
         result
     }
 
@@ -238,6 +279,28 @@ impl Camera {
         let height = 2. * dist * (self.fov_y / 2.).tan();
         (width, height)
     }
+
+    // /// We only convert the parts we need in the shader.
+    // pub fn to_bytes(&self) -> [u8; VERTEX_SIZE] {
+    //     let mut result = [0; VERTEX_SIZE];
+    //
+    //     result[0..4].clone_from_slice(&self.position[0].to_le_bytes());
+    //     result[4..8].clone_from_slice(&self.position[1].to_le_bytes());
+    //     result[8..12].clone_from_slice(&self.position[2].to_le_bytes());
+    //     result[12..16].clone_from_slice(&self.tex_coords[0].to_le_bytes());
+    //     result[16..20].clone_from_slice(&self.tex_coords[1].to_le_bytes());
+    //     result[20..24].clone_from_slice(&self.normal[0].to_le_bytes());
+    //     result[24..28].clone_from_slice(&self.normal[1].to_le_bytes());
+    //     result[28..32].clone_from_slice(&self.normal[2].to_le_bytes());
+    //     result[32..36].clone_from_slice(&self.tangent[0].to_le_bytes());
+    //     result[36..40].clone_from_slice(&self.tangent[1].to_le_bytes());
+    //     result[40..44].clone_from_slice(&self.tangent[2].to_le_bytes());
+    //     result[44..48].clone_from_slice(&self.bitangent[0].to_le_bytes());
+    //     result[48..52].clone_from_slice(&self.bitangent[1].to_le_bytes());
+    //     result[52..56].clone_from_slice(&self.bitangent[2].to_le_bytes());
+    //
+    //     result
+    // }
 }
 
 impl Default for Camera {

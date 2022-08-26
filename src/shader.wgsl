@@ -1,6 +1,7 @@
 struct VertexOutput {
-    @location(0) tex_coord: vec2<f32>,
-    @builtin(position) position: vec4<f32>,
+    @builtin(0) position: vec4<f32>,
+    @location(1) tex_coord: vec2<f32>,
+
 };
 
 // todo: Rename transform A/R to indicate it's for the camera
@@ -13,7 +14,7 @@ struct Transform {
     // from world to camera
     view: mat4x4<f32>,
     // camera position
-    cam_pos: vec4<f32>,
+    position: vec4<f32>,
 }
 
 @group(0)
@@ -24,12 +25,13 @@ var<uniform> transform: Transform;
 fn vs_main(
     @location(0) position: vec4<f32>,
     @location(1) tex_coord: vec2<f32>,
-    @location(2) model: vec4<f32>,
+//    @location(2) model: vec4<f32>,
+    @builtin(vertex_index) in_vertex_index: u32
 ) -> VertexOutput {
     var result: VertexOutput;
     result.tex_coord = tex_coord;
 
-    result.position = transform.proj * transform.view * model * (transform.camera_pos - position);
+    result.position = transform.proj * transform.view * model * (transform.position - position);
     return result;
 }
 
@@ -44,7 +46,7 @@ fn fs_main(vertex: VertexOutput) -> @location(0) vec4<f32> {
     return vec4<f32>(1.0 - (v * 5.0), 1.0 - (v * 15.0), 1.0 - (v * 50.0), 1.0);
 }
 
-@fragment
-fn fs_wire(vertex: VertexOutput) -> @location(0) vec4<f32> {
-    return vec4<f32>(0.0, 0.5, 0.0, 0.5);
-}
+//@fragment
+//fn fs_wire(vertex: VertexOutput) -> @location(0) vec4<f32> {
+//    return vec4<f32>(0.0, 0.5, 0.0, 0.5);
+//}

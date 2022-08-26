@@ -376,25 +376,47 @@ impl Quaternion {
     /// Converts a Quaternion to a rotation matrix
     #[rustfmt::skip]
     pub fn to_matrix(&self) -> Mat3 {
-        let qwqw = self.w * self.w; // calculate common terms to avoid repeated operations
-        let qwqx = self.w * self.x;
-        let qwqy = self.w * self.y;
-        let qwqz = self.w * self.z;
-        let qxqy = self.x * self.y;
-        let qxqz = self.x * self.z;
-        let qyqz = self.y * self.z;
+        // let qwqw = self.w * self.w; // calculate common terms to avoid repeated operations
+        // let qwqx = self.w * self.x;
+        // let qwqy = self.w * self.y;
+        // let qwqz = self.w * self.z;
+        // let qxqy = self.x * self.y;
+        // let qxqz = self.x * self.z;
+        // let qyqz = self.y * self.z;
+        //
+        // Mat3 {
+        //     data: [
+        //         2.0 * (qwqw - 0.5 + self.x * self.x),
+        //         2.0 * (qxqy + qwqz),
+        //         2.0 * (qxqz - qwqy),
+        //         2.0 * (qxqy - qwqz),
+        //         2.0 * (qwqw - 0.5 + self.y * self.y),
+        //         2.0 * (qyqz + qwqx),
+        //         2.0 * (qxqz + qwqy),
+        //         2.0 * (qyqz - qwqx),
+        //         2.0 * (qwqw - 0.5 + self.z * self.z),
+        //     ]
+        // }
+
+        // https://docs.rs/glam/latest/src/glam/f32/mat3.rs.html#159-180
+        let x2 = self.x + self.x;
+        let y2 = self.y + self.y;
+        let z2 = self.z + self.z;
+        let xx = self.x * x2;
+        let xy = self.x * y2;
+        let xz = self.x * z2;
+        let yy = self.y * y2;
+        let yz = self.y * z2;
+        let zz = self.z * z2;
+        let wx = self.w * x2;
+        let wy = self.w * y2;
+        let wz = self.w * z2;
 
         Mat3 {
             data: [
-                2.0 * (qwqw - 0.5 + self.x * self.x),
-                2.0 * (qxqy + qwqz),
-                2.0 * (qxqz - qwqy),
-                2.0 * (qxqy - qwqz),
-                2.0 * (qwqw - 0.5 + self.y * self.y),
-                2.0 * (qyqz + qwqx),
-                2.0 * (qxqz + qwqy),
-                2.0 * (qyqz - qwqx),
-                2.0 * (qwqw - 0.5 + self.z * self.z),
+                1.0 - (yy + zz), xy + wz, xz - wy,
+                xy - wz, 1.0 - (xx + zz), yz + wx,
+                xz + wy, yz - wx, 1.0 - (xx + yy),
             ]
         }
     }
@@ -778,6 +800,16 @@ impl Mat4 {
                 cf(3, 0), cf(3, 1), cf(3, 2), cf(3, 3),
             ]))
         }
+    }
+
+    pub fn to_bytes(&self) -> [u8; 16 * 4] {
+        let mut result = [0; 16 * 4];
+
+        for i in 0..self.data.len() {
+            result[i * 4..i * 4 + 4].clone_from_slice(&self.data[i].to_le_bytes());
+        }
+
+        result
     }
 }
 

@@ -9,27 +9,28 @@
 //!
 //! 2022-08-21: https://github.com/gfx-rs/wgpu/blob/master/wgpu/examples/cube/main.rs
 
-// todo: Remove Cows.
-
 use std::{
-    borrow::Cow,
-    iter, mem,
-    ops::Range,
+    mem,
     sync::atomic::{AtomicUsize, Ordering},
 };
 
 use wgpu::{self, util::DeviceExt, BindGroup, BindGroupLayout, Surface, SurfaceConfiguration};
 
-use super::{
+use crate::{
     input,
     lin_alg::{Quaternion, Vec3},
-    texture,
-    types::{Brush, Camera, Entity, Mesh, Scene, Vertex},
-    // types_wgpu::{self, CameraUniform, Material, MeshWgpu, Model, VertexWgpu},
-    types_wgpu::VertexWgpu,
+    // texture,
+    types::{Brush, Camera, Entity, Mesh, Scene, Vertex, CAM_SIZE, VERTEX_SIZE},
 };
 
 use winit::event::DeviceEvent;
+
+const BG_COLOR: wgpu::Color = wgpu::Color {
+    r: 0.1,
+    g: 0.2,
+    b: 0.3,
+    a: 1.0,
+};
 
 static MESH_I: AtomicUsize = AtomicUsize::new(0);
 
@@ -110,13 +111,11 @@ fn create_texels(size: usize) -> Vec<u8> {
 pub struct State {
     vertex_buf: wgpu::Buffer,
     index_buf: wgpu::Buffer,
-    index_count: usize,
+    num_indices: usize,
     bind_groups: BindGroupData,
-    uniform_buf: wgpu::Buffer,
+    camera_buf: wgpu::Buffer,
     pipeline: wgpu::RenderPipeline,
-    pipeline_wire: Option<wgpu::RenderPipeline>,
     camera: Camera,
-    // camera_uniform: CameraUniform,
     staging_belt: wgpu::util::StagingBelt, // todo: Do we want this?
 }
 
@@ -126,33 +125,34 @@ impl State {
         queue: &wgpu::Queue,
         surface_cfg: &SurfaceConfiguration,
     ) -> Self {
-        // let mut camera_uniform = types_wgpu::CameraUniform::new();
-        // camera_uniform.update_view_proj(&camera, &camera.projection_mat);
-        //
-        // let camera_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-        //     label: Some("Camera Buffer"),
-        //     contents: bytemuck::cast_slice(&[camera_uniform]),
-        //     usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-        // });
-
         // Create the vertex and index buffers
-        let vertex_size = mem::size_of::<VertexWgpu>();
         let (vertex_data, index_data) = create_vertices();
+        let num_indices = index_data.len();
 
-        let mut vertex_data_wgpu: Vec<VertexWgpu> = Vec::new();
-        for v in vertex_data {
-            vertex_data_wgpu.push((&v).into());
+        // Convert the vertex and index data to u8 buffers.
+        let mut vertex_buf = Vec::new();
+        for vertex in vertex_data {
+            for byte in vertex.to_bytes() {
+                vertex_buf.push(byte);
+            }
+        }
+
+        let mut index_buf = Vec::new();
+        for index in index_data {
+            let bytes = index.to_le_bytes();
+            index_buf.push(bytes[0]);
+            index_buf.push(bytes[1]);
         }
 
         let vertex_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Vertex Buffer"),
-            contents: bytemuck::cast_slice(&vertex_data_wgpu),
+            label: None,
+            contents: &vertex_buf,
             usage: wgpu::BufferUsages::VERTEX,
         });
 
         let index_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Index Buffer"),
-            contents: bytemuck::cast_slice(&index_data),
+            label: None,
+            contents: &index_buf,
             usage: wgpu::BufferUsages::INDEX,
         });
 
@@ -190,93 +190,27 @@ impl State {
         let mut camera = Camera::default();
         camera.update_proj_mats();
 
-        let camera_uniform = camera.to_uniform_data();
-
         // Create other resources
-
-        let uniform_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Uniform Buffer"),
-            contents: bytemuck::cast_slice(&camera_uniform),
+        let camera_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: None,
+            contents: &camera.to_bytes(),
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
         });
 
-        let bind_groups = create_bindgroups(&device, &texture_view, &uniform_buf);
+        let bind_groups = create_bindgroups(&device, &texture_view, &camera_buf);
 
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: None,
-            source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("shader.wgsl"))),
+            source: wgpu::ShaderSource::Wgsl(include_str!("shader.wgsl").into()),
         });
 
-        let vertex_buffers = [wgpu::VertexBufferLayout {
-            array_stride: vertex_size as wgpu::BufferAddress,
-            step_mode: wgpu::VertexStepMode::Vertex,
-            attributes: &[
-                wgpu::VertexAttribute {
-                    format: wgpu::VertexFormat::Float32x4,
-                    offset: 0,
-                    shader_location: 0,
-                },
-                wgpu::VertexAttribute {
-                    format: wgpu::VertexFormat::Float32x2,
-                    offset: 4 * 4,
-                    shader_location: 1,
-                },
-                wgpu::VertexAttribute {
-                    format: wgpu::VertexFormat::Float32x4,
-                    offset: 4 * 4, // todo?
-                    shader_location: 2,
-                },
-            ],
-        }];
+        let vertex_buffers = [Vertex::desc()];
 
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: None,
             bind_group_layouts: &[&bind_groups.bg_layout],
             push_constant_ranges: &[],
         });
-
-        let pipeline_wire = if device
-            .features()
-            .contains(wgpu::Features::POLYGON_MODE_LINE)
-        {
-            let pipeline_wire = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-                label: None,
-                layout: Some(&pipeline_layout),
-                vertex: wgpu::VertexState {
-                    module: &shader,
-                    entry_point: "vs_main",
-                    buffers: &vertex_buffers,
-                },
-                fragment: Some(wgpu::FragmentState {
-                    module: &shader,
-                    entry_point: "fs_wire",
-                    targets: &[Some(wgpu::ColorTargetState {
-                        format: surface_cfg.format,
-                        blend: Some(wgpu::BlendState {
-                            color: wgpu::BlendComponent {
-                                operation: wgpu::BlendOperation::Add,
-                                src_factor: wgpu::BlendFactor::SrcAlpha,
-                                dst_factor: wgpu::BlendFactor::OneMinusSrcAlpha,
-                            },
-                            alpha: wgpu::BlendComponent::REPLACE,
-                        }),
-                        write_mask: wgpu::ColorWrites::ALL,
-                    })],
-                }),
-                primitive: wgpu::PrimitiveState {
-                    front_face: wgpu::FrontFace::Ccw,
-                    cull_mode: Some(wgpu::Face::Back),
-                    polygon_mode: wgpu::PolygonMode::Line,
-                    ..Default::default()
-                },
-                depth_stencil: None,
-                multisample: wgpu::MultisampleState::default(),
-                multiview: None,
-            });
-            Some(pipeline_wire)
-        } else {
-            None
-        };
 
         let pipeline = create_render_pipeline(
             device,
@@ -293,13 +227,12 @@ impl State {
         Self {
             vertex_buf,
             index_buf,
-            index_count: index_data.len(),
+            num_indices,
             bind_groups,
-            uniform_buf,
+            camera_buf,
             pipeline,
-            pipeline_wire,
+            // pipeline_wire,
             camera,
-            // camera_uniform,
             staging_belt: wgpu::util::StagingBelt::new(0x100),
         }
     }
@@ -309,29 +242,24 @@ impl State {
         input::handle_event(event, &mut self.camera);
     }
 
-    pub fn render(
-        &mut self,
-        view: &wgpu::TextureView,
-        device: &wgpu::Device,
-        queue: &wgpu::Queue,
-        // spawner: &framework::Spawner,
-    ) {
+    pub fn render(&mut self, view: &wgpu::TextureView, device: &wgpu::Device, queue: &wgpu::Queue) {
+        // We create a CommandEncoder to create the actual commands to send to the
+        // gpu. Most modern graphics frameworks expect commands to be stored in a command buffer
+        // before being sent to the gpu. The encoder builds a command buffer that we can then
+        // send to the gpu.
         let mut encoder =
             device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
-
-        // Update the camera buffer:
-        let camera_uniform = self.camera.to_uniform_data();
 
         self.staging_belt
             .write_buffer(
                 &mut encoder,
-                &self.uniform_buf,
+                &self.camera_buf,
                 0,
                 // x4 since all value are f32.
-                wgpu::BufferSize::new((camera_uniform.len() * 4) as wgpu::BufferAddress).unwrap(),
+                wgpu::BufferSize::new(CAM_SIZE as wgpu::BufferAddress).unwrap(),
                 device,
             )
-            .copy_from_slice(bytemuck::cast_slice(&camera_uniform));
+            .copy_from_slice(&self.camera.to_bytes());
 
         self.staging_belt.finish();
 
@@ -342,31 +270,24 @@ impl State {
                     view,
                     resolve_target: None,
                     ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(wgpu::Color {
-                            r: 0.1,
-                            g: 0.2,
-                            b: 0.3,
-                            a: 1.0,
-                        }),
+                        load: wgpu::LoadOp::Clear(BG_COLOR),
                         store: true,
                     },
                 })],
                 depth_stencil_attachment: None,
             });
+
             rpass.push_debug_group("Prepare data for draw.");
             rpass.set_pipeline(&self.pipeline);
             rpass.set_bind_group(0, &self.bind_groups.bind_group, &[]);
             rpass.set_index_buffer(self.index_buf.slice(..), wgpu::IndexFormat::Uint16);
             rpass.set_vertex_buffer(0, self.vertex_buf.slice(..));
+            // rpass.draw(0..self.num_vertices, 0..1);
             rpass.pop_debug_group();
             rpass.insert_debug_marker("Draw!");
-            rpass.draw_indexed(0..self.index_count as u32, 0, 0..1);
-
-            if let Some(ref pipe) = self.pipeline_wire {
-                rpass.set_pipeline(pipe);
-                rpass.draw_indexed(0..self.index_count as u32, 0, 0..1);
-            }
+            rpass.draw_indexed(0..self.num_indices as u32, 0, 0..1);
         }
+
         queue.submit(Some(encoder.finish()));
     }
 }
@@ -380,10 +301,6 @@ struct BindGroupData {
 fn create_render_pipeline(
     device: &wgpu::Device,
     layout: &wgpu::PipelineLayout,
-    // color_format: wgpu::TextureFormat,
-    // depth_format: Option<wgpu::TextureFormat>,
-    // vertex_layouts: &[wgpu::VertexBufferLayout],
-    // shader: wgpu::ShaderModuleDescriptor,
     vertex_buffers: &[wgpu::VertexBufferLayout],
     shader: wgpu::ShaderModule,
     config: &SurfaceConfiguration,
@@ -402,8 +319,13 @@ fn create_render_pipeline(
             targets: &[Some(config.format.into())],
         }),
         primitive: wgpu::PrimitiveState {
+            topology: wgpu::PrimitiveTopology::TriangleList,
+            strip_index_format: None,
+            front_face: wgpu::FrontFace::Ccw,
             cull_mode: Some(wgpu::Face::Back),
-            ..Default::default()
+            unclipped_depth: false,
+            polygon_mode: wgpu::PolygonMode::Fill,
+            conservative: false,
         },
         depth_stencil: None,
         multisample: wgpu::MultisampleState::default(),
@@ -413,7 +335,6 @@ fn create_render_pipeline(
 
 fn create_bindgroups(
     device: &wgpu::Device,
-    // camera_buffer: &wgpu::Buffer,
     texture_view: &wgpu::TextureView,
     uniform_buf: &wgpu::Buffer,
 ) -> BindGroupData {
