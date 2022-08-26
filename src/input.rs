@@ -39,7 +39,8 @@ pub fn handle_event(event: DeviceEvent, cam: &mut Camera) {
     match event {
         DeviceEvent::Key(key) => match key.scancode {
             17 => {
-                // E
+                // W
+                println!("CAM: {:?}", cam);
                 inputs.fwd = true;
             }
             31 => {

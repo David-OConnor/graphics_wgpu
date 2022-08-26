@@ -179,9 +179,6 @@ pub struct Camera {
     pub projection_mat_inv: Mat4,
 }
 
-use cgmath;
-use cgmath::SquareMatrix; // todo temp
-
 impl Camera {
     /// Update the stored projection matrices. Run this whenever we change camera parameters like
     /// FOV and aspect ratio.
@@ -229,8 +226,7 @@ impl Camera {
         result[..16].copy_from_slice(&self.projection_mat.data);
         result[16..32].copy_from_slice(&self.projection_mat_inv.data);
         result[32..48].copy_from_slice(&view.data);
-        result[48..51].copy_from_slice(&[self.position.x, self.position.y, self.position.z]);
-        result[51] = 1.0;
+        result[48..52].copy_from_slice(&[self.position.x, self.position.y, self.position.z, 1.]);
         result
     }
 
@@ -247,7 +243,7 @@ impl Camera {
 impl Default for Camera {
     fn default() -> Self {
         Self {
-            position: Vec3::new(0., 2., -10.),
+            position: Vec3::new(0., 2., 10.),
             orientation: Quaternion::new_identity(),
             fov_y: TAU / 3., // Vertical field of view in radians.
             aspect: 4. / 3., // width / height.

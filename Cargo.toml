@@ -13,8 +13,6 @@ chrono = "^0.4.19"
 wgpu = "^0.13.1"
 #wgpu = { git = "https://github.com/gfx-rs/wgpu" }  # Use GH version so examples work.
 
-cgmath = "0.18.0" # todo temp to TS issues
-
 # That's a lot of deps for WGPU examples. Try to trim it down?
 
 winit = "^0.26.1"

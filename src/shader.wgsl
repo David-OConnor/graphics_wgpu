@@ -3,18 +3,33 @@ struct VertexOutput {
     @builtin(position) position: vec4<f32>,
 };
 
+// todo: Rename transform A/R to indicate it's for the camera
+
+struct Transform {
+    // from camera to screen
+    proj: mat4x4<f32>,
+    // from screen to camera
+    proj_inv: mat4x4<f32>,
+    // from world to camera
+    view: mat4x4<f32>,
+    // camera position
+    cam_pos: vec4<f32>,
+}
+
 @group(0)
 @binding(0)
-var<uniform> transform: mat4x4<f32>;
+var<uniform> transform: Transform;
 
 @vertex
 fn vs_main(
     @location(0) position: vec4<f32>,
     @location(1) tex_coord: vec2<f32>,
+    @location(2) model: vec4<f32>,
 ) -> VertexOutput {
     var result: VertexOutput;
     result.tex_coord = tex_coord;
-    result.position = transform * position;
+
+    result.position = transform.proj * transform.view * model * (transform.camera_pos - position);
     return result;
 }
 

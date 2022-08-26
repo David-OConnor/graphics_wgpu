@@ -5,17 +5,16 @@ use std::time::{Duration, Instant};
 
 use crate::init_graphics;
 use winit::{
-    event::{self, WindowEvent},
+    event::{Event, WindowEvent},
     event_loop::{ControlFlow, EventLoop},
+    window::{Window, WindowBuilder},
 };
 
-use super::init_graphics::State;
+use crate::init_graphics::State;
 
 const WINDOW_TITLE: &str = "Graphics";
 
-pub struct System {
-    window: winit::window::Window,
-    event_loop: EventLoop<()>,
+pub struct GraphicsSystem {
     instance: wgpu::Instance,
     size: winit::dpi::PhysicalSize<u32>,
     surface: wgpu::Surface,
@@ -25,18 +24,53 @@ pub struct System {
     surface_cfg: wgpu::SurfaceConfiguration,
 }
 
-impl System {
-    pub async fn new() -> System {
+/// Quarantine for the Async part of the API
+async fn setup_async(
+    instance: &wgpu::Instance,
+    surface: &wgpu::Surface,
+) -> (wgpu::Adapter, wgpu::Device, wgpu::Queue) {
+    // The adapter is a handle to our actual graphics card. You can use this to get
+    // information about the graphics card such as its name and what backend the
+    // adapter uses. We use this to create our Device and Queue.
+    let adapter = instance
+        .request_adapter(&wgpu::RequestAdapterOptions {
+            // `Default` prefers low power when on battery, high performance when on mains.
+            power_preference: wgpu::PowerPreference::default(),
+            compatible_surface: Some(&surface),
+            force_fallback_adapter: false,
+        })
+        .await
+        .unwrap();
+
+    let (device, queue) = adapter
+        .request_device(
+            &wgpu::DeviceDescriptor {
+                label: None,
+                // https://docs.rs/wgpu/latest/wgpu/struct.Features.html
+                features: wgpu::Features::empty(),
+                // https://docs.rs/wgpu/latest/wgpu/struct.Limits.html
+                limits: wgpu::Limits::default(),
+            },
+            std::env::var("WGPU_TRACE")
+                .ok()
+                .as_ref()
+                .map(std::path::Path::new),
+        )
+        .await
+        .expect("Unable to find a suitable GPU adapter!");
+
+    (adapter, device, queue)
+}
+
+impl GraphicsSystem {
+    pub fn new(window: &Window) -> GraphicsSystem {
         #[cfg(not(target_arch = "wasm32"))]
         {
             env_logger::init();
         };
 
-        let event_loop = EventLoop::new();
         let mut builder = winit::window::WindowBuilder::new();
         builder = builder.with_title(WINDOW_TITLE);
-
-        let window = builder.build(&event_loop).unwrap();
 
         #[cfg(target_arch = "wasm32")]
         {
@@ -61,25 +95,17 @@ impl System {
 
         let size = window.inner_size();
 
-        // The instance is a handle to our GPU
+        // The instance is a handle to our GPU. Its main purpose is to create Adapters and Surfaces.
         let instance = wgpu::Instance::new(wgpu::Backends::VULKAN);
 
-        let surface = unsafe { instance.create_surface(&window) };
-        // let adapter =
-        //     // todo: High power?
-        //     wgpu::util::initialize_adapter_from_env(&instance, backend, Some(&surface))
-        //         .expect("No suitable GPU adapters found on the system!");
+        let surface = unsafe { instance.create_surface(window) };
 
-        let adapter = instance
-            .request_adapter(&wgpu::RequestAdapterOptions {
-                power_preference: wgpu::PowerPreference::default(),
-                compatible_surface: Some(&surface),
-                force_fallback_adapter: false,
-            })
-            .await
-            .unwrap();
+        let (adapter, device, queue) = pollster::block_on(setup_async(&instance, &surface));
 
-        let mut surface_cfg = wgpu::SurfaceConfiguration {
+        // The surface is the part of the window that we draw to. We need it to draw directly to the
+        // screen. Our window needs to implement raw-window-handle (opens new window)'s
+        // HasRawWindowHandle trait to create a surface.
+        let surface_cfg = wgpu::SurfaceConfiguration {
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
             format: surface.get_supported_formats(&adapter)[0],
             width: size.width,
@@ -88,25 +114,7 @@ impl System {
             present_mode: wgpu::PresentMode::Fifo,
         };
 
-        let trace_dir = std::env::var("WGPU_TRACE");
-
-        let (device, queue) = adapter
-            .request_device(
-                &wgpu::DeviceDescriptor {
-                    label: None,
-                    // https://docs.rs/wgpu/latest/wgpu/struct.Features.html
-                    features: wgpu::Features::empty(),
-                    // https://docs.rs/wgpu/latest/wgpu/struct.Limits.html
-                    limits: wgpu::Limits::default(),
-                },
-                trace_dir.ok().as_ref().map(std::path::Path::new),
-            )
-            .await
-            .expect("Unable to find a suitable GPU adapter!");
-
-        System {
-            window,
-            event_loop,
+        Self {
             instance,
             size,
             surface,
@@ -117,40 +125,21 @@ impl System {
         }
     }
 
-    pub fn resize(
-        &mut self,
-        new_size: winit::dpi::PhysicalSize<u32>,
-        config: &mut wgpu::SurfaceConfiguration,
-    ) {
+    pub fn resize(&mut self, new_size: winit::dpi::PhysicalSize<u32>) {
         if new_size.width > 0 && new_size.height > 0 {
-            // self.projection.resize(new_size.width, new_size.height);
             self.size = new_size;
             self.surface_cfg.width = new_size.width;
             self.surface_cfg.height = new_size.height;
-            self.surface.configure(&self.device, config);
-            // self.depth_texture =
-            //     texture::Texture::create_depth_texture(&self.device, config, "depth_texture");
+            self.surface.configure(&self.device, &self.surface_cfg);
         }
+    }
+
+    fn input(&mut self, event: &WindowEvent) -> bool {
+        false
     }
 }
 
-pub fn start(
-    System {
-        window,
-        event_loop,
-        instance,
-        size,
-        surface,
-        adapter,
-        device,
-        queue,
-        mut surface_cfg,
-    }: System,
-) {
-    surface.configure(&device, &surface_cfg);
-
-    let mut state = State::new(&device, &queue, &surface_cfg);
-
+pub fn run() {
     #[cfg(not(target_arch = "wasm32"))]
     let mut last_update_inst = Instant::now();
     #[cfg(not(target_arch = "wasm32"))]
@@ -158,12 +147,20 @@ pub fn start(
     #[cfg(not(target_arch = "wasm32"))]
     let (mut frame_count, mut accum_time) = (0, 0.0);
 
+    let event_loop = EventLoop::new();
+    let window = WindowBuilder::new().build(&event_loop).unwrap();
+
+    let mut sys = GraphicsSystem::new(&window);
+    let mut state = State::new(&sys.device, &sys.queue, &sys.surface_cfg);
+
+    sys.surface.configure(&sys.device, &sys.surface_cfg);
+
     event_loop.run(move |event, _, control_flow| {
-        let _ = (&instance, &adapter); // force ownership by the closure
+        let _ = (&sys.instance, &sys.adapter); // force ownership by the closure
         *control_flow = ControlFlow::Poll;
 
         match event {
-            event::Event::RedrawEventsCleared => {
+            Event::RedrawEventsCleared => {
                 #[cfg(not(target_arch = "wasm32"))]
                 {
                     // Clamp to some max framerate to avoid busy-looping too much
@@ -176,42 +173,31 @@ pub fn start(
                     let time_since_last_frame = last_update_inst.elapsed();
                     if time_since_last_frame >= target_frametime {
                         window.request_redraw();
-                        last_update_inst = Instant::now();
                     } else {
                         *control_flow = ControlFlow::WaitUntil(
                             Instant::now() + target_frametime - time_since_last_frame,
                         );
                     }
-
-                    // spawner.run_until_stalled();
                 }
 
                 #[cfg(target_arch = "wasm32")]
                 window.request_redraw();
             }
-            event::Event::WindowEvent {
-                event:
-                    WindowEvent::Resized(size)
-                    | WindowEvent::ScaleFactorChanged {
-                        new_inner_size: &mut size,
-                        ..
-                    },
-                ..
-            } => {
-                surface_cfg.width = size.width.max(1);
-                surface_cfg.height = size.height.max(1);
-
-                // todo?
-                // system.resize(&config, &device, &queue);
-                surface.configure(&device, &surface_cfg);
-            }
-            event::Event::WindowEvent { event, .. } => {}
-            event::Event::DeviceEvent { event, .. } => {
+            Event::WindowEvent { event, .. } => match event {
+                WindowEvent::Resized(physical_size) => {
+                    sys.resize(physical_size);
+                }
+                WindowEvent::ScaleFactorChanged { new_inner_size, .. } => {
+                    sys.resize(*new_inner_size);
+                }
+                _ => (),
+            },
+            Event::DeviceEvent { event, .. } => {
                 // todo: Evaluate how you handle DT; this is quick +dirty
                 let dt = last_frame_inst.elapsed().as_secs_f32();
                 state.update(event);
             }
-            event::Event::RedrawRequested(_) => {
+            Event::RedrawRequested(_) => {
                 #[cfg(not(target_arch = "wasm32"))]
                 {
                     accum_time += last_frame_inst.elapsed().as_secs_f32();
@@ -227,11 +213,11 @@ pub fn start(
                     }
                 }
 
-                let frame = match surface.get_current_texture() {
+                let frame = match sys.surface.get_current_texture() {
                     Ok(frame) => frame,
                     Err(_) => {
-                        surface.configure(&device, &surface_cfg);
-                        surface
+                        sys.surface.configure(&sys.device, &sys.surface_cfg);
+                        sys.surface
                             .get_current_texture()
                             .expect("Failed to acquire next surface texture!")
                     }
@@ -240,19 +226,14 @@ pub fn start(
                     .texture
                     .create_view(&wgpu::TextureViewDescriptor::default());
 
-                state.render(&view, &device, &queue, &surface);
+                state.render(&view, &sys.device, &sys.queue);
 
                 frame.present();
             }
             _ => {}
         }
     });
-}
-
-#[cfg(not(target_arch = "wasm32"))]
-pub fn run() {
-    let setup = pollster::block_on(System::new());
-    start(setup);
+    last_update_inst = Instant::now();
 }
 
 #[cfg(target_arch = "wasm32")]
