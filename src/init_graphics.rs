@@ -20,7 +20,7 @@ use crate::{
     input,
     lin_alg::Vec3,
     // texture,
-    types::{Brush, Camera, Entity, Mesh, Scene, Vertex, CAM_UNIFORM_SIZE, VERTEX_SIZE},
+    types::{Brush, Camera, Entity, Mesh, Scene, Vertex, CAM_UNIFORM_SIZE},
 };
 
 use winit::event::DeviceEvent;
@@ -250,18 +250,20 @@ impl State {
         let mut encoder =
             device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
 
-        self.staging_belt
-            .write_buffer(
-                &mut encoder,
-                &self.camera_buf,
-                0,
-                // x4 since all value are f32.
-                wgpu::BufferSize::new(CAM_UNIFORM_SIZE as wgpu::BufferAddress).unwrap(),
-                device,
-            )
-            .copy_from_slice(&self.camera.to_uniform().to_bytes());
+        // todo: Put back
 
-        self.staging_belt.finish();
+        // self.staging_belt
+        //     .write_buffer(
+        //         &mut encoder,
+        //         &self.camera_buf,
+        //         1, // todo: What should this be?
+        //         // x4 since all value are f32.
+        //         wgpu::BufferSize::new(CAM_UNIFORM_SIZE as wgpu::BufferAddress).unwrap(),
+        //         device,
+        //     )
+        //     .copy_from_slice(&self.camera.to_uniform().to_bytes());
+        //
+        // self.staging_belt.finish();
 
         {
             let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {

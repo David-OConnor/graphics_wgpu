@@ -8,12 +8,14 @@ use crate::{
 };
 
 // These sizes are in bytes. We do this, since that's the data format expected by the shader.
-pub const VERTEX_SIZE: usize = 14 * 4;
+const F32_SIZE: usize = 4;
 
-pub const MAT4_SIZE: usize = 16 * 4;
+pub const VERTEX_SIZE: usize = 14 * F32_SIZE;
+pub const MAT4_SIZE: usize = 16 * F32_SIZE;
 // cam size is only the parts we pass to the shader.
 // For each of the 4 matrices in the camera, plus a padded vec3 for position.
-pub const CAM_UNIFORM_SIZE: usize = 3 * MAT4_SIZE + 4 * 4;
+pub const CAM_UNIFORM_SIZE: usize = 3 * MAT4_SIZE + 4 * F32_SIZE;
+pub const VEC3_SIZE: usize = 3 * F32_SIZE;
 
 #[derive(Clone, Copy, Debug)]
 /// Example attributes: https://github.com/bevyengine/bevy/blob/main/crates/bevy_render/src/mesh/mesh/mod.rs#L56
@@ -72,16 +74,38 @@ impl Vertex {
             array_stride: std::mem::size_of::<Vertex>() as wgpu::BufferAddress,
             step_mode: wgpu::VertexStepMode::Vertex,
             attributes: &[
+                // position
                 wgpu::VertexAttribute {
                     offset: 0,
                     shader_location: 0,
                     format: wgpu::VertexFormat::Float32x3,
                 },
+                // tex_coords
                 wgpu::VertexAttribute {
-                    // todo: Should this be of the prev (3), or this? (2)
-                    offset: std::mem::size_of::<[f32; 3]>() as wgpu::BufferAddress,
+                    offset: VEC3_SIZE as u64,
                     shader_location: 1,
                     format: wgpu::VertexFormat::Float32x2,
+                },
+                // normal
+                wgpu::VertexAttribute {
+                    // offset: std::mem::size_of::<[f32; 3]>() as wgpu::BufferAddress,
+                    offset: (2 * F32_SIZE + VEC3_SIZE) as u64,
+                    shader_location: 2,
+                    format: wgpu::VertexFormat::Float32x3,
+                },
+                // tangent
+                wgpu::VertexAttribute {
+                    // offset: std::mem::size_of::<[f32; 3]>() as wgpu::BufferAddress,
+                    offset: (2 * F32_SIZE + 2 * VEC3_SIZE) as u64,
+                    shader_location: 3,
+                    format: wgpu::VertexFormat::Float32x3,
+                },
+                // bitangent
+                wgpu::VertexAttribute {
+                    // offset: std::mem::size_of::<[f32; 3]>() as wgpu::BufferAddress,
+                    offset: (2 * F32_SIZE + 3 * VEC3_SIZE) as u64,
+                    shader_location: 4,
+                    format: wgpu::VertexFormat::Float32x3,
                 },
             ],
         }
@@ -224,17 +248,15 @@ impl CameraUniform {
     pub fn to_bytes(&self) -> [u8; CAM_UNIFORM_SIZE] {
         let mut result = [0; CAM_UNIFORM_SIZE];
 
-        result[0..MAT4_SIZE].clone_from_slice(&self.projection_mat.to_bytes());
-        result[MAT4_SIZE..2 * MAT4_SIZE].clone_from_slice(&self.projection_mat_inv.to_bytes());
-        result[2 * MAT4_SIZE..3 * MAT4_SIZE].clone_from_slice(&self.view_mat.to_bytes());
+        // 64 is mat4 size in bytes.
+        result[0..64].clone_from_slice(&self.projection_mat.to_bytes());
+        result[64..128].clone_from_slice(&self.projection_mat_inv.to_bytes());
+        result[128..192].clone_from_slice(&self.view_mat.to_bytes());
 
-        result[3 * MAT4_SIZE..CAM_UNIFORM_SIZE - 12]
-            .clone_from_slice(&self.position.y.to_le_bytes());
-        result[3 * MAT4_SIZE - 12..CAM_UNIFORM_SIZE - 8]
-            .clone_from_slice(&self.position.y.to_le_bytes());
-        result[3 * CAM_UNIFORM_SIZE - 8..CAM_UNIFORM_SIZE - 4]
-            .clone_from_slice(&self.position.z.to_le_bytes());
-        result[3 * CAM_UNIFORM_SIZE - 4..CAM_UNIFORM_SIZE].clone_from_slice(&1.0_f32.to_le_bytes());
+        result[192..196].clone_from_slice(&self.position.x.to_le_bytes());
+        result[196..200].clone_from_slice(&self.position.y.to_le_bytes());
+        result[200..204].clone_from_slice(&self.position.z.to_le_bytes());
+        result[204..208].clone_from_slice(&1.0_f32.to_le_bytes());
 
         result
     }
