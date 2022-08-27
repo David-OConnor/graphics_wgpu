@@ -13,7 +13,7 @@ pub const VERTEX_SIZE: usize = 14 * 4;
 pub const MAT4_SIZE: usize = 16 * 4;
 // cam size is only the parts we pass to the shader.
 // For each of the 4 matrices in the camera, plus a padded vec3 for position.
-pub const CAM_SIZE: usize = 3 * MAT4_SIZE + 4 * 4;
+pub const CAM_UNIFORM_SIZE: usize = 3 * MAT4_SIZE + 4 * 4;
 
 #[derive(Clone, Copy, Debug)]
 /// Example attributes: https://github.com/bevyengine/bevy/blob/main/crates/bevy_render/src/mesh/mesh/mod.rs#L56
@@ -208,18 +208,10 @@ impl Brush {
     // }
 }
 
-#[derive(Clone, Debug)]
-pub struct Camera {
-    // todo: Consider a substruct either of the uniform data fields, or the non-uniform
-    // todo data fields.
-    pub fov_y: f32,  // Vertical field of view in radians.
-    pub aspect: f32, // width / height.
-    pub near: f32,
-    pub far: f32,
-    /// Position shifts all points prior to the camera transform; this is what
-    /// we adjust with move keys.
+/// This is the component of the camrea that
+pub struct CameraUniform {
     pub position: Vec3,
-    pub orientation: Quaternion,
+    pub view_mat: Mat4,
     /// The projection matrix only changes when camera properties (fov, aspect, near, far)
     /// change, store it.
     /// By contrast, the view matrix changes whenever we changed position or orientation.
@@ -228,17 +220,54 @@ pub struct Camera {
     pub projection_mat_inv: Mat4,
 }
 
+impl CameraUniform {
+    pub fn to_bytes(&self) -> [u8; CAM_UNIFORM_SIZE] {
+        let mut result = [0; CAM_UNIFORM_SIZE];
+
+        result[0..MAT4_SIZE].clone_from_slice(&self.projection_mat.to_bytes());
+        result[MAT4_SIZE..2 * MAT4_SIZE].clone_from_slice(&self.projection_mat_inv.to_bytes());
+        result[2 * MAT4_SIZE..3 * MAT4_SIZE].clone_from_slice(&self.view_mat.to_bytes());
+
+        result[3 * MAT4_SIZE..CAM_UNIFORM_SIZE - 12]
+            .clone_from_slice(&self.position.y.to_le_bytes());
+        result[3 * MAT4_SIZE - 12..CAM_UNIFORM_SIZE - 8]
+            .clone_from_slice(&self.position.y.to_le_bytes());
+        result[3 * CAM_UNIFORM_SIZE - 8..CAM_UNIFORM_SIZE - 4]
+            .clone_from_slice(&self.position.z.to_le_bytes());
+        result[3 * CAM_UNIFORM_SIZE - 4..CAM_UNIFORM_SIZE].clone_from_slice(&1.0_f32.to_le_bytes());
+
+        result
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct Camera {
+    pub fov_y: f32,  // Vertical field of view in radians.
+    pub aspect: f32, // width / height.
+    pub near: f32,
+    pub far: f32,
+    /// Position shifts all points prior to the camera transform; this is what
+    /// we adjust with move keys.
+    pub position: Vec3,
+    pub orientation: Quaternion,
+}
+
 impl Camera {
     /// Update the stored projection matrices. Run this whenever we change camera parameters like
     /// FOV and aspect ratio.
-    pub fn update_proj_mats(&mut self) {
-        // todo: CLean this up once you sort out your proj mat logic!!
-        self.projection_mat =
-            Mat4::new_perspective_rh(self.fov_y, self.aspect, self.near, self.far);
+    pub fn to_uniform(&self) -> CameraUniform {
+        let projection_mat = Mat4::new_perspective_rh(self.fov_y, self.aspect, self.near, self.far);
 
         // self.projection_mat_inv = self.projection_mat.inverse().unwrap();
+        let projection_mat_inv = Mat4::new_identity(); // todo
 
         // todo: How does the inverted proj mat work?
+        CameraUniform {
+            position: self.position,
+            view_mat: self.view_mat(),
+            projection_mat,
+            projection_mat_inv,
+        }
     }
 
     /// Calculate the view matrix.
@@ -252,23 +281,6 @@ impl Camera {
             mat.data[2], mat.data[5], mat.data[8], 0.,
             -self.position.dot(RIGHT_VEC), -self.position.dot(UP_VEC), self.position.dot(FWD_VEC), 1.,
         ])
-    }
-
-    pub fn to_bytes(&self) -> [u8; CAM_SIZE] {
-        let view = self.view_mat();
-
-        let mut result = [0; CAM_SIZE];
-
-        result[0..MAT4_SIZE].clone_from_slice(&self.projection_mat.to_bytes());
-        result[MAT4_SIZE..2 * MAT4_SIZE].clone_from_slice(&self.projection_mat_inv.to_bytes());
-        result[2 * MAT4_SIZE..3 * MAT4_SIZE].clone_from_slice(&self.view_mat().to_bytes());
-
-        result[3 * MAT4_SIZE..CAM_SIZE - 12].clone_from_slice(&self.position.y.to_le_bytes());
-        result[3 * MAT4_SIZE - 12..CAM_SIZE - 8].clone_from_slice(&self.position.y.to_le_bytes());
-        result[3 * CAM_SIZE - 8..CAM_SIZE - 4].clone_from_slice(&self.position.z.to_le_bytes());
-        result[3 * CAM_SIZE - 4..CAM_SIZE].clone_from_slice(&1.0_f32.to_le_bytes());
-
-        result
     }
 
     pub fn view_size(&self, far: bool) -> (f32, f32) {
@@ -312,8 +324,6 @@ impl Default for Camera {
             aspect: 4. / 3., // width / height.
             near: 1.,
             far: 100.,
-            projection_mat: Mat4::new_identity(),
-            projection_mat_inv: Mat4::new_identity(),
         }
     }
 }

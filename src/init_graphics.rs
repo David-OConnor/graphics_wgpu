@@ -18,9 +18,9 @@ use wgpu::{self, util::DeviceExt, BindGroup, BindGroupLayout, Surface, SurfaceCo
 
 use crate::{
     input,
-    lin_alg::{Quaternion, Vec3},
+    lin_alg::Vec3,
     // texture,
-    types::{Brush, Camera, Entity, Mesh, Scene, Vertex, CAM_SIZE, VERTEX_SIZE},
+    types::{Brush, Camera, Entity, Mesh, Scene, Vertex, CAM_UNIFORM_SIZE, VERTEX_SIZE},
 };
 
 use winit::event::DeviceEvent;
@@ -70,11 +70,12 @@ fn create_vertices() -> (Vec<Vertex>, Vec<u16>) {
     // These indices define faces by triangles. (each 3 represent a triangle, starting at index 0.
     // todo: You have code in `types` to split a face into triangles for mesh construction.
 
+    // Indices are arranged CCW, from front of face
     #[rustfmt::skip]
         let indices: &[u16] = &[
-        0, 1, 2,
+        0, 2, 1,
         0, 1, 3,
-        0, 2, 3,
+        0, 3, 2,
         1, 2, 3,
     ];
 
@@ -188,16 +189,15 @@ impl State {
         );
 
         let mut camera = Camera::default();
-        camera.update_proj_mats();
 
         // Create other resources
-        let camera_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+        let cam_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: None,
-            contents: &camera.to_bytes(),
+            contents: &camera.to_uniform().to_bytes(),
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
         });
 
-        let bind_groups = create_bindgroups(&device, &texture_view, &camera_buf);
+        let bind_groups = create_bindgroups(&device, &cam_buf);
 
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: None,
@@ -208,7 +208,7 @@ impl State {
 
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: None,
-            bind_group_layouts: &[&bind_groups.bg_layout],
+            bind_group_layouts: &[&bind_groups.layout_cam],
             push_constant_ranges: &[],
         });
 
@@ -229,7 +229,7 @@ impl State {
             index_buf,
             num_indices,
             bind_groups,
-            camera_buf,
+            camera_buf: cam_buf,
             pipeline,
             // pipeline_wire,
             camera,
@@ -256,10 +256,10 @@ impl State {
                 &self.camera_buf,
                 0,
                 // x4 since all value are f32.
-                wgpu::BufferSize::new(CAM_SIZE as wgpu::BufferAddress).unwrap(),
+                wgpu::BufferSize::new(CAM_UNIFORM_SIZE as wgpu::BufferAddress).unwrap(),
                 device,
             )
-            .copy_from_slice(&self.camera.to_bytes());
+            .copy_from_slice(&self.camera.to_uniform().to_bytes());
 
         self.staging_belt.finish();
 
@@ -277,24 +277,19 @@ impl State {
                 depth_stencil_attachment: None,
             });
 
-            rpass.push_debug_group("Prepare data for draw.");
             rpass.set_pipeline(&self.pipeline);
-            rpass.set_bind_group(0, &self.bind_groups.bind_group, &[]);
-            rpass.set_index_buffer(self.index_buf.slice(..), wgpu::IndexFormat::Uint16);
+            // rpass.set_bind_group(0, &self.bind_groups.diffuse, &[]);
+            // todo: Diffuse bind group?
+
+            rpass.set_bind_group(1, &self.bind_groups.cam, &[]);
             rpass.set_vertex_buffer(0, self.vertex_buf.slice(..));
-            // rpass.draw(0..self.num_vertices, 0..1);
-            rpass.pop_debug_group();
-            rpass.insert_debug_marker("Draw!");
+            rpass.set_index_buffer(self.index_buf.slice(..), wgpu::IndexFormat::Uint16);
+
             rpass.draw_indexed(0..self.num_indices as u32, 0, 0..1);
         }
 
         queue.submit(Some(encoder.finish()));
     }
-}
-
-struct BindGroupData {
-    pub bg_layout: BindGroupLayout,
-    pub bind_group: BindGroup,
 }
 
 /// Create render pipelines.
@@ -333,57 +328,39 @@ fn create_render_pipeline(
     })
 }
 
-fn create_bindgroups(
-    device: &wgpu::Device,
-    texture_view: &wgpu::TextureView,
-    uniform_buf: &wgpu::Buffer,
-) -> BindGroupData {
-    // Create pipeline layout
-    let bg_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-        label: None,
-        entries: &[
-            wgpu::BindGroupLayoutEntry {
-                binding: 0,
-                visibility: wgpu::ShaderStages::VERTEX,
-                ty: wgpu::BindingType::Buffer {
-                    ty: wgpu::BufferBindingType::Uniform,
-                    has_dynamic_offset: false,
-                    min_binding_size: None,
-                },
-                count: None,
-            },
-            wgpu::BindGroupLayoutEntry {
-                binding: 1,
-                visibility: wgpu::ShaderStages::FRAGMENT,
-                ty: wgpu::BindingType::Texture {
-                    multisampled: false,
-                    sample_type: wgpu::TextureSampleType::Uint,
-                    view_dimension: wgpu::TextureViewDimension::D2,
-                },
-                count: None,
-            },
-        ],
-    });
+struct BindGroupData {
+    pub layout_cam: BindGroupLayout,
+    pub cam: BindGroup,
+}
 
-    let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-        layout: &bg_layout,
-        entries: &[
-            wgpu::BindGroupEntry {
-                binding: 0,
-                resource: uniform_buf.as_entire_binding(),
+fn create_bindgroups(device: &wgpu::Device, cam_buf: &wgpu::Buffer) -> BindGroupData {
+    // We only need vertex, not fragment info in the camera uniform.
+    let layout_cam = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+        entries: &[wgpu::BindGroupLayoutEntry {
+            binding: 0,
+            visibility: wgpu::ShaderStages::VERTEX,
+            ty: wgpu::BindingType::Buffer {
+                ty: wgpu::BufferBindingType::Uniform,
+                // The dynamic field indicates whether this buffer will change size or
+                // not. This is useful if we want to store an array of things in our uniforms.
+                has_dynamic_offset: false,
+                min_binding_size: None,
             },
-            wgpu::BindGroupEntry {
-                binding: 1,
-                resource: wgpu::BindingResource::TextureView(&texture_view),
-            },
-        ],
+            count: None,
+        }],
         label: None,
     });
 
-    BindGroupData {
-        bg_layout,
-        bind_group,
-    }
+    let cam = device.create_bind_group(&wgpu::BindGroupDescriptor {
+        layout: &layout_cam,
+        entries: &[wgpu::BindGroupEntry {
+            binding: 0,
+            resource: cam_buf.as_entire_binding(),
+        }],
+        label: None,
+    });
+
+    BindGroupData { layout_cam, cam }
 }
 
 fn add_scene_entities(entities: &mut Vec<Entity>) {
