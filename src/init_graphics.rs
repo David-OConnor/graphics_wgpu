@@ -10,17 +10,17 @@
 //! 2022-08-21: https://github.com/gfx-rs/wgpu/blob/master/wgpu/examples/cube/main.rs
 
 use std::{
-    mem,
-    sync::atomic::{AtomicUsize, Ordering},
+    sync::atomic::{AtomicUsize},
 };
 
 use wgpu::{self, util::DeviceExt, BindGroup, BindGroupLayout, Surface, SurfaceConfiguration};
 
 use crate::{
+    // texture,
+    camera::{Camera},
     input,
     lin_alg::Vec3,
-    // texture,
-    types::{Brush, Camera, Entity, Mesh, Scene, Vertex, CAM_UNIFORM_SIZE},
+    types::{Brush, Entity, Mesh, Scene, Vertex},
 };
 
 use winit::event::DeviceEvent;
@@ -189,6 +189,7 @@ impl State {
         );
 
         let mut camera = Camera::default();
+        camera.update_proj_mat();
 
         // Create other resources
         let cam_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
@@ -238,8 +239,18 @@ impl State {
     }
 
     #[allow(clippy::single_match)]
-    pub fn update(&mut self, event: DeviceEvent) {
+    pub fn update(&mut self, event: DeviceEvent, queue: &wgpu::Queue) {
         input::handle_event(event, &mut self.camera);
+
+        // todo: ALternative approach that may be more performant:
+        // "We can create a separate buffer and copy its contents to our camera_buffer. The new buffer
+        // is known as a staging buffer. This method is usually how it's done
+        // as it allows the contents of the main buffer (in this case camera_buffer)
+        // to only be accessible by the gpu. The gpu can do some speed optimizations which
+        // it couldn't if we could access the buffer via the cpu."
+
+        // self.queue.write_buffer(
+        queue.write_buffer(&self.camera_buf, 0, &self.camera.to_uniform().to_bytes());
     }
 
     pub fn render(&mut self, view: &wgpu::TextureView, device: &wgpu::Device, queue: &wgpu::Queue) {
@@ -249,8 +260,6 @@ impl State {
         // send to the gpu.
         let mut encoder =
             device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
-
-        // todo: Put back
 
         // self.staging_belt
         //     .write_buffer(
@@ -331,6 +340,8 @@ fn create_render_pipeline(
 }
 
 struct BindGroupData {
+    // pub layout_diffuse: BindGroupLayout,
+    // pub diffuse: BindGroup,
     pub layout_cam: BindGroupLayout,
     pub cam: BindGroup,
 }

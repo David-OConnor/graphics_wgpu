@@ -1,11 +1,9 @@
 //! Handles keyboard and mouse input, eg for moving the camera.
 
-use std::f32::consts::TAU;
-
 use crate::{
+    camera::Camera,
     init_graphics::{DT, FWD_VEC, RIGHT_VEC, UP_VEC},
     lin_alg::{Quaternion, Vec3},
-    types::Camera,
 };
 
 // todo: remove Winit from this module if you can, and make it agnostic?

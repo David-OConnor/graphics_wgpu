@@ -3,6 +3,7 @@ pub mod init_system;
 mod input;
 mod lin_alg;
 // mod texture;
+mod camera;
 mod types;
 
 pub use init_system::run;

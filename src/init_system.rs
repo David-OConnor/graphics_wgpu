@@ -194,7 +194,7 @@ pub fn run() {
             Event::DeviceEvent { event, .. } => {
                 // todo: Evaluate how you handle DT; this is quick +dirty
                 let dt = last_frame_inst.elapsed().as_secs_f32();
-                state.update(event);
+                state.update(event, &sys.queue);
             }
             Event::RedrawRequested(_) => {
                 #[cfg(not(target_arch = "wasm32"))]
