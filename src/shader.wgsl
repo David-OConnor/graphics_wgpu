@@ -9,7 +9,7 @@ struct CameraUniform {
     position: vec4<f32>,
 }
 
-@group(0) @binding(0) // 1.
+@group(0) @binding(0)
 var<uniform> camera: CameraUniform;
 
 struct VertexInput {
@@ -39,9 +39,8 @@ fn vs_main(
     return result;
 }
 
-@group(0)
-@binding(1)
-var r_color: texture_2d<u32>;
+//@group(0) @binding(0)
+//var r_color: texture_2d<u32>;
 
 @fragment
 fn fs_main(vertex: VertexOutput) -> @location(0) vec4<f32> {

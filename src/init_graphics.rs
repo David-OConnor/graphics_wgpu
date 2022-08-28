@@ -9,18 +9,16 @@
 //!
 //! 2022-08-21: https://github.com/gfx-rs/wgpu/blob/master/wgpu/examples/cube/main.rs
 
-use std::{
-    sync::atomic::{AtomicUsize},
-};
+use std::sync::atomic::AtomicUsize;
 
 use wgpu::{self, util::DeviceExt, BindGroup, BindGroupLayout, Surface, SurfaceConfiguration};
 
 use crate::{
     // texture,
-    camera::{Camera},
+    camera::Camera,
     input,
-    lin_alg::Vec3,
-    types::{Brush, Entity, Mesh, Scene, Vertex},
+    lin_alg::{Quaternion, Vec3},
+    types::{Brush, Entity, Instance, Mesh, Scene, Vertex},
 };
 
 use winit::event::DeviceEvent;
@@ -113,6 +111,8 @@ pub struct State {
     vertex_buf: wgpu::Buffer,
     index_buf: wgpu::Buffer,
     num_indices: usize,
+    instances: Vec<Instance>,
+    instance_buffer: wgpu::Buffer,
     bind_groups: BindGroupData,
     camera_buf: wgpu::Buffer,
     pipeline: wgpu::RenderPipeline,
@@ -146,15 +146,38 @@ impl State {
         }
 
         let vertex_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: None,
+            label: Some("Vertex buffer"),
             contents: &vertex_buf,
             usage: wgpu::BufferUsages::VERTEX,
         });
 
         let index_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: None,
+            label: Some("Index buffer"),
             contents: &index_buf,
             usage: wgpu::BufferUsages::INDEX,
+        });
+
+        let instances = (0..6)
+            .flat_map(|z| {
+                (0..NUM_INSTANCES_PER_ROW).map(move |x| {
+                    let position = Vec3::new(x, 0., z) - 5.;
+
+                    let rotation = Quaternion::new_identity();
+
+                    Instance {
+                        position,
+                        rotation,
+                        scale: 1.,
+                    }
+                })
+            })
+            .collect::<Vec<_>>();
+
+        let instance_data = instances.iter().map(Instance::to_bytes).collect::<Vec<_>>();
+        let instance_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Instance buffer"),
+            contents: &instance_data,
+            usage: wgpu::BufferUsages::VERTEX,
         });
 
         // Create the texture
@@ -167,7 +190,7 @@ impl State {
         };
 
         let texture = device.create_texture(&wgpu::TextureDescriptor {
-            label: None,
+            label: Some("Texture"),
             size: texture_extent,
             mip_level_count: 1,
             sample_count: 1,
@@ -193,7 +216,7 @@ impl State {
 
         // Create other resources
         let cam_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: None,
+            label: Some("Camera buffer"),
             contents: &camera.to_uniform().to_bytes(),
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
         });
@@ -201,14 +224,14 @@ impl State {
         let bind_groups = create_bindgroups(&device, &cam_buf);
 
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: None,
+            label: Some("Shader"),
             source: wgpu::ShaderSource::Wgsl(include_str!("shader.wgsl").into()),
         });
 
         let vertex_buffers = [Vertex::desc()];
 
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-            label: None,
+            label: Some("Pipeline"),
             bind_group_layouts: &[&bind_groups.layout_cam],
             push_constant_ranges: &[],
         });
@@ -258,8 +281,9 @@ impl State {
         // gpu. Most modern graphics frameworks expect commands to be stored in a command buffer
         // before being sent to the gpu. The encoder builds a command buffer that we can then
         // send to the gpu.
-        let mut encoder =
-            device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
+        let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+            label: Some("Encoder"),
+        });
 
         // self.staging_belt
         //     .write_buffer(
@@ -276,7 +300,7 @@ impl State {
 
         {
             let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                label: None,
+                label: Some("Render pass"),
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                     view,
                     resolve_target: None,
@@ -312,7 +336,7 @@ fn create_render_pipeline(
     config: &SurfaceConfiguration,
 ) -> wgpu::RenderPipeline {
     device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-        label: None,
+        label: Some("Render pipeline"),
         layout: Some(layout),
         vertex: wgpu::VertexState {
             module: &shader,
@@ -335,6 +359,8 @@ fn create_render_pipeline(
         },
         depth_stencil: None,
         multisample: wgpu::MultisampleState::default(),
+        // If the pipeline will be used with a multiview render pass, this
+        // indicates how many array layers the attachments will have.
         multiview: None,
     })
 }
@@ -361,7 +387,7 @@ fn create_bindgroups(device: &wgpu::Device, cam_buf: &wgpu::Buffer) -> BindGroup
             },
             count: None,
         }],
-        label: None,
+        label: Some("Camera bind group layout"),
     });
 
     let cam = device.create_bind_group(&wgpu::BindGroupDescriptor {
@@ -370,7 +396,7 @@ fn create_bindgroups(device: &wgpu::Device, cam_buf: &wgpu::Buffer) -> BindGroup
             binding: 0,
             resource: cam_buf.as_entire_binding(),
         }],
-        label: None,
+        label: Some("Camera bind group"),
     });
 
     BindGroupData { layout_cam, cam }

@@ -1,8 +1,6 @@
 //! https://sotrh.github.io/learn-wgpu/beginner/tutorial9-models/#rendering-a-mesh
 
-use crate::{
-    lin_alg::{Quaternion, Vec3},
-};
+use crate::lin_alg::{Quaternion, Vec3};
 
 // These sizes are in bytes. We do this, since that's the data format expected by the shader.
 pub const F32_SIZE: usize = 4;
@@ -12,6 +10,7 @@ pub const MAT4_SIZE: usize = 16 * F32_SIZE;
 // cam size is only the parts we pass to the shader.
 // For each of the 4 matrices in the camera, plus a padded vec3 for position.
 pub const VEC3_SIZE: usize = 3 * F32_SIZE;
+// pub const INSTANCE_SIZE: usize = VEC3_SIZE + MAT4_SIZE + F32_SIZE;
 
 #[derive(Clone, Copy, Debug)]
 /// Example attributes: https://github.com/bevyengine/bevy/blob/main/crates/bevy_render/src/mesh/mesh/mod.rs#L56
@@ -65,6 +64,7 @@ impl Vertex {
         result
     }
 
+    // todo: This probably shouldn't be in this module, which is backend-agnostic-ish.
     pub fn desc<'a>() -> wgpu::VertexBufferLayout<'a> {
         wgpu::VertexBufferLayout {
             array_stride: std::mem::size_of::<Vertex>() as wgpu::BufferAddress,
@@ -105,6 +105,23 @@ impl Vertex {
                 },
             ],
         }
+    }
+}
+
+/// Instances allow the GPU to render the same object multiple times.
+/// "Instancing allows us to draw the same object multiple times with different properties
+/// (position, orientation, size, color, etc.). "
+pub struct Instance {
+    pub position: Vec3,
+    pub rotation: Quaternion,
+    pub scale: f32,
+}
+
+impl Instance {
+    /// Converts to a model matrix
+    pub fn to_bytes(&self) -> [u8; MAT4_SIZE] {
+        (Mat4::new_translation(self.position) * Mat4::new_scaler(scale) * self.rotation.to_matrix())
+            .to_bytes()
     }
 }
 
