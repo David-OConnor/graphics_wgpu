@@ -11,7 +11,7 @@
 
 use std::sync::atomic::AtomicUsize;
 
-use wgpu::{self, util::DeviceExt, BindGroup, BindGroupLayout, Surface, SurfaceConfiguration};
+use wgpu::{self, util::DeviceExt, BindGroup, BindGroupLayout, SurfaceConfiguration};
 
 use crate::{
     // texture,
@@ -112,7 +112,7 @@ pub struct State {
     index_buf: wgpu::Buffer,
     num_indices: usize,
     instances: Vec<Instance>,
-    instance_buffer: wgpu::Buffer,
+    instance_buf: wgpu::Buffer,
     bind_groups: BindGroupData,
     camera_buf: wgpu::Buffer,
     pipeline: wgpu::RenderPipeline,
@@ -127,41 +127,13 @@ impl State {
         surface_cfg: &SurfaceConfiguration,
     ) -> Self {
         // Create the vertex and index buffers
-        let (vertex_data, index_data) = create_vertices();
-        let num_indices = index_data.len();
-
-        // Convert the vertex and index data to u8 buffers.
-        let mut vertex_buf = Vec::new();
-        for vertex in vertex_data {
-            for byte in vertex.to_bytes() {
-                vertex_buf.push(byte);
-            }
-        }
-
-        let mut index_buf = Vec::new();
-        for index in index_data {
-            let bytes = index.to_le_bytes();
-            index_buf.push(bytes[0]);
-            index_buf.push(bytes[1]);
-        }
-
-        let vertex_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Vertex buffer"),
-            contents: &vertex_buf,
-            usage: wgpu::BufferUsages::VERTEX,
-        });
-
-        let index_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Index buffer"),
-            contents: &index_buf,
-            usage: wgpu::BufferUsages::INDEX,
-        });
+        let (vertices, indices) = create_vertices();
+        let num_indices = indices.len();
 
         let instances = (0..6)
             .flat_map(|z| {
-                (0..NUM_INSTANCES_PER_ROW).map(move |x| {
-                    let position = Vec3::new(x, 0., z) - 5.;
-
+                (0..5).map(move |x| {
+                    let position = Vec3::new(x as f32, 0., z as f32);
                     let rotation = Quaternion::new_identity();
 
                     Instance {
@@ -173,7 +145,42 @@ impl State {
             })
             .collect::<Vec<_>>();
 
-        let instance_data = instances.iter().map(Instance::to_bytes).collect::<Vec<_>>();
+
+        // Convert the vertex and index data to u8 buffers.
+        let mut vertex_data = Vec::new();
+        for vertex in vertices {
+            for byte in vertex.to_bytes() {
+                vertex_data.push(byte);
+            }
+        }
+
+        let vertex_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Vertex buffer"),
+            contents: &vertex_data,
+            usage: wgpu::BufferUsages::VERTEX,
+        });
+
+        let mut index_data = Vec::new();
+        for index in indices {
+            let bytes = index.to_le_bytes();
+            index_data.push(bytes[0]);
+            index_data.push(bytes[1]);
+        }
+
+        let index_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Index buffer"),
+            contents: &index_data,
+            usage: wgpu::BufferUsages::INDEX,
+        });
+
+        // todo: Heper fn that takes a `ToBytes` trait we haven't made?
+        let mut instance_data = Vec::new();
+        for instance in &instances {
+            for byte in instance.to_bytes() {
+                instance_data.push(byte);
+            }
+        }
+
         let instance_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Instance buffer"),
             contents: &instance_data,
@@ -181,35 +188,35 @@ impl State {
         });
 
         // Create the texture
-        let size = 256u32;
-        let texels = create_texels(size as usize);
-        let texture_extent = wgpu::Extent3d {
-            width: size,
-            height: size,
-            depth_or_array_layers: 1,
-        };
-
-        let texture = device.create_texture(&wgpu::TextureDescriptor {
-            label: Some("Texture"),
-            size: texture_extent,
-            mip_level_count: 1,
-            sample_count: 1,
-            dimension: wgpu::TextureDimension::D2,
-            format: wgpu::TextureFormat::R8Uint,
-            usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
-        });
-
-        let texture_view = texture.create_view(&wgpu::TextureViewDescriptor::default());
-        queue.write_texture(
-            texture.as_image_copy(),
-            &texels,
-            wgpu::ImageDataLayout {
-                offset: 0,
-                bytes_per_row: Some(std::num::NonZeroU32::new(size).unwrap()),
-                rows_per_image: None,
-            },
-            texture_extent,
-        );
+        // let size = 256u32;
+        // let texels = create_texels(size as usize);
+        // let texture_extent = wgpu::Extent3d {
+        //     width: size,
+        //     height: size,
+        //     depth_or_array_layers: 1,
+        // };
+        //
+        // let texture = device.create_texture(&wgpu::TextureDescriptor {
+        //     label: Some("Texture"),
+        //     size: texture_extent,
+        //     mip_level_count: 1,
+        //     sample_count: 1,
+        //     dimension: wgpu::TextureDimension::D2,
+        //     format: wgpu::TextureFormat::R8Uint,
+        //     usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+        // });
+        //
+        // let texture_view = texture.create_view(&wgpu::TextureViewDescriptor::default());
+        // queue.write_texture(
+        //     texture.as_image_copy(),
+        //     &texels,
+        //     wgpu::ImageDataLayout {
+        //         offset: 0,
+        //         bytes_per_row: Some(std::num::NonZeroU32::new(size).unwrap()),
+        //         rows_per_image: None,
+        //     },
+        //     texture_extent,
+        // );
 
         let mut camera = Camera::default();
         camera.update_proj_mat();
@@ -228,21 +235,13 @@ impl State {
             source: wgpu::ShaderSource::Wgsl(include_str!("shader.wgsl").into()),
         });
 
-        let vertex_buffers = [Vertex::desc()];
-
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("Pipeline"),
             bind_group_layouts: &[&bind_groups.layout_cam],
             push_constant_ranges: &[],
         });
 
-        let pipeline = create_render_pipeline(
-            device,
-            &pipeline_layout,
-            &vertex_buffers,
-            shader,
-            surface_cfg,
-        );
+        let pipeline = create_render_pipeline(device, &pipeline_layout, shader, surface_cfg);
 
         // let mut entities = vec![]; // todo!
         // let mut meshes = vec![]; // todo!
@@ -252,6 +251,8 @@ impl State {
             vertex_buf,
             index_buf,
             num_indices,
+            instances,
+            instance_buf: instance_buffer,
             bind_groups,
             camera_buf: cam_buf,
             pipeline,
@@ -318,10 +319,14 @@ impl State {
 
             rpass.set_bind_group(1, &self.bind_groups.cam, &[]);
             rpass.set_vertex_buffer(0, self.vertex_buf.slice(..));
+            rpass.set_vertex_buffer(1, self.instance_buf.slice(..));
             rpass.set_index_buffer(self.index_buf.slice(..), wgpu::IndexFormat::Uint16);
 
-            rpass.draw_indexed(0..self.num_indices as u32, 0, 0..1);
+            rpass.draw_indexed(0..self.num_indices as u32, 0, 0..self.instances.len() as _);
         }
+
+        // todo: Make sure if you add new instances to the Vec, that you recreate the instance_buffer
+        // todo and as well as camera_bind_group, otherwise your new instances won't show up correctly.
 
         queue.submit(Some(encoder.finish()));
     }
@@ -331,7 +336,6 @@ impl State {
 fn create_render_pipeline(
     device: &wgpu::Device,
     layout: &wgpu::PipelineLayout,
-    vertex_buffers: &[wgpu::VertexBufferLayout],
     shader: wgpu::ShaderModule,
     config: &SurfaceConfiguration,
 ) -> wgpu::RenderPipeline {
@@ -341,7 +345,7 @@ fn create_render_pipeline(
         vertex: wgpu::VertexState {
             module: &shader,
             entry_point: "vs_main",
-            buffers: &vertex_buffers,
+            buffers: &[Vertex::desc(), Instance::desc()],
         },
         fragment: Some(wgpu::FragmentState {
             module: &shader,

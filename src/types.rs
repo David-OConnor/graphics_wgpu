@@ -1,6 +1,6 @@
 //! https://sotrh.github.io/learn-wgpu/beginner/tutorial9-models/#rendering-a-mesh
 
-use crate::lin_alg::{Quaternion, Vec3};
+use crate::lin_alg::{Mat4, Quaternion, Vec3};
 
 // These sizes are in bytes. We do this, since that's the data format expected by the shader.
 pub const F32_SIZE: usize = 4;
@@ -84,21 +84,18 @@ impl Vertex {
                 },
                 // normal
                 wgpu::VertexAttribute {
-                    // offset: std::mem::size_of::<[f32; 3]>() as wgpu::BufferAddress,
                     offset: (2 * F32_SIZE + VEC3_SIZE) as u64,
                     shader_location: 2,
                     format: wgpu::VertexFormat::Float32x3,
                 },
                 // tangent
                 wgpu::VertexAttribute {
-                    // offset: std::mem::size_of::<[f32; 3]>() as wgpu::BufferAddress,
                     offset: (2 * F32_SIZE + 2 * VEC3_SIZE) as u64,
                     shader_location: 3,
                     format: wgpu::VertexFormat::Float32x3,
                 },
                 // bitangent
                 wgpu::VertexAttribute {
-                    // offset: std::mem::size_of::<[f32; 3]>() as wgpu::BufferAddress,
                     offset: (2 * F32_SIZE + 3 * VEC3_SIZE) as u64,
                     shader_location: 4,
                     format: wgpu::VertexFormat::Float32x3,
@@ -118,9 +115,44 @@ pub struct Instance {
 }
 
 impl Instance {
+    pub fn desc<'a>() -> wgpu::VertexBufferLayout<'a> {
+        wgpu::VertexBufferLayout {
+            array_stride: MAT4_SIZE as wgpu::BufferAddress,
+            // We need to switch from using a step mode of Vertex to Instance
+            // This means that our shaders will only change to use the next
+            // instance when the shader starts processing a new instance
+            step_mode: wgpu::VertexStepMode::Instance,
+            attributes: &[
+                wgpu::VertexAttribute {
+                    offset: 0,
+                    shader_location: 5,
+                    format: wgpu::VertexFormat::Float32x4,
+                },
+                // A mat4 takes up 4 vertex slots as it is technically 4 vec4s. We need to define a slot
+                // for each vec4. We'll have to reassemble the mat4 in
+                // the shader.
+                wgpu::VertexAttribute {
+                    offset: (F32_SIZE * 4) as wgpu::BufferAddress,
+                    shader_location: 6,
+                    format: wgpu::VertexFormat::Float32x4,
+                },
+                wgpu::VertexAttribute {
+                    offset: (F32_SIZE * 8) as wgpu::BufferAddress,
+                    shader_location: 7,
+                    format: wgpu::VertexFormat::Float32x4,
+                },
+                wgpu::VertexAttribute {
+                    offset: (F32_SIZE * 12) as wgpu::BufferAddress,
+                    shader_location: 8,
+                    format: wgpu::VertexFormat::Float32x4,
+                },
+            ],
+        }
+    }
+
     /// Converts to a model matrix
     pub fn to_bytes(&self) -> [u8; MAT4_SIZE] {
-        (Mat4::new_translation(self.position) * Mat4::new_scaler(scale) * self.rotation.to_matrix())
+        (Mat4::new_translation(self.position) * Mat4::new_scaler(self.scale) * self.rotation.to_matrix())
             .to_bytes()
     }
 }

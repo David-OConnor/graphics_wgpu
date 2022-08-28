@@ -375,7 +375,7 @@ impl Quaternion {
 
     /// Converts a Quaternion to a rotation matrix
     #[rustfmt::skip]
-    pub fn to_matrix(&self) -> Mat3 {
+    pub fn to_matrix(&self) -> Mat4 {
         // let qwqw = self.w * self.w; // calculate common terms to avoid repeated operations
         // let qwqx = self.w * self.x;
         // let qwqy = self.w * self.y;
@@ -412,11 +412,12 @@ impl Quaternion {
         let wy = self.w * y2;
         let wz = self.w * z2;
 
-        Mat3 {
+        Mat4 {
             data: [
-                1.0 - (yy + zz), xy + wz, xz - wy,
-                xy - wz, 1.0 - (xx + zz), yz + wx,
-                xz + wy, yz - wx, 1.0 - (xx + yy),
+                1.0 - (yy + zz), xy + wz, xz - wy, 0.,
+                xy - wz, 1.0 - (xx + zz), yz + wx, 0.,
+                xz + wy, yz - wx, 1.0 - (xx + yy), 0.,
+                0., 0., 0., 1.,
             ]
         }
     }
