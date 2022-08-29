@@ -1,20 +1,20 @@
 //! https://sotrh.github.io/learn-wgpu/beginner/tutorial9-models/#rendering-a-mesh
 
 use crate::{
+    lighting::PointLight,
     lin_alg::{Mat4, Quaternion, Vec3},
-    lighting::Light,
 };
 
 // These sizes are in bytes. We do this, since that's the data format expected by the shader.
 pub const F32_SIZE: usize = 4;
 
 pub const VEC3_SIZE: usize = 3 * F32_SIZE;
+pub const VEC3_UNIFORM_SIZE: usize = 4 * F32_SIZE;
 pub const VERTEX_SIZE: usize = 14 * F32_SIZE;
 pub const MAT4_SIZE: usize = 16 * F32_SIZE;
-// cam size is only the parts we pass to the shader.
-// For each of the 4 matrices in the camera, plus a padded vec3 for position.
+pub const MAT3_SIZE: usize = 9 * F32_SIZE;
 
-// pub const INSTANCE_SIZE: usize = VEC3_SIZE + MAT4_SIZE + F32_SIZE;
+pub const INSTANCE_SIZE: usize = MAT_4_SIZE + MAT_3_SIZE;
 
 #[derive(Clone, Copy, Debug)]
 /// Example attributes: https://github.com/bevyengine/bevy/blob/main/crates/bevy_render/src/mesh/mesh/mod.rs#L56
@@ -22,11 +22,10 @@ pub const MAT4_SIZE: usize = 16 * F32_SIZE;
 pub struct Vertex {
     /// Where the vertex is located in space
     pub position: [f32; 3],
-    // pub position: Vec3,
     /// AKA UV mapping. https://en.wikipedia.org/wiki/UV_mapping
     pub tex_coords: [f32; 2],
     /// The direction the vertex normal is facing in
-    pub normal: [f32; 3],
+    pub normal: Vec3,
     /// "Tangent and Binormal vectors are vectors that are perpendicular to each other
     /// and the normal vector which essentially describe the direction of the u,v texture
     /// coordinates with respect to the surface that you are trying to render. Typically
@@ -40,10 +39,10 @@ impl Vertex {
     pub fn new(x: f32, y: f32, z: f32) -> Self {
         Self {
             position: [x, y, z],
-            tex_coords: [0., 0.],    // todo
-            normal: [0., 0., 0.],    // todo
-            tangent: [0., 0., 0.],   // todo
-            bitangent: [0., 0., 0.], // todo
+            tex_coords: [0., 0.],     // todo
+            normal: Vec3::new_zero(), // todo
+            tangent: [0., 0., 0.],    // todo
+            bitangent: [0., 0., 0.],  // todo
         }
     }
 
@@ -55,9 +54,9 @@ impl Vertex {
         result[8..12].clone_from_slice(&self.position[2].to_le_bytes());
         result[12..16].clone_from_slice(&self.tex_coords[0].to_le_bytes());
         result[16..20].clone_from_slice(&self.tex_coords[1].to_le_bytes());
-        result[20..24].clone_from_slice(&self.normal[0].to_le_bytes());
-        result[24..28].clone_from_slice(&self.normal[1].to_le_bytes());
-        result[28..32].clone_from_slice(&self.normal[2].to_le_bytes());
+
+        result[20..32].clone_from_slice(&self.normal.to_bytes_vertex());
+
         result[32..36].clone_from_slice(&self.tangent[0].to_le_bytes());
         result[36..40].clone_from_slice(&self.tangent[1].to_le_bytes());
         result[40..44].clone_from_slice(&self.tangent[2].to_le_bytes());
@@ -150,14 +149,31 @@ impl Instance {
                     shader_location: 8,
                     format: wgpu::VertexFormat::Float32x4,
                 },
+                wgpu::VertexAttribute {
+                    offset: mem::size_of::<[f32; 16]>() as wgpu::BufferAddress,
+                    shader_location: 9,
+                    format: wgpu::VertexFormat::Float32x3,
+                },
+                wgpu::VertexAttribute {
+                    offset: mem::size_of::<[f32; 19]>() as wgpu::BufferAddress,
+                    shader_location: 10,
+                    format: wgpu::VertexFormat::Float32x3,
+                },
+                wgpu::VertexAttribute {
+                    offset: mem::size_of::<[f32; 22]>() as wgpu::BufferAddress,
+                    shader_location: 11,
+                    format: wgpu::VertexFormat::Float32x3,
+                },
             ],
         }
     }
 
     /// Converts to a model matrix
     pub fn to_bytes(&self) -> [u8; MAT4_SIZE] {
-        (Mat4::new_translation(self.position) * Mat4::new_scaler(self.scale) * self.rotation.to_matrix())
-            .to_bytes()
+        (Mat4::new_translation(self.position)
+            * Mat4::new_scaler(self.scale)
+            * self.rotation.to_matrix())
+        .to_bytes()
     }
 }
 
@@ -281,9 +297,8 @@ impl Brush {
     // }
 }
 
-
 #[derive(Clone, Debug, Default)]
 pub struct Scene {
     pub entities: Vec<Entity>,
-    pub lights: Vec<Light>,
+    pub lights: Vec<PointLight>,
 }

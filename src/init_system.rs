@@ -4,18 +4,18 @@
 use std::time::{Duration, Instant};
 
 use winit::{
-    event::{Event, WindowEvent},
+    event::{DeviceEvent, Event, KeyboardInput, WindowEvent},
     event_loop::{ControlFlow, EventLoop},
     window::{Window, WindowBuilder},
 };
 
-use crate::init_graphics::State;
+use crate::{init_graphics::State, types::Scene};
 
 const WINDOW_TITLE: &str = "Graphics";
-const WINDOW_SIZE_X: f32 = 800.0;
-const WINDOW_SIZE_Y: f32 = 800.0;
+const WINDOW_SIZE_X: f32 = 900.0;
+const WINDOW_SIZE_Y: f32 = 600.0;
 
-pub struct GraphicsSystem {
+pub(crate) struct GraphicsSystem {
     instance: wgpu::Instance,
     size: winit::dpi::PhysicalSize<u32>,
     surface: wgpu::Surface,
@@ -64,7 +64,7 @@ async fn setup_async(
 }
 
 impl GraphicsSystem {
-    pub fn new(window: &Window) -> GraphicsSystem {
+    pub(crate) fn new(window: &Window) -> GraphicsSystem {
         #[cfg(not(target_arch = "wasm32"))]
         {
             env_logger::init();
@@ -123,7 +123,7 @@ impl GraphicsSystem {
         }
     }
 
-    pub fn resize(&mut self, new_size: winit::dpi::PhysicalSize<u32>) {
+    pub(crate) fn resize(&mut self, new_size: winit::dpi::PhysicalSize<u32>) {
         if new_size.width > 0 && new_size.height > 0 {
             self.size = new_size;
             self.surface_cfg.width = new_size.width;
@@ -137,7 +137,7 @@ impl GraphicsSystem {
     }
 }
 
-pub fn run() {
+pub fn run(scene: Scene) {
     #[cfg(not(target_arch = "wasm32"))]
     let mut last_update_inst = Instant::now();
     #[cfg(not(target_arch = "wasm32"))]
@@ -149,92 +149,72 @@ pub fn run() {
     let window = WindowBuilder::new()
         .with_title(WINDOW_TITLE)
         .with_inner_size(winit::dpi::LogicalSize::new(WINDOW_SIZE_X, WINDOW_SIZE_Y))
-        .build(&event_loop).unwrap();
+        .build(&event_loop)
+        .unwrap();
 
     let mut sys = GraphicsSystem::new(&window);
     let mut state = State::new(&sys.device, &sys.queue, &sys.surface_cfg);
 
     sys.surface.configure(&sys.device, &sys.surface_cfg);
 
+    let mut last_render_time = Instant::now();
+    let mut dt = Duration::new(0, 0);
+
     event_loop.run(move |event, _, control_flow| {
         let _ = (&sys.instance, &sys.adapter); // force ownership by the closure
         *control_flow = ControlFlow::Poll;
 
         match event {
-            Event::RedrawEventsCleared => {
-                #[cfg(not(target_arch = "wasm32"))]
-                {
-                    // Clamp to some max framerate to avoid busy-looping too much
-                    // (we might be in wgpu::PresentMode::Mailbox, thus discarding superfluous frames)
-                    //
-                    // winit has window.current_monitor().video_modes() but that is a list of all full screen video modes.
-                    // So without extra dependencies it's a bit tricky to get the max refresh rate we can run the window on.
-                    // Therefore we just go with 60fps - sorry 120hz+ folks!
-                    let target_frametime = Duration::from_secs_f64(1.0 / 120.0);
-                    let time_since_last_frame = last_update_inst.elapsed();
-                    if time_since_last_frame >= target_frametime {
-                        window.request_redraw();
-                    } else {
-                        *control_flow = ControlFlow::WaitUntil(
-                            Instant::now() + target_frametime - time_since_last_frame,
-                        );
-                    }
-                }
-
-                #[cfg(target_arch = "wasm32")]
-                window.request_redraw();
-            }
-            Event::WindowEvent { event, .. } => match event {
-                WindowEvent::Resized(physical_size) => {
-                    sys.resize(physical_size);
-                }
-                WindowEvent::ScaleFactorChanged { new_inner_size, .. } => {
-                    sys.resize(*new_inner_size);
-                }
-                _ => (),
-            },
+            Event::MainEventsCleared => window.request_redraw(),
             Event::DeviceEvent { event, .. } => {
-                // todo: Evaluate how you handle DT; this is quick +dirty
-                let dt = last_frame_inst.elapsed().as_secs_f32();
-                state.update(event, &sys.queue);
+                state.handle_input(event, dt);
             }
-            Event::RedrawRequested(_) => {
-                #[cfg(not(target_arch = "wasm32"))]
-                {
-                    accum_time += last_frame_inst.elapsed().as_secs_f32();
-                    last_frame_inst = Instant::now();
-                    frame_count += 1;
-                    if frame_count == 100 {
-                        // println!(
-                        //     "Avg frame time {}ms",
-                        //     accum_time * 1000.0 / frame_count as f32
-                        // );
-                        accum_time = 0.0;
-                        frame_count = 0;
+            Event::WindowEvent {
+                ref event,
+                window_id,
+                // } if window_id == window.id() && !state.input(event) => {
+            } if window_id == window.id() => {
+                match event {
+                    // todo: Put back for window-closing.
+                    // #[cfg(not(target_arch="wasm32"))]
+                    // WindowEvent::CloseRequested
+                    // | WindowEvent::KeyboardInput {
+                    //     input:
+                    //     KeyboardInput {
+                    //         state: ElementState::Pressed,
+                    //         virtual_keycode: Some(VirtualKeyCode::Escape),
+                    //         ..
+                    //     },
+                    //     ..
+                    // } => *control_flow = ControlFlow::Exit,
+                    WindowEvent::Resized(physical_size) => {
+                        sys.resize(*physical_size);
                     }
+                    WindowEvent::ScaleFactorChanged { new_inner_size, .. } => {
+                        sys.resize(**new_inner_size);
+                    }
+                    _ => {}
                 }
+            }
 
-                let frame = match sys.surface.get_current_texture() {
-                    Ok(frame) => frame,
-                    Err(_) => {
-                        sys.surface.configure(&sys.device, &sys.surface_cfg);
-                        sys.surface
-                            .get_current_texture()
-                            .expect("Failed to acquire next surface texture!")
-                    }
-                };
-                let view = frame
-                    .texture
-                    .create_view(&wgpu::TextureViewDescriptor::default());
-
-                state.render(&view, &sys.device, &sys.queue);
-
-                frame.present();
+            Event::RedrawRequested(window_id) if window_id == window.id() => {
+                let now = Instant::now();
+                dt = now - last_render_time;
+                last_render_time = now;
+                state.update(&sys.queue);
+                // match state.render() {
+                //     Ok(_) => {}
+                //     // Reconfigure the surface if it's lost or outdated
+                //     Err(wgpu::SurfaceError::Lost | wgpu::SurfaceError::Outdated) => state.resize(state.size),
+                //     // The system is out of memory, we should probably quit
+                //     Err(wgpu::SurfaceError::OutOfMemory) => *control_flow = ControlFlow::Exit,
+                //     // We're ignoring timeouts
+                //     Err(wgpu::SurfaceError::Timeout) => log::warn!("Surface timeout"),
+                // }
             }
             _ => {}
         }
     });
-    last_update_inst = Instant::now();
 }
 
 #[cfg(target_arch = "wasm32")]
@@ -270,7 +250,7 @@ pub fn run<E: Example>(title: &str) {
 #[cfg(target_arch = "wasm32")]
 /// Parse the query string as returned by `web_sys::window()?.location().search()?` and get a
 /// specific key out of it.
-pub fn parse_url_query_string<'a>(query: &'a str, search_key: &str) -> Option<&'a str> {
+pub(crate) fn parse_url_query_string<'a>(query: &'a str, search_key: &str) -> Option<&'a str> {
     let query_string = query.strip_prefix('?')?;
 
     for pair in query_string.split('&') {

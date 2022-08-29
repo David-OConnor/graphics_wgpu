@@ -2,7 +2,7 @@
 
 use crate::{
     camera::Camera,
-    init_graphics::{DT, FWD_VEC, RIGHT_VEC, UP_VEC},
+    init_graphics::{FWD_VEC, RIGHT_VEC, UP_VEC},
     lin_alg::{Quaternion, Vec3},
 };
 
@@ -31,7 +31,8 @@ struct InputsCommanded {
     run: bool,
 }
 
-pub fn handle_event(event: DeviceEvent, cam: &mut Camera) {
+/// dt is in seconds.
+pub(crate) fn handle_event(event: DeviceEvent, cam: &mut Camera, dt: f32) {
     let mut inputs = InputsCommanded::default();
 
     match event {
@@ -83,15 +84,15 @@ pub fn handle_event(event: DeviceEvent, cam: &mut Camera) {
         _ => (),
     }
 
-    adjust_camera(cam, &inputs);
+    adjust_camera(cam, &inputs, dt);
 }
 
 /// Adjust the camera orientation and position.
 /// todo: copyied from `peptide`'s Bevy interface.
-fn adjust_camera(cam: &mut Camera, inputs: &InputsCommanded) {
-    let mut move_amt: f32 = CAM_MOVE_SENS * DT;
-    const ROTATE_AMT: f32 = CAM_ROTATE_SENS * DT;
-    let mut rotate_key_amt: f32 = CAM_ROTATE_KEY_SENS * DT;
+fn adjust_camera(cam: &mut Camera, inputs: &InputsCommanded, dt: f32) {
+    let mut move_amt: f32 = CAM_MOVE_SENS * dt;
+    let rotate_amt: f32 = CAM_ROTATE_SENS * dt;
+    let mut rotate_key_amt: f32 = CAM_ROTATE_KEY_SENS * dt;
 
     // todo: This split is where you can decouple WGPU-specific code from general code.
 
@@ -147,8 +148,8 @@ fn adjust_camera(cam: &mut Camera, inputs: &InputsCommanded) {
 
     let eps = 0.00001;
     if inputs.mouse_delta_x.abs() > eps || inputs.mouse_delta_y.abs() > eps {
-        rotation = Quaternion::from_axis_angle(up, inputs.mouse_delta_x * ROTATE_AMT)
-            * Quaternion::from_axis_angle(right, inputs.mouse_delta_y * ROTATE_AMT)
+        rotation = Quaternion::from_axis_angle(up, inputs.mouse_delta_x * rotate_amt)
+            * Quaternion::from_axis_angle(right, inputs.mouse_delta_y * rotate_amt)
             * rotation;
 
         cam_rotated = true;

@@ -9,14 +9,14 @@
 //!
 //! 2022-08-21: https://github.com/gfx-rs/wgpu/blob/master/wgpu/examples/cube/main.rs
 
-use std::sync::atomic::AtomicUsize;
+use std::{sync::atomic::AtomicUsize, time::Duration};
 
 use wgpu::{self, util::DeviceExt, BindGroup, BindGroupLayout, SurfaceConfiguration};
 
 use crate::{
     camera::Camera,
     input,
-    lighting::{Lighting},
+    lighting::{Lighting, PointLight},
     lin_alg::{Quaternion, Vec3},
     types::{Brush, Entity, Instance, Mesh, Scene, Vertex},
 };
@@ -35,19 +35,17 @@ static MESH_I: AtomicUsize = AtomicUsize::new(0);
 const DEPTH_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Depth24Plus;
 const IMAGE_SIZE: u32 = 128;
 
-pub const DT: f32 = 1. / 60.; //ie the inverse of frame rate.
-
-pub const UP_VEC: Vec3 = Vec3 {
+pub(crate) const UP_VEC: Vec3 = Vec3 {
     x: 0.,
     y: 1.,
     z: 0.,
 };
-pub const RIGHT_VEC: Vec3 = Vec3 {
+pub(crate) const RIGHT_VEC: Vec3 = Vec3 {
     x: 1.,
     y: 0.,
     z: 0.,
 };
-pub const FWD_VEC: Vec3 = Vec3 {
+pub(crate) const FWD_VEC: Vec3 = Vec3 {
     x: 0.,
     y: 0.,
     z: 1.,
@@ -58,7 +56,7 @@ pub const FWD_VEC: Vec3 = Vec3 {
 fn create_vertices() -> (Vec<Vertex>, Vec<u16>) {
     // todo: Normals etc on these?
     // This forms a tetrahedron
-    let vertices = [
+    let mut vertices = [
         Vertex::new(1., 1., 1.),
         Vertex::new(1., -1., -1.),
         Vertex::new(-1., 1., -1.),
@@ -76,6 +74,13 @@ fn create_vertices() -> (Vec<Vertex>, Vec<u16>) {
         0, 3, 2,
         1, 2, 3,
     ];
+
+    // Note: For tetrahedrons, these are the corners of the cube we
+    // didn't use for vertices.
+    vertices[0].normal = Vec3::new(1., 1., -1.).to_normalized();
+    vertices[1].normal = Vec3::new(1., -1., 1.).to_normalized();
+    vertices[2].normal = Vec3::new(-1., 1., 1.).to_normalized();
+    vertices[2].normal = Vec3::new(-1., -1., -1.).to_normalized();
 
     // todo: Consider imlementing this.
     let faces = vec![
@@ -107,7 +112,7 @@ fn create_texels(size: usize) -> Vec<u8> {
         .collect()
 }
 
-pub struct State {
+pub(crate) struct State {
     vertex_buf: wgpu::Buffer,
     index_buf: wgpu::Buffer,
     num_indices: usize,
@@ -118,18 +123,21 @@ pub struct State {
     camera_buf: wgpu::Buffer,
     lighting: Lighting,
     lighting_buf: wgpu::Buffer,
+    point_lights: Vec<PointLight>,
+    point_light_buf: wgpu::Buffer,
     pipeline: wgpu::RenderPipeline,
     staging_belt: wgpu::util::StagingBelt, // todo: Do we want this?
 }
 
 impl State {
-    pub fn new(
+    pub(crate) fn new(
         device: &wgpu::Device,
         queue: &wgpu::Queue,
         surface_cfg: &SurfaceConfiguration,
     ) -> Self {
         // Create the vertex and index buffers
         let (vertices, indices) = create_vertices();
+
         let num_indices = indices.len();
 
         let instances = (0..6)
@@ -146,7 +154,6 @@ impl State {
                 })
             })
             .collect::<Vec<_>>();
-
 
         // Convert the vertex and index data to u8 buffers.
         let mut vertex_data = Vec::new();
@@ -206,7 +213,17 @@ impl State {
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
         });
 
+        let mut point_lights = vec![];
+
+        // todo
+        let point_light_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Point light buffer"),
+            contents: &[],
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+        });
+
         let bind_groups = create_bindgroups(&device, &cam_buf, &lighting_buf);
+        // let bind_groups = create_bindgroups(&device, &cam_buf, &lighting_buf, &point_light_buf);
 
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("Shader"),
@@ -236,6 +253,8 @@ impl State {
             camera_buf: cam_buf,
             lighting,
             lighting_buf,
+            point_lights,
+            point_light_buf,
             pipeline,
             // pipeline_wire,
             staging_belt: wgpu::util::StagingBelt::new(0x100),
@@ -243,9 +262,14 @@ impl State {
     }
 
     #[allow(clippy::single_match)]
-    pub fn update(&mut self, event: DeviceEvent, queue: &wgpu::Queue) {
-        input::handle_event(event, &mut self.camera);
+    pub(crate) fn handle_input(&mut self, event: DeviceEvent, dt: Duration) {
+        // let dt_secs = dt.as_secs as f32 + dt.subsec_millis() / 1_000. + dt.subsec_micros() / 1_000_000.;
+        let dt_secs = dt.as_secs() as f32 + dt.subsec_micros() as f32 / 1_000_000.;
+        input::handle_event(event, &mut self.camera, dt_secs);
+    }
 
+    #[allow(clippy::single_match)]
+    pub(crate) fn update(&mut self, queue: &wgpu::Queue) {
         // todo: ALternative approach that may be more performant:
         // "We can create a separate buffer and copy its contents to our camera_buffer. The new buffer
         // is known as a staging buffer. This method is usually how it's done
@@ -253,11 +277,15 @@ impl State {
         // to only be accessible by the gpu. The gpu can do some speed optimizations which
         // it couldn't if we could access the buffer via the cpu."
 
-        // self.queue.write_buffer(
         queue.write_buffer(&self.camera_buf, 0, &self.camera.to_uniform().to_bytes());
     }
 
-    pub fn render(&mut self, view: &wgpu::TextureView, device: &wgpu::Device, queue: &wgpu::Queue) {
+    pub(crate) fn render(
+        &mut self,
+        view: &wgpu::TextureView,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+    ) {
         // We create a CommandEncoder to create the actual commands to send to the
         // gpu. Most modern graphics frameworks expect commands to be stored in a command buffer
         // before being sent to the gpu. The encoder builds a command buffer that we can then
@@ -354,7 +382,11 @@ struct BindGroupData {
     pub lighting: BindGroup,
 }
 
-fn create_bindgroups(device: &wgpu::Device, cam_buf: &wgpu::Buffer, lighting_buf: &wgpu::Buffer) -> BindGroupData {
+fn create_bindgroups(
+    device: &wgpu::Device,
+    cam_buf: &wgpu::Buffer,
+    lighting_buf: &wgpu::Buffer,
+) -> BindGroupData {
     // We only need vertex, not fragment info in the camera uniform.
     let layout_cam = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
         entries: &[wgpu::BindGroupLayoutEntry {
@@ -404,7 +436,12 @@ fn create_bindgroups(device: &wgpu::Device, cam_buf: &wgpu::Buffer, lighting_buf
         label: Some("Lighting bind group"),
     });
 
-    BindGroupData { layout_cam, cam, layout_lighting, lighting }
+    BindGroupData {
+        layout_cam,
+        cam,
+        layout_lighting,
+        lighting,
+    }
 }
 
 fn add_scene_entities(entities: &mut Vec<Entity>) {

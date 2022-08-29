@@ -123,12 +123,26 @@ impl Vec3 {
         self.x * rhs.x + self.y * rhs.y + self.z * rhs.z
     }
 
-    pub fn to_bytes(&self) -> [u8; 3 * 4] {
+    /// Note that this function pads with an extra 4 bytes, IOC with the  hardware
+    /// 16-byte alignment requirement. This assumes we're using this in a uniform; Vertexes
+    /// don't use padding.
+    pub fn to_bytes_uniform(&self) -> [u8; 4 * 4] {
+        let mut result = [0; 4 * 4];
+
+        result[0..4].clone_from_slice(&self.x.to_ne_bytes());
+        result[4..8].clone_from_slice(&self.y.to_ne_bytes());
+        result[8..12].clone_from_slice(&self.z.to_ne_bytes());
+        result[12..16].clone_from_slice(&[0_u8; 4]);
+
+        result
+    }
+
+    pub fn to_bytes_vertex(&self) -> [u8; 3 * 4] {
         let mut result = [0; 3 * 4];
 
-        result[0..4].clone_from_slice(&self.x.to_le_bytes());
-        result[4..8].clone_from_slice(&self.y.to_le_bytes());
-        result[8..12].clone_from_slice(&self.z.to_le_bytes());
+        result[0..4].clone_from_slice(&self.x.to_ne_bytes());
+        result[4..8].clone_from_slice(&self.y.to_ne_bytes());
+        result[8..12].clone_from_slice(&self.z.to_ne_bytes());
 
         result
     }
@@ -817,7 +831,7 @@ impl Mat4 {
         let mut result = [0; 16 * 4];
 
         for i in 0..self.data.len() {
-            result[i * 4..i * 4 + 4].clone_from_slice(&self.data[i].to_le_bytes());
+            result[i * 4..i * 4 + 4].clone_from_slice(&self.data[i].to_ne_bytes());
         }
 
         result

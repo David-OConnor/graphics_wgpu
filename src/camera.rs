@@ -5,10 +5,12 @@ use core::f32::consts::TAU;
 use crate::{
     init_graphics::{FWD_VEC, RIGHT_VEC, UP_VEC},
     lin_alg::{Mat4, Quaternion, Vec3},
-    types::{F32_SIZE, MAT4_SIZE},
+    types::{MAT4_SIZE, VEC3_UNIFORM_SIZE},
 };
 
-pub const CAM_UNIFORM_SIZE: usize = 2 * MAT4_SIZE + 4 * F32_SIZE;
+// cam size is only the parts we pass to the shader.
+// For each of the 4 matrices in the camera, plus a padded vec3 for position.
+pub const CAM_UNIFORM_SIZE: usize = 2 * MAT4_SIZE + VEC3_UNIFORM_SIZE;
 
 /// This is the component of the camrea that
 pub struct CameraUniform {
@@ -29,11 +31,10 @@ impl CameraUniform {
         // 64 is mat4 size in bytes.
         result[0..64].clone_from_slice(&self.proj_view_mat.to_bytes());
         result[64..128].clone_from_slice(&self.proj_mat_inv.to_bytes());
-
-        result[128..132].clone_from_slice(&self.position.x.to_le_bytes());
-        result[132..136].clone_from_slice(&self.position.y.to_le_bytes());
-        result[136..140].clone_from_slice(&self.position.z.to_le_bytes());
-        result[140..144].clone_from_slice(&1.0_f32.to_le_bytes());
+        result[128..132].clone_from_slice(&self.position.x.to_ne_bytes());
+        result[132..136].clone_from_slice(&self.position.y.to_ne_bytes());
+        result[136..140].clone_from_slice(&self.position.z.to_ne_bytes());
+        result[140..144].clone_from_slice(&[0_u8; 4]); // Vec3 pad
 
         result
     }
@@ -98,20 +99,20 @@ impl Camera {
     // pub fn to_bytes(&self) -> [u8; VERTEX_SIZE] {
     //     let mut result = [0; VERTEX_SIZE];
     //
-    //     result[0..4].clone_from_slice(&self.position[0].to_le_bytes());
-    //     result[4..8].clone_from_slice(&self.position[1].to_le_bytes());
-    //     result[8..12].clone_from_slice(&self.position[2].to_le_bytes());
-    //     result[12..16].clone_from_slice(&self.tex_coords[0].to_le_bytes());
-    //     result[16..20].clone_from_slice(&self.tex_coords[1].to_le_bytes());
-    //     result[20..24].clone_from_slice(&self.normal[0].to_le_bytes());
-    //     result[24..28].clone_from_slice(&self.normal[1].to_le_bytes());
-    //     result[28..32].clone_from_slice(&self.normal[2].to_le_bytes());
-    //     result[32..36].clone_from_slice(&self.tangent[0].to_le_bytes());
-    //     result[36..40].clone_from_slice(&self.tangent[1].to_le_bytes());
-    //     result[40..44].clone_from_slice(&self.tangent[2].to_le_bytes());
-    //     result[44..48].clone_from_slice(&self.bitangent[0].to_le_bytes());
-    //     result[48..52].clone_from_slice(&self.bitangent[1].to_le_bytes());
-    //     result[52..56].clone_from_slice(&self.bitangent[2].to_le_bytes());
+    //     result[0..4].clone_from_slice(&self.position[0].to_ne_bytes());
+    //     result[4..8].clone_from_slice(&self.position[1].to_ne_bytes());
+    //     result[8..12].clone_from_slice(&self.position[2].to_ne_bytes());
+    //     result[12..16].clone_from_slice(&self.tex_coords[0].to_ne_bytes());
+    //     result[16..20].clone_from_slice(&self.tex_coords[1].to_ne_bytes());
+    //     result[20..24].clone_from_slice(&self.normal[0].to_ne_bytes());
+    //     result[24..28].clone_from_slice(&self.normal[1].to_ne_bytes());
+    //     result[28..32].clone_from_slice(&self.normal[2].to_ne_bytes());
+    //     result[32..36].clone_from_slice(&self.tangent[0].to_ne_bytes());
+    //     result[36..40].clone_from_slice(&self.tangent[1].to_ne_bytes());
+    //     result[40..44].clone_from_slice(&self.tangent[2].to_ne_bytes());
+    //     result[44..48].clone_from_slice(&self.bitangent[0].to_ne_bytes());
+    //     result[48..52].clone_from_slice(&self.bitangent[1].to_ne_bytes());
+    //     result[52..56].clone_from_slice(&self.bitangent[2].to_ne_bytes());
     //
     //     result
     // }

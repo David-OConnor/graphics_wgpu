@@ -4,7 +4,8 @@ mod input;
 mod lin_alg;
 // mod texture;
 mod camera;
-mod types;
 mod lighting;
+mod types;
 
 pub use init_system::run;
+pub use types::Scene;
