@@ -1,15 +1,19 @@
 //! https://sotrh.github.io/learn-wgpu/beginner/tutorial9-models/#rendering-a-mesh
 
-use crate::lin_alg::{Mat4, Quaternion, Vec3};
+use crate::{
+    lin_alg::{Mat4, Quaternion, Vec3},
+    lighting::Light,
+};
 
 // These sizes are in bytes. We do this, since that's the data format expected by the shader.
 pub const F32_SIZE: usize = 4;
 
+pub const VEC3_SIZE: usize = 3 * F32_SIZE;
 pub const VERTEX_SIZE: usize = 14 * F32_SIZE;
 pub const MAT4_SIZE: usize = 16 * F32_SIZE;
 // cam size is only the parts we pass to the shader.
 // For each of the 4 matrices in the camera, plus a padded vec3 for position.
-pub const VEC3_SIZE: usize = 3 * F32_SIZE;
+
 // pub const INSTANCE_SIZE: usize = VEC3_SIZE + MAT4_SIZE + F32_SIZE;
 
 #[derive(Clone, Copy, Debug)]
@@ -277,23 +281,6 @@ impl Brush {
     // }
 }
 
-#[derive(Debug, Clone)]
-pub enum LightType {
-    Omnidirectional,
-    Directional(Vec3), // direction pointed at // todo: FOV?
-    Diffuse,
-}
-
-#[derive(Clone, Debug)]
-pub struct Light {
-    // A point light source
-    pub type_: LightType,
-    pub position: Vec3,
-    pub color: [f32; 4],
-    pub intensity: f32,
-    // todo: FOV? range?
-    // shadow_map
-}
 
 #[derive(Clone, Debug, Default)]
 pub struct Scene {

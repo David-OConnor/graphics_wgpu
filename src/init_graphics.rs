@@ -14,9 +14,9 @@ use std::sync::atomic::AtomicUsize;
 use wgpu::{self, util::DeviceExt, BindGroup, BindGroupLayout, SurfaceConfiguration};
 
 use crate::{
-    // texture,
     camera::Camera,
     input,
+    lighting::{Lighting},
     lin_alg::{Quaternion, Vec3},
     types::{Brush, Entity, Instance, Mesh, Scene, Vertex},
 };
@@ -114,9 +114,11 @@ pub struct State {
     instances: Vec<Instance>,
     instance_buf: wgpu::Buffer,
     bind_groups: BindGroupData,
-    camera_buf: wgpu::Buffer,
-    pipeline: wgpu::RenderPipeline,
     camera: Camera,
+    camera_buf: wgpu::Buffer,
+    lighting: Lighting,
+    lighting_buf: wgpu::Buffer,
+    pipeline: wgpu::RenderPipeline,
     staging_belt: wgpu::util::StagingBelt, // todo: Do we want this?
 }
 
@@ -187,48 +189,24 @@ impl State {
             usage: wgpu::BufferUsages::VERTEX,
         });
 
-        // Create the texture
-        // let size = 256u32;
-        // let texels = create_texels(size as usize);
-        // let texture_extent = wgpu::Extent3d {
-        //     width: size,
-        //     height: size,
-        //     depth_or_array_layers: 1,
-        // };
-        //
-        // let texture = device.create_texture(&wgpu::TextureDescriptor {
-        //     label: Some("Texture"),
-        //     size: texture_extent,
-        //     mip_level_count: 1,
-        //     sample_count: 1,
-        //     dimension: wgpu::TextureDimension::D2,
-        //     format: wgpu::TextureFormat::R8Uint,
-        //     usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
-        // });
-        //
-        // let texture_view = texture.create_view(&wgpu::TextureViewDescriptor::default());
-        // queue.write_texture(
-        //     texture.as_image_copy(),
-        //     &texels,
-        //     wgpu::ImageDataLayout {
-        //         offset: 0,
-        //         bytes_per_row: Some(std::num::NonZeroU32::new(size).unwrap()),
-        //         rows_per_image: None,
-        //     },
-        //     texture_extent,
-        // );
-
         let mut camera = Camera::default();
         camera.update_proj_mat();
 
-        // Create other resources
         let cam_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Camera buffer"),
             contents: &camera.to_uniform().to_bytes(),
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
         });
 
-        let bind_groups = create_bindgroups(&device, &cam_buf);
+        let mut lighting = Lighting::default();
+
+        let lighting_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Lighting buffer"),
+            contents: &lighting.to_bytes(),
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+        });
+
+        let bind_groups = create_bindgroups(&device, &cam_buf, &lighting_buf);
 
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("Shader"),
@@ -237,7 +215,7 @@ impl State {
 
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("Pipeline"),
-            bind_group_layouts: &[&bind_groups.layout_cam],
+            bind_group_layouts: &[&bind_groups.layout_cam, &bind_groups.layout_lighting],
             push_constant_ranges: &[],
         });
 
@@ -254,10 +232,12 @@ impl State {
             instances,
             instance_buf: instance_buffer,
             bind_groups,
+            camera,
             camera_buf: cam_buf,
+            lighting,
+            lighting_buf,
             pipeline,
             // pipeline_wire,
-            camera,
             staging_belt: wgpu::util::StagingBelt::new(0x100),
         }
     }
@@ -314,10 +294,8 @@ impl State {
             });
 
             rpass.set_pipeline(&self.pipeline);
-            // rpass.set_bind_group(0, &self.bind_groups.diffuse, &[]);
-            // todo: Diffuse bind group?
-
-            rpass.set_bind_group(1, &self.bind_groups.cam, &[]);
+            rpass.set_bind_group(0, &self.bind_groups.cam, &[]);
+            rpass.set_bind_group(1, &self.bind_groups.lighting, &[]);
             rpass.set_vertex_buffer(0, self.vertex_buf.slice(..));
             rpass.set_vertex_buffer(1, self.instance_buf.slice(..));
             rpass.set_index_buffer(self.index_buf.slice(..), wgpu::IndexFormat::Uint16);
@@ -370,13 +348,13 @@ fn create_render_pipeline(
 }
 
 struct BindGroupData {
-    // pub layout_diffuse: BindGroupLayout,
-    // pub diffuse: BindGroup,
     pub layout_cam: BindGroupLayout,
     pub cam: BindGroup,
+    pub layout_lighting: BindGroupLayout,
+    pub lighting: BindGroup,
 }
 
-fn create_bindgroups(device: &wgpu::Device, cam_buf: &wgpu::Buffer) -> BindGroupData {
+fn create_bindgroups(device: &wgpu::Device, cam_buf: &wgpu::Buffer, lighting_buf: &wgpu::Buffer) -> BindGroupData {
     // We only need vertex, not fragment info in the camera uniform.
     let layout_cam = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
         entries: &[wgpu::BindGroupLayoutEntry {
@@ -403,7 +381,30 @@ fn create_bindgroups(device: &wgpu::Device, cam_buf: &wgpu::Buffer) -> BindGroup
         label: Some("Camera bind group"),
     });
 
-    BindGroupData { layout_cam, cam }
+    let layout_lighting = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+        entries: &[wgpu::BindGroupLayoutEntry {
+            binding: 0,
+            visibility: wgpu::ShaderStages::FRAGMENT,
+            ty: wgpu::BindingType::Buffer {
+                ty: wgpu::BufferBindingType::Uniform,
+                has_dynamic_offset: false,
+                min_binding_size: None,
+            },
+            count: None,
+        }],
+        label: Some("Lighting bind group layout"),
+    });
+
+    let lighting = device.create_bind_group(&wgpu::BindGroupDescriptor {
+        layout: &layout_lighting,
+        entries: &[wgpu::BindGroupEntry {
+            binding: 0,
+            resource: lighting_buf.as_entire_binding(),
+        }],
+        label: Some("Lighting bind group"),
+    });
+
+    BindGroupData { layout_cam, cam, layout_lighting, lighting }
 }
 
 fn add_scene_entities(entities: &mut Vec<Entity>) {

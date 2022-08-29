@@ -122,6 +122,16 @@ impl Vec3 {
     pub fn dot(&self, rhs: Self) -> f32 {
         self.x * rhs.x + self.y * rhs.y + self.z * rhs.z
     }
+
+    pub fn to_bytes(&self) -> [u8; 3 * 4] {
+        let mut result = [0; 3 * 4];
+
+        result[0..4].clone_from_slice(&self.x.to_le_bytes());
+        result[4..8].clone_from_slice(&self.y.to_le_bytes());
+        result[8..12].clone_from_slice(&self.z.to_le_bytes());
+
+        result
+    }
 }
 
 #[derive(Clone, Copy, Debug)]

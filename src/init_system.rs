@@ -12,6 +12,8 @@ use winit::{
 use crate::init_graphics::State;
 
 const WINDOW_TITLE: &str = "Graphics";
+const WINDOW_SIZE_X: f32 = 800.0;
+const WINDOW_SIZE_Y: f32 = 800.0;
 
 pub struct GraphicsSystem {
     instance: wgpu::Instance,
@@ -67,9 +69,6 @@ impl GraphicsSystem {
         {
             env_logger::init();
         };
-
-        let mut builder = winit::window::WindowBuilder::new();
-        builder = builder.with_title(WINDOW_TITLE);
 
         #[cfg(target_arch = "wasm32")]
         {
@@ -147,7 +146,10 @@ pub fn run() {
     let (mut frame_count, mut accum_time) = (0, 0.0);
 
     let event_loop = EventLoop::new();
-    let window = WindowBuilder::new().build(&event_loop).unwrap();
+    let window = WindowBuilder::new()
+        .with_title(WINDOW_TITLE)
+        .with_inner_size(winit::dpi::LogicalSize::new(WINDOW_SIZE_X, WINDOW_SIZE_Y))
+        .build(&event_loop).unwrap();
 
     let mut sys = GraphicsSystem::new(&window);
     let mut state = State::new(&sys.device, &sys.queue, &sys.surface_cfg);

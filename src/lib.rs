@@ -5,5 +5,6 @@ mod lin_alg;
 // mod texture;
 mod camera;
 mod types;
+mod lighting;
 
 pub use init_system::run;
