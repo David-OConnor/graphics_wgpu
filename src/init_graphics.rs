@@ -155,6 +155,49 @@ impl State {
             })
             .collect::<Vec<_>>();
 
+        let instances = vec![
+            Instance {
+                position: Vec3::new(10., 10., 10.),
+                rotation: Quaternion::new_identity(),
+                scale: 1.,
+            },
+            Instance {
+                position: Vec3::new(-10., -10., -10.),
+                rotation: Quaternion::new_identity(),
+                scale: 1.,
+            },
+            Instance {
+                position: Vec3::new(5., 10., 5.),
+                rotation: Quaternion::new_identity(),
+                scale: 1.,
+            },
+            Instance {
+                position: Vec3::new(-5., 10., -5.),
+                rotation: Quaternion::new_identity(),
+                scale: 1.,
+            },
+            Instance {
+                position: Vec3::new(-3., 0., 3.),
+                rotation: Quaternion::new_identity(),
+                scale: 10.,
+            },
+            Instance {
+                position: Vec3::new(5., -3., -5.),
+                rotation: Quaternion::new_identity(),
+                scale: 1.,
+            },
+            Instance {
+                position: Vec3::new(0., 0., -3.),
+                rotation: Quaternion::new_identity(),
+                scale: 1.,
+            },
+            Instance {
+                position: Vec3::new(0., 0., 3.),
+                rotation: Quaternion::new_identity(),
+                scale: 1.,
+            },
+        ];
+
         // Convert the vertex and index data to u8 buffers.
         let mut vertex_data = Vec::new();
         for vertex in vertices {

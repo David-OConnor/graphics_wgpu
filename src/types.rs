@@ -14,7 +14,7 @@ pub const VERTEX_SIZE: usize = 14 * F32_SIZE;
 pub const MAT4_SIZE: usize = 16 * F32_SIZE;
 pub const MAT3_SIZE: usize = 9 * F32_SIZE;
 
-pub const INSTANCE_SIZE: usize = MAT_4_SIZE + MAT_3_SIZE;
+pub const INSTANCE_SIZE: usize = MAT4_SIZE + MAT3_SIZE;
 
 #[derive(Clone, Copy, Debug)]
 /// Example attributes: https://github.com/bevyengine/bevy/blob/main/crates/bevy_render/src/mesh/mesh/mod.rs#L56
@@ -150,17 +150,17 @@ impl Instance {
                     format: wgpu::VertexFormat::Float32x4,
                 },
                 wgpu::VertexAttribute {
-                    offset: mem::size_of::<[f32; 16]>() as wgpu::BufferAddress,
+                    offset: (F32_SIZE * 16) as wgpu::BufferAddress,
                     shader_location: 9,
                     format: wgpu::VertexFormat::Float32x3,
                 },
                 wgpu::VertexAttribute {
-                    offset: mem::size_of::<[f32; 19]>() as wgpu::BufferAddress,
+                    offset: (F32_SIZE * 19) as wgpu::BufferAddress,
                     shader_location: 10,
                     format: wgpu::VertexFormat::Float32x3,
                 },
                 wgpu::VertexAttribute {
-                    offset: mem::size_of::<[f32; 22]>() as wgpu::BufferAddress,
+                    offset: (F32_SIZE * 22) as wgpu::BufferAddress,
                     shader_location: 11,
                     format: wgpu::VertexFormat::Float32x3,
                 },
@@ -169,11 +169,20 @@ impl Instance {
     }
 
     /// Converts to a model matrix
-    pub fn to_bytes(&self) -> [u8; MAT4_SIZE] {
-        (Mat4::new_translation(self.position)
+    pub fn to_bytes(&self) -> [u8; INSTANCE_SIZE] {
+        let mut result = [0; INSTANCE_SIZE];
+
+        let model_mat = (Mat4::new_translation(self.position)
             * Mat4::new_scaler(self.scale)
-            * self.rotation.to_matrix())
-        .to_bytes()
+            * self.rotation.to_matrix());
+
+        let normal_mat = self.rotation.to_matrix3();
+
+        // 64 is mat4 size in bytes.
+        result[0..MAT4_SIZE].clone_from_slice(&model_mat.to_bytes());
+        result[MAT4_SIZE..INSTANCE_SIZE].clone_from_slice(&normal_mat.to_bytes());
+
+        result
     }
 }
 

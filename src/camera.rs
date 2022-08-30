@@ -55,10 +55,6 @@ pub struct Camera {
 }
 
 impl Camera {
-    pub fn update_proj_mat(&mut self) {
-        self.proj_mat = Mat4::new_perspective_rh(self.fov_y, self.aspect, self.near, self.far);
-    }
-
     /// Update the stored projection matrices. Run this whenever we change camera parameters like
     /// FOV and aspect ratio.
     pub fn to_uniform(&self) -> CameraUniform {
@@ -71,6 +67,10 @@ impl Camera {
             proj_view_mat: self.proj_mat.clone() * self.view_mat(),
             proj_mat_inv,
         }
+    }
+
+    pub fn update_proj_mat(&mut self) {
+        self.proj_mat = Mat4::new_perspective_rh(self.fov_y, self.aspect, self.near, self.far);
     }
 
     /// Calculate the view matrix.
@@ -94,28 +94,6 @@ impl Camera {
         let height = 2. * dist * (self.fov_y / 2.).tan();
         (width, height)
     }
-
-    // /// We only convert the parts we need in the shader.
-    // pub fn to_bytes(&self) -> [u8; VERTEX_SIZE] {
-    //     let mut result = [0; VERTEX_SIZE];
-    //
-    //     result[0..4].clone_from_slice(&self.position[0].to_ne_bytes());
-    //     result[4..8].clone_from_slice(&self.position[1].to_ne_bytes());
-    //     result[8..12].clone_from_slice(&self.position[2].to_ne_bytes());
-    //     result[12..16].clone_from_slice(&self.tex_coords[0].to_ne_bytes());
-    //     result[16..20].clone_from_slice(&self.tex_coords[1].to_ne_bytes());
-    //     result[20..24].clone_from_slice(&self.normal[0].to_ne_bytes());
-    //     result[24..28].clone_from_slice(&self.normal[1].to_ne_bytes());
-    //     result[28..32].clone_from_slice(&self.normal[2].to_ne_bytes());
-    //     result[32..36].clone_from_slice(&self.tangent[0].to_ne_bytes());
-    //     result[36..40].clone_from_slice(&self.tangent[1].to_ne_bytes());
-    //     result[40..44].clone_from_slice(&self.tangent[2].to_ne_bytes());
-    //     result[44..48].clone_from_slice(&self.bitangent[0].to_ne_bytes());
-    //     result[48..52].clone_from_slice(&self.bitangent[1].to_ne_bytes());
-    //     result[52..56].clone_from_slice(&self.bitangent[2].to_ne_bytes());
-    //
-    //     result
-    // }
 }
 
 impl Default for Camera {

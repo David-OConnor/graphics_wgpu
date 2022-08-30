@@ -43,6 +43,9 @@ struct InstanceInput {
     @location(6) model_matrix_1: vec4<f32>,
     @location(7) model_matrix_2: vec4<f32>,
     @location(8) model_matrix_3: vec4<f32>,
+    @location(9) normal_matrix_0: vec3<f32>,
+    @location(10) normal_matrix_1: vec3<f32>,
+    @location(11) normal_matrix_2: vec3<f32>,
 }
 
 struct VertexOutput {
@@ -58,8 +61,6 @@ fn vs_main(
     model: VertexInput,
     instance: InstanceInput,
 ) -> VertexOutput {
-    var result: VertexOutput;
-
     // todo: Why do we construct the matrix from parts instead of passing whole?
     var model_mat = mat4x4<f32>(
         instance.model_matrix_0,
@@ -90,10 +91,14 @@ fn vs_main(
     // Pad the model position with 1., for use with the 4x4 transform mats.
     var model_posit = vec4<f32>(model.position, 1.0);
 
-    result.clip_position = camera.proj_view * model_mat * model_posit;
+    let world_posit = model_mat * model_posit;
 
-    // todo: How?
-//    v_normal = transpose(inverse(mat3(uniforms.r_model))) * -normal;
+    var result: VertexOutput;
+
+    result.clip_position = camera.proj_view * world_posit;
+    result.tangent_position = tangent_mat * world_posit.xyz;
+    result.tangent_view_position = tangent_mat * camera.position.xyz;
+//    result.tangent_light_position = tangent_mat * light.position;
 
     return result;
 }
@@ -109,8 +114,9 @@ fn fs_main(vertex: VertexOutput) -> @location(0) vec4<f32> {
 //    let view_dir = normalize(in.tangent_view_position - in.tangent_position);
 //    let half_dir = normalize(view_dir + light_dir);
 
-    var diffuse_on_face = max(dot(v_normal, lighting.diffuse_dir), 0.);
-    var diffuse = lighting.diffuse_color * diffuse_on_face * lighting.diffuse_intensity;
+//    var diffuse_on_face = max(dot(vertex.normal, lighting.diffuse_dir), 0.);
+//    var diffuse = lighting.diffuse_color * diffuse_on_face * lighting.diffuse_intensity;
+    let diffuse = vec3<f32>(0., 0., 0.); // todo temp until we sort out normal passing.
 
 // todo: Put this in once the rest works.
 //    let specular_strength = pow(max(dot(tangent_normal, half_dir), 0.0), 32.0);
