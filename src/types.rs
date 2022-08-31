@@ -19,7 +19,7 @@ pub const INSTANCE_SIZE: usize = MAT4_SIZE + MAT3_SIZE;
 #[derive(Clone, Copy, Debug)]
 /// Example attributes: https://github.com/bevyengine/bevy/blob/main/crates/bevy_render/src/mesh/mesh/mod.rs#L56
 /// // todo: Vec3 vs arrays?
-pub struct Vertex {
+pub struct ModelVertex {
     /// Where the vertex is located in space
     pub position: [f32; 3],
     /// AKA UV mapping. https://en.wikipedia.org/wiki/UV_mapping
@@ -35,7 +35,7 @@ pub struct Vertex {
     pub bitangent: [f32; 3],
 }
 
-impl Vertex {
+impl ModelVertex {
     pub fn new(x: f32, y: f32, z: f32) -> Self {
         Self {
             position: [x, y, z],
@@ -70,7 +70,7 @@ impl Vertex {
     // todo: This probably shouldn't be in this module, which is backend-agnostic-ish.
     pub fn desc<'a>() -> wgpu::VertexBufferLayout<'a> {
         wgpu::VertexBufferLayout {
-            array_stride: std::mem::size_of::<Vertex>() as wgpu::BufferAddress,
+            array_stride: std::mem::size_of::<ModelVertex>() as wgpu::BufferAddress,
             step_mode: wgpu::VertexStepMode::Vertex,
             attributes: &[
                 // position
@@ -120,7 +120,7 @@ pub struct Instance {
 impl Instance {
     pub fn desc<'a>() -> wgpu::VertexBufferLayout<'a> {
         wgpu::VertexBufferLayout {
-            array_stride: MAT4_SIZE as wgpu::BufferAddress,
+            array_stride: INSTANCE_SIZE as wgpu::BufferAddress,
             // We need to switch from using a step mode of Vertex to Instance
             // This means that our shaders will only change to use the next
             // instance when the shader starts processing a new instance
@@ -172,9 +172,9 @@ impl Instance {
     pub fn to_bytes(&self) -> [u8; INSTANCE_SIZE] {
         let mut result = [0; INSTANCE_SIZE];
 
-        let model_mat = (Mat4::new_translation(self.position)
-            * Mat4::new_scaler(self.scale)
-            * self.rotation.to_matrix());
+        let model_mat = Mat4::new_translation(self.position)
+            * self.rotation.to_matrix()
+            * Mat4::new_scaler(self.scale);
 
         let normal_mat = self.rotation.to_matrix3();
 
@@ -202,7 +202,7 @@ pub struct Entity {
 /// As a reference: https://github.com/bevyengine/bevy/blob/main/crates/bevy_render/src/mesh/mesh/mod.rs
 #[derive(Debug)]
 pub struct Mesh {
-    pub vertices: Vec<Vertex>,
+    pub vertices: Vec<ModelVertex>,
     /// Each consecutive triplet of indices defines a triangle.
     pub indices: Vec<usize>,
 }
@@ -240,14 +240,14 @@ impl Mesh {
 /// A brush is a geometry representation that can be converted to a mesh. Unlike a mesh, it's not
 /// designed to be passed directly to the GPU.
 pub struct Brush {
-    pub vertices: Vec<Vertex>,
+    pub vertices: Vec<ModelVertex>,
     /// Faces are defined in terms of vertex index, and must be defined in an order of adjacent
     /// edges. (LH or RH?)
     pub faces: Vec<Vec<usize>>,
 }
 
 impl Brush {
-    pub fn new(vertices: Vec<Vertex>, faces: Vec<Vec<usize>>) -> Self {
+    pub fn new(vertices: Vec<ModelVertex>, faces: Vec<Vec<usize>>) -> Self {
         Self { vertices, faces }
     }
 
@@ -262,15 +262,15 @@ impl Brush {
         Self {
             vertices: vec![
                 // top
-                Vertex::new(x, y, z),
-                Vertex::new(x, y, -z),
-                Vertex::new(-x, y, -z),
-                Vertex::new(-x, y, z),
+                ModelVertex::new(x, y, z),
+                ModelVertex::new(x, y, -z),
+                ModelVertex::new(-x, y, -z),
+                ModelVertex::new(-x, y, z),
                 // bottom
-                Vertex::new(x, -y, z),
-                Vertex::new(x, -y, -z),
-                Vertex::new(-x, -y, -z),
-                Vertex::new(-x, -y, z),
+                ModelVertex::new(x, -y, z),
+                ModelVertex::new(x, -y, -z),
+                ModelVertex::new(-x, -y, -z),
+                ModelVertex::new(-x, -y, z),
             ],
 
             faces: vec![

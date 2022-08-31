@@ -647,24 +647,32 @@ impl Mat4 {
     }
 
     /// Field of view is in radians. Aspect is width / height.
-    /// https://developer.mozilla.org/en-US/docs/Web/API/WebGL_API/WebGL_model_view_projection
-    /// https://docs.microsoft.com/en-us/windows/win32/direct3d9/d3dxmatrixperspectivefovlh
-    /// There seems to be suble differences depending on the source. Various combinations of the
-    /// non-0/1 items in cols 2 and 3. Multiplies of 2 yes/no, signs, far or far and near etc.
+    /// https://docs.rs/glam/latest/src/glam/f32/sse2/mat4.rs.html#839-851
     #[rustfmt::skip]
-    pub fn new_perspective_rh(fov_y: f32, aspect_ratio: f32, near: f32, far: f32) -> Self {
-        let f = 1. / (fov_y / 2.).tan();
-        let range_inv = 1. / (near - far);
+    pub fn new_perspective_rh(fov_y: f32, aspect_ratio: f32, z_near: f32, z_far: f32) -> Self {
+        // todo: Once working, merge these matrices into one.
 
-        // todo: Still needs work and QC!!
-        Self {
+        #[rustfmt::skip]
+        pub const OPENGL_TO_WGPU_MATRIX: Mat4 = Mat4 {
             data: [
-                f / aspect_ratio, 0., 0., 0.,
-                0., f, 0., 0.,
-                // 0., 0., (near + far) * range_inv, -1.,
-                0., 0., far * range_inv, -1.,
-                // 0., 0., (2. * far * near) * range_inv, 0.
-                0., 0., (far * near) * range_inv, 0.
+            1.0, 0.0, 0.0, 0.0,
+            0.0, 1.0, 0.0, 0.0,
+            0.0, 0.0, 0.5, 0.0,
+            0.0, 0.0, 0.5, 1.0,
+            ]
+        };
+
+        let (sin_fov, cos_fov) = (0.5 * fov_y).sin_cos();
+        let h = cos_fov / sin_fov;
+        let w = h / aspect_ratio;
+        let r = z_far / (z_near - z_far);
+
+        OPENGL_TO_WGPU_MATRIX * Self {
+            data: [
+                w, 0., 0., 0.,
+                0., h, 0., 0.,
+                0., 0., r, -1.,
+                0., 0., r * z_near, 0.
             ]
         }
     }

@@ -18,7 +18,7 @@ use crate::{
     input,
     lighting::{Lighting, PointLight},
     lin_alg::{Quaternion, Vec3},
-    types::{Brush, Entity, Instance, Mesh, Scene, Vertex},
+    types::{Brush, Entity, Instance, Mesh, Scene, ModelVertex},
 };
 
 use winit::event::DeviceEvent;
@@ -33,7 +33,7 @@ const BG_COLOR: wgpu::Color = wgpu::Color {
 static MESH_I: AtomicUsize = AtomicUsize::new(0);
 
 const DEPTH_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Depth24Plus;
-const IMAGE_SIZE: u32 = 128;
+// const IMAGE_SIZE: u32 = 128;
 
 pub(crate) const UP_VEC: Vec3 = Vec3 {
     x: 0.,
@@ -53,14 +53,14 @@ pub(crate) const FWD_VEC: Vec3 = Vec3 {
 
 // todo: INstead of this, create a brush, then convert it to a mesh.
 // todo: Do this once your renderer works using this hardcoded tetrahedron.
-fn create_vertices() -> (Vec<Vertex>, Vec<u16>) {
+fn create_vertices() -> (Vec<ModelVertex>, Vec<u32>) {
     // todo: Normals etc on these?
     // This forms a tetrahedron
     let mut vertices = [
-        Vertex::new(1., 1., 1.),
-        Vertex::new(1., -1., -1.),
-        Vertex::new(-1., 1., -1.),
-        Vertex::new(-1., -1., 1.),
+        ModelVertex::new(1., 1., 1.),
+        ModelVertex::new(1., -1., -1.),
+        ModelVertex::new(-1., 1., -1.),
+        ModelVertex::new(-1., -1., 1.),
     ];
 
     // These indices define faces by triangles. (each 3 represent a triangle, starting at index 0.
@@ -68,7 +68,7 @@ fn create_vertices() -> (Vec<Vertex>, Vec<u16>) {
 
     // Indices are arranged CCW, from front of face
     #[rustfmt::skip]
-        let indices: &[u16] = &[
+        let indices: &[u32] = &[
         0, 2, 1,
         0, 1, 3,
         0, 3, 2,
@@ -364,14 +364,16 @@ impl State {
                 depth_stencil_attachment: None,
             });
 
+            rpass.set_vertex_buffer(1, self.instance_buf.slice(..));
             rpass.set_pipeline(&self.pipeline);
+
+            rpass.set_vertex_buffer(0, self.vertex_buf.slice(..));
+            rpass.set_index_buffer(self.index_buf.slice(..), wgpu::IndexFormat::Uint32);
+            // self.set_bind_group(0, &material.bind_group, &[]);
             rpass.set_bind_group(0, &self.bind_groups.cam, &[]);
             rpass.set_bind_group(1, &self.bind_groups.lighting, &[]);
-            rpass.set_vertex_buffer(0, self.vertex_buf.slice(..));
-            rpass.set_vertex_buffer(1, self.instance_buf.slice(..));
-            rpass.set_index_buffer(self.index_buf.slice(..), wgpu::IndexFormat::Uint16);
-
-            rpass.draw_indexed(0..self.num_indices as u32, 0, 0..self.instances.len() as _);
+            // rpass.draw_indexed(0..self.num_indices as u32, 0, 0..self.instances.len() as _);
+            rpass.draw_indexed(0..self.num_indices as u32, 0, 0..1);
         }
 
         // todo: Make sure if you add new instances to the Vec, that you recreate the instance_buffer
@@ -394,12 +396,20 @@ fn create_render_pipeline(
         vertex: wgpu::VertexState {
             module: &shader,
             entry_point: "vs_main",
-            buffers: &[Vertex::desc(), Instance::desc()],
+            buffers: &[ModelVertex::desc(), Instance::desc()],
         },
         fragment: Some(wgpu::FragmentState {
             module: &shader,
             entry_point: "fs_main",
             targets: &[Some(config.format.into())],
+            // targets: &[Some(wgpu::ColorTargetState {
+            //     format: color_format,
+            //     blend: Some(wgpu::BlendState {
+            //         alpha: wgpu::BlendComponent::REPLACE,
+            //         color: wgpu::BlendComponent::REPLACE,
+            //     }),
+            //     write_mask: wgpu::ColorWrites::ALL,
+            // })],
         }),
         primitive: wgpu::PrimitiveState {
             topology: wgpu::PrimitiveTopology::TriangleList,
@@ -411,6 +421,14 @@ fn create_render_pipeline(
             conservative: false,
         },
         depth_stencil: None,
+        // todo
+        // depth_stencil: depth_format.map(|format| wgpu::DepthStencilState {
+        //     format,
+        //     depth_write_enabled: true,
+        //     depth_compare: wgpu::CompareFunction::Less,
+        //     stencil: wgpu::StencilState::default(),
+        //     bias: wgpu::DepthBiasState::default(),
+        // }),
         multisample: wgpu::MultisampleState::default(),
         // If the pipeline will be used with a multiview render pass, this
         // indicates how many array layers the attachments will have.
@@ -434,7 +452,7 @@ fn create_bindgroups(
     let layout_cam = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
         entries: &[wgpu::BindGroupLayoutEntry {
             binding: 0,
-            visibility: wgpu::ShaderStages::VERTEX,
+            visibility: wgpu::ShaderStages::VERTEX | wgpu::ShaderStages::FRAGMENT,
             ty: wgpu::BindingType::Buffer {
                 ty: wgpu::BufferBindingType::Uniform,
                 // The dynamic field indicates whether this buffer will change size or

@@ -202,6 +202,14 @@ pub fn run(scene: Scene) {
                 dt = now - last_render_time;
                 last_render_time = now;
                 state.update(&sys.queue);
+
+                // todo: move this into `render`?
+                let output = sys.surface.get_current_texture().unwrap();
+                let view = output
+                    .texture
+                    .create_view(&wgpu::TextureViewDescriptor::default());
+
+                state.render(&view, &sys.device, &sys.queue);
                 // match state.render() {
                 //     Ok(_) => {}
                 //     // Reconfigure the surface if it's lost or outdated
@@ -211,6 +219,7 @@ pub fn run(scene: Scene) {
                 //     // We're ignoring timeouts
                 //     Err(wgpu::SurfaceError::Timeout) => log::warn!("Surface timeout"),
                 // }
+                output.present();
             }
             _ => {}
         }

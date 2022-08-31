@@ -1,7 +1,6 @@
 struct Camera {
     proj_view: mat4x4<f32>,
-    proj_inv: mat4x4<f32>,
-    position: vec4<f32>,
+    position: vec3<f32>,
 }
 
 struct Lighting {
@@ -30,7 +29,7 @@ var<uniform> lighting: Lighting;
 //var<uniform> point_light: PointLight;
 
 
-struct VertexInput {
+struct VertexIn {
     @location(0) position: vec3<f32>,
     @location(1) tex_coords: vec2<f32>, // unused
     @location(2) normal: vec3<f32>,
@@ -38,7 +37,7 @@ struct VertexInput {
     @location(4) bitangent: vec3<f32>,
 }
 
-struct InstanceInput {
+struct InstanceIn {
     @location(5) model_matrix_0: vec4<f32>,
     @location(6) model_matrix_1: vec4<f32>,
     @location(7) model_matrix_2: vec4<f32>,
@@ -48,7 +47,7 @@ struct InstanceInput {
     @location(11) normal_matrix_2: vec3<f32>,
 }
 
-struct VertexOutput {
+struct VertexOut {
     @builtin(position) clip_position: vec4<f32>,
     @location(0) tex_coords: vec2<f32>,
     @location(1) tangent_position: vec3<f32>,
@@ -58,9 +57,9 @@ struct VertexOutput {
 
 @vertex
 fn vs_main(
-    model: VertexInput,
-    instance: InstanceInput,
-) -> VertexOutput {
+    model: VertexIn,
+    instance: InstanceIn,
+) -> VertexOut {
     // todo: Why do we construct the matrix from parts instead of passing whole?
     var model_mat = mat4x4<f32>(
         instance.model_matrix_0,
@@ -93,7 +92,7 @@ fn vs_main(
 
     let world_posit = model_mat * model_posit;
 
-    var result: VertexOutput;
+    var result: VertexOut;
 
     result.clip_position = camera.proj_view * world_posit;
     result.tangent_position = tangent_mat * world_posit.xyz;
@@ -104,7 +103,7 @@ fn vs_main(
 }
 
 @fragment
-fn fs_main(vertex: VertexOutput) -> @location(0) vec4<f32> {
+fn fs_main(vertex: VertexOut) -> @location(0) vec4<f32> {
     var ambient = lighting.ambient_color * lighting.ambient_intensity;
 
     // todo: How do we pass vnormal from the vector?

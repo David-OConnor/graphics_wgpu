@@ -10,7 +10,7 @@ use crate::{
 
 // cam size is only the parts we pass to the shader.
 // For each of the 4 matrices in the camera, plus a padded vec3 for position.
-pub const CAM_UNIFORM_SIZE: usize = 2 * MAT4_SIZE + VEC3_UNIFORM_SIZE;
+pub const CAM_UNIFORM_SIZE: usize = MAT4_SIZE + VEC3_UNIFORM_SIZE;
 
 /// This is the component of the camrea that
 pub struct CameraUniform {
@@ -18,10 +18,7 @@ pub struct CameraUniform {
     /// change, store it.
     /// By contrast, the view matrix changes whenever we changed position or orientation.
     pub proj_view_mat: Mat4,
-    /// We us the inverse project matrix for... lighting?
-    pub proj_mat_inv: Mat4,
     pub position: Vec3,
-    // pub view_mat: Mat4,
 }
 
 impl CameraUniform {
@@ -29,12 +26,8 @@ impl CameraUniform {
         let mut result = [0; CAM_UNIFORM_SIZE];
 
         // 64 is mat4 size in bytes.
-        result[0..64].clone_from_slice(&self.proj_view_mat.to_bytes());
-        result[64..128].clone_from_slice(&self.proj_mat_inv.to_bytes());
-        result[128..132].clone_from_slice(&self.position.x.to_ne_bytes());
-        result[132..136].clone_from_slice(&self.position.y.to_ne_bytes());
-        result[136..140].clone_from_slice(&self.position.z.to_ne_bytes());
-        result[140..144].clone_from_slice(&[0_u8; 4]); // Vec3 pad
+        result[0..MAT4_SIZE].clone_from_slice(&self.proj_view_mat.to_bytes());
+        result[MAT4_SIZE..CAM_UNIFORM_SIZE].clone_from_slice(&self.position.to_bytes_uniform());
 
         result
     }
@@ -58,14 +51,11 @@ impl Camera {
     /// Update the stored projection matrices. Run this whenever we change camera parameters like
     /// FOV and aspect ratio.
     pub fn to_uniform(&self) -> CameraUniform {
-        // self.projection_mat_inv = self.projection_mat.inverse().unwrap();
-        let proj_mat_inv = Mat4::new_identity(); // todo temp
-
         // todo: How does the inverted proj mat work?
         CameraUniform {
             position: self.position,
+            // todo: Generate view mat seprately, only when cam changes?
             proj_view_mat: self.proj_mat.clone() * self.view_mat(),
-            proj_mat_inv,
         }
     }
 
@@ -73,17 +63,10 @@ impl Camera {
         self.proj_mat = Mat4::new_perspective_rh(self.fov_y, self.aspect, self.near, self.far);
     }
 
-    /// Calculate the view matrix.
-    #[rustfmt::skip]
+    /// Calculate the view matrix: This is a translation of the negative coordinates of the camera's
+    /// position, applied before the camera's rotation.
     pub fn view_mat(&self) -> Mat4 {
-        let mat = self.orientation.to_matrix();
-
-        Mat4::new([
-            mat.data[0], mat.data[3], mat.data[6], 0.,
-            mat.data[1], mat.data[4], mat.data[7], 0.,
-            mat.data[2], mat.data[5], mat.data[8], 0.,
-            -self.position.dot(RIGHT_VEC), -self.position.dot(UP_VEC), self.position.dot(FWD_VEC), 1.,
-        ])
+        self.orientation.inverse().to_matrix() * Mat4::new_translation(self.position * -1.)
     }
 
     pub fn view_size(&self, far: bool) -> (f32, f32) {
@@ -98,14 +81,17 @@ impl Camera {
 
 impl Default for Camera {
     fn default() -> Self {
-        Self {
-            position: Vec3::new(0., 2., 10.),
+        let mut result = Self {
+            position: Vec3::new(0., 0., -5.),
             orientation: Quaternion::new_identity(),
             fov_y: TAU / 3., // Vertical field of view in radians.
             aspect: 4. / 3., // width / height.
             near: 1.,
             far: 100.,
             proj_mat: Mat4::new_identity(),
-        }
+        };
+
+        result.update_proj_mat();
+        result
     }
 }
