@@ -37,6 +37,7 @@ struct VertexIn {
     @location(4) bitangent: vec3<f32>,
 }
 
+// These are matrix columns; can't pass matrices directly for vertex attributes.
 struct InstanceIn {
     @location(5) model_matrix_0: vec4<f32>,
     @location(6) model_matrix_1: vec4<f32>,

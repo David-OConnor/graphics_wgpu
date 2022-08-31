@@ -11,7 +11,7 @@ use winit::event::{DeviceEvent, ElementState};
 
 // These sensitivities are in units (position), or radians (orientation) per second.
 const CAM_MOVE_SENS: f32 = 1.1;
-const CAM_ROTATE_SENS: f32 = 0.3;
+const CAM_ROTATE_SENS: f32 = 1.0;
 const CAM_ROTATE_KEY_SENS: f32 = 0.5;
 // Move speed multiplier when the run modifier key is held.
 const RUN_FACTOR: f32 = 3.;

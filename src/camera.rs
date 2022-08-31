@@ -10,28 +10,7 @@ use crate::{
 
 // cam size is only the parts we pass to the shader.
 // For each of the 4 matrices in the camera, plus a padded vec3 for position.
-pub const CAM_UNIFORM_SIZE: usize = MAT4_SIZE + VEC3_UNIFORM_SIZE;
-
-/// This is the component of the camrea that
-pub struct CameraUniform {
-    /// The projection matrix only changes when camera properties (fov, aspect, near, far)
-    /// change, store it.
-    /// By contrast, the view matrix changes whenever we changed position or orientation.
-    pub proj_view_mat: Mat4,
-    pub position: Vec3,
-}
-
-impl CameraUniform {
-    pub fn to_bytes(&self) -> [u8; CAM_UNIFORM_SIZE] {
-        let mut result = [0; CAM_UNIFORM_SIZE];
-
-        // 64 is mat4 size in bytes.
-        result[0..MAT4_SIZE].clone_from_slice(&self.proj_view_mat.to_bytes());
-        result[MAT4_SIZE..CAM_UNIFORM_SIZE].clone_from_slice(&self.position.to_bytes_uniform());
-
-        result
-    }
-}
+pub const CAMERA_SIZE: usize = MAT4_SIZE + VEC3_UNIFORM_SIZE;
 
 #[derive(Clone, Debug)]
 pub struct Camera {
@@ -48,15 +27,16 @@ pub struct Camera {
 }
 
 impl Camera {
-    /// Update the stored projection matrices. Run this whenever we change camera parameters like
-    /// FOV and aspect ratio.
-    pub fn to_uniform(&self) -> CameraUniform {
-        // todo: How does the inverted proj mat work?
-        CameraUniform {
-            position: self.position,
-            // todo: Generate view mat seprately, only when cam changes?
-            proj_view_mat: self.proj_mat.clone() * self.view_mat(),
-        }
+    pub fn to_bytes(&self) -> [u8; CAMERA_SIZE] {
+        let mut result = [0; CAMERA_SIZE];
+
+        let proj_view = self.proj_mat.clone() * self.view_mat();
+
+        // 64 is mat4 size in bytes.
+        result[0..MAT4_SIZE].clone_from_slice(&proj_view.to_bytes());
+        result[MAT4_SIZE..CAMERA_SIZE].clone_from_slice(&self.position.to_bytes_uniform());
+
+        result
     }
 
     pub fn update_proj_mat(&mut self) {

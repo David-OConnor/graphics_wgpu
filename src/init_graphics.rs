@@ -18,15 +18,15 @@ use crate::{
     input,
     lighting::{Lighting, PointLight},
     lin_alg::{Quaternion, Vec3},
-    types::{Brush, Entity, Instance, Mesh, Scene, ModelVertex},
+    types::{Brush, Entity, Instance, Mesh, ModelVertex, Scene},
 };
 
 use winit::event::DeviceEvent;
 
 const BG_COLOR: wgpu::Color = wgpu::Color {
-    r: 0.1,
-    g: 0.2,
-    b: 0.3,
+    r: 0.7,
+    g: 0.7,
+    b: 0.7,
     a: 1.0,
 };
 
@@ -68,7 +68,7 @@ fn create_vertices() -> (Vec<ModelVertex>, Vec<u32>) {
 
     // Indices are arranged CCW, from front of face
     #[rustfmt::skip]
-        let indices: &[u32] = &[
+    let indices: &[u32] = &[
         0, 2, 1,
         0, 1, 3,
         0, 3, 2,
@@ -126,6 +126,8 @@ pub(crate) struct State {
     point_lights: Vec<PointLight>,
     point_light_buf: wgpu::Buffer,
     pipeline: wgpu::RenderPipeline,
+    // todo: Will this need to change for multiple models
+    // obj_mesh: Mesh,
     staging_belt: wgpu::util::StagingBelt, // todo: Do we want this?
 }
 
@@ -139,21 +141,6 @@ impl State {
         let (vertices, indices) = create_vertices();
 
         let num_indices = indices.len();
-
-        let instances = (0..6)
-            .flat_map(|z| {
-                (0..5).map(move |x| {
-                    let position = Vec3::new(x as f32, 0., z as f32);
-                    let rotation = Quaternion::new_identity();
-
-                    Instance {
-                        position,
-                        rotation,
-                        scale: 1.,
-                    }
-                })
-            })
-            .collect::<Vec<_>>();
 
         let instances = vec![
             Instance {
@@ -214,9 +201,11 @@ impl State {
 
         let mut index_data = Vec::new();
         for index in indices {
-            let bytes = index.to_le_bytes();
+            let bytes = index.to_ne_bytes();
             index_data.push(bytes[0]);
             index_data.push(bytes[1]);
+            index_data.push(bytes[2]);
+            index_data.push(bytes[3]);
         }
 
         let index_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
@@ -244,7 +233,7 @@ impl State {
 
         let cam_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Camera buffer"),
-            contents: &camera.to_uniform().to_bytes(),
+            contents: &camera.to_bytes(),
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
         });
 
@@ -274,7 +263,7 @@ impl State {
         });
 
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-            label: Some("Pipeline"),
+            label: Some("Render pipeline layout"),
             bind_group_layouts: &[&bind_groups.layout_cam, &bind_groups.layout_lighting],
             push_constant_ranges: &[],
         });
@@ -309,6 +298,7 @@ impl State {
         // let dt_secs = dt.as_secs as f32 + dt.subsec_millis() / 1_000. + dt.subsec_micros() / 1_000_000.;
         let dt_secs = dt.as_secs() as f32 + dt.subsec_micros() as f32 / 1_000_000.;
         input::handle_event(event, &mut self.camera, dt_secs);
+        // println!("Input");
     }
 
     #[allow(clippy::single_match)]
@@ -320,7 +310,8 @@ impl State {
         // to only be accessible by the gpu. The gpu can do some speed optimizations which
         // it couldn't if we could access the buffer via the cpu."
 
-        queue.write_buffer(&self.camera_buf, 0, &self.camera.to_uniform().to_bytes());
+        queue.write_buffer(&self.camera_buf, 0, &self.camera.to_bytes());
+        // println!("Update");
     }
 
     pub(crate) fn render(
@@ -334,7 +325,7 @@ impl State {
         // before being sent to the gpu. The encoder builds a command buffer that we can then
         // send to the gpu.
         let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
-            label: Some("Encoder"),
+            label: Some("Render encoder"),
         });
 
         // self.staging_belt
@@ -364,22 +355,37 @@ impl State {
                 depth_stencil_attachment: None,
             });
 
-            rpass.set_vertex_buffer(1, self.instance_buf.slice(..));
             rpass.set_pipeline(&self.pipeline);
-
-            rpass.set_vertex_buffer(0, self.vertex_buf.slice(..));
-            rpass.set_index_buffer(self.index_buf.slice(..), wgpu::IndexFormat::Uint32);
-            // self.set_bind_group(0, &material.bind_group, &[]);
             rpass.set_bind_group(0, &self.bind_groups.cam, &[]);
             rpass.set_bind_group(1, &self.bind_groups.lighting, &[]);
-            // rpass.draw_indexed(0..self.num_indices as u32, 0, 0..self.instances.len() as _);
-            rpass.draw_indexed(0..self.num_indices as u32, 0, 0..1);
+
+            rpass.set_vertex_buffer(0, self.vertex_buf.slice(..));
+            rpass.set_vertex_buffer(1, self.instance_buf.slice(..));
+
+            rpass.set_index_buffer(self.index_buf.slice(..), wgpu::IndexFormat::Uint32);
+            // rpass.set_bind_group(0, &material.bind_group, &[]);
+
+            // rpass.set_bind_group(2, light_bind_group, &[]);
+            rpass.draw_indexed(
+                0..self.num_indices as u32,
+                0,
+                0..self.instances.len() as u32,
+            );
+
+
+            // mesh.draw_instanced(
+            //     &mut rpass,
+            //     0..1,
+            //     // 0..self.instances.len() as u32,
+            //     &self.bind_groups.cam,
+            // );
         }
 
         // todo: Make sure if you add new instances to the Vec, that you recreate the instance_buffer
         // todo and as well as camera_bind_group, otherwise your new instances won't show up correctly.
 
         queue.submit(Some(encoder.finish()));
+        // queue.submit(iter::once(encoder.finish()));
     }
 }
 

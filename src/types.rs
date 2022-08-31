@@ -1,5 +1,7 @@
 //! https://sotrh.github.io/learn-wgpu/beginner/tutorial9-models/#rendering-a-mesh
 
+use std::ops::Range;
+
 use crate::{
     lighting::PointLight,
     lin_alg::{Mat4, Quaternion, Vec3},
@@ -36,33 +38,34 @@ pub struct ModelVertex {
 }
 
 impl ModelVertex {
+    /// Initialize position; change the others after init.
     pub fn new(x: f32, y: f32, z: f32) -> Self {
         Self {
             position: [x, y, z],
-            tex_coords: [0., 0.],     // todo
-            normal: Vec3::new_zero(), // todo
-            tangent: [0., 0., 0.],    // todo
-            bitangent: [0., 0., 0.],  // todo
+            tex_coords: [0., 0.],
+            normal: Vec3::new_zero(),
+            tangent: [0., 0., 0.],
+            bitangent: [0., 0., 0.],
         }
     }
 
     pub fn to_bytes(&self) -> [u8; VERTEX_SIZE] {
         let mut result = [0; VERTEX_SIZE];
 
-        result[0..4].clone_from_slice(&self.position[0].to_le_bytes());
-        result[4..8].clone_from_slice(&self.position[1].to_le_bytes());
-        result[8..12].clone_from_slice(&self.position[2].to_le_bytes());
-        result[12..16].clone_from_slice(&self.tex_coords[0].to_le_bytes());
-        result[16..20].clone_from_slice(&self.tex_coords[1].to_le_bytes());
+        result[0..4].clone_from_slice(&self.position[0].to_ne_bytes());
+        result[4..8].clone_from_slice(&self.position[1].to_ne_bytes());
+        result[8..12].clone_from_slice(&self.position[2].to_ne_bytes());
+        result[12..16].clone_from_slice(&self.tex_coords[0].to_ne_bytes());
+        result[16..20].clone_from_slice(&self.tex_coords[1].to_ne_bytes());
 
         result[20..32].clone_from_slice(&self.normal.to_bytes_vertex());
 
-        result[32..36].clone_from_slice(&self.tangent[0].to_le_bytes());
-        result[36..40].clone_from_slice(&self.tangent[1].to_le_bytes());
-        result[40..44].clone_from_slice(&self.tangent[2].to_le_bytes());
-        result[44..48].clone_from_slice(&self.bitangent[0].to_le_bytes());
-        result[48..52].clone_from_slice(&self.bitangent[1].to_le_bytes());
-        result[52..56].clone_from_slice(&self.bitangent[2].to_le_bytes());
+        result[32..36].clone_from_slice(&self.tangent[0].to_ne_bytes());
+        result[36..40].clone_from_slice(&self.tangent[1].to_ne_bytes());
+        result[40..44].clone_from_slice(&self.tangent[2].to_ne_bytes());
+        result[44..48].clone_from_slice(&self.bitangent[0].to_ne_bytes());
+        result[48..52].clone_from_slice(&self.bitangent[1].to_ne_bytes());
+        result[52..56].clone_from_slice(&self.bitangent[2].to_ne_bytes());
 
         result
     }
@@ -70,7 +73,7 @@ impl ModelVertex {
     // todo: This probably shouldn't be in this module, which is backend-agnostic-ish.
     pub fn desc<'a>() -> wgpu::VertexBufferLayout<'a> {
         wgpu::VertexBufferLayout {
-            array_stride: std::mem::size_of::<ModelVertex>() as wgpu::BufferAddress,
+            array_stride: VERTEX_SIZE as wgpu::BufferAddress,
             step_mode: wgpu::VertexStepMode::Vertex,
             attributes: &[
                 // position
@@ -81,25 +84,25 @@ impl ModelVertex {
                 },
                 // tex_coords
                 wgpu::VertexAttribute {
-                    offset: VEC3_SIZE as u64,
+                    offset: VEC3_SIZE as wgpu::BufferAddress,
                     shader_location: 1,
                     format: wgpu::VertexFormat::Float32x2,
                 },
                 // normal
                 wgpu::VertexAttribute {
-                    offset: (2 * F32_SIZE + VEC3_SIZE) as u64,
+                    offset: (2 * F32_SIZE + VEC3_SIZE) as wgpu::BufferAddress,
                     shader_location: 2,
                     format: wgpu::VertexFormat::Float32x3,
                 },
                 // tangent
                 wgpu::VertexAttribute {
-                    offset: (2 * F32_SIZE + 2 * VEC3_SIZE) as u64,
+                    offset: (2 * F32_SIZE + 2 * VEC3_SIZE) as wgpu::BufferAddress,
                     shader_location: 3,
                     format: wgpu::VertexFormat::Float32x3,
                 },
                 // bitangent
                 wgpu::VertexAttribute {
-                    offset: (2 * F32_SIZE + 3 * VEC3_SIZE) as u64,
+                    offset: (2 * F32_SIZE + 3 * VEC3_SIZE) as wgpu::BufferAddress,
                     shader_location: 4,
                     format: wgpu::VertexFormat::Float32x3,
                 },
@@ -178,13 +181,47 @@ impl Instance {
 
         let normal_mat = self.rotation.to_matrix3();
 
-        // 64 is mat4 size in bytes.
         result[0..MAT4_SIZE].clone_from_slice(&model_mat.to_bytes());
         result[MAT4_SIZE..INSTANCE_SIZE].clone_from_slice(&normal_mat.to_bytes());
 
         result
     }
 }
+
+// todo: This shouldn't have WGP types in it.
+pub struct Mesh {
+    pub name: String,
+    pub vertex_buffer: wgpu::Buffer,
+    pub index_buffer: wgpu::Buffer,
+    pub num_elements: u32,
+    pub material: usize,
+}
+
+// impl<'a> Mesh {
+//     // pub fn draw_instanced<'a, 'b>(
+//     //     &'b self,
+//     //     rpass: &mut wgpu::RenderPass<'a>,
+//     //     // material: &'b Material,
+//     //     instances: Range<u32>,
+//     //     camera_bind_group: &'b wgpu::BindGroup,
+//     //     // light_bind_group: &'b wgpu::BindGroup,
+//     // ) {
+//     pub fn draw_instanced(
+//         &'a self,
+//         rpass: &mut wgpu::RenderPass<'a>,
+//         // material: &'b Material,
+//         instances: Range<u32>,
+//         camera_bind_group: &'a wgpu::BindGroup,
+//         // light_bind_group: &'b wgpu::BindGroup,
+//     ) {
+//         rpass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
+//         rpass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint32);
+//         // rpass.set_bind_group(0, &material.bind_group, &[]);
+//         rpass.set_bind_group(0, camera_bind_group, &[]);
+//         // rpass.set_bind_group(2, light_bind_group, &[]);
+//         rpass.draw_indexed(0..self.num_elements, 0, instances);
+//     }
+// }
 
 /// Represents an entity in the world. This is not fundamental to the WGPU system.
 #[derive(Clone, Debug)]
@@ -196,44 +233,6 @@ pub struct Entity {
     /// Rotation, relative to up.
     pub orientation: Quaternion,
     pub scale: f32, // 1.0 is original.
-}
-
-/// Mesh - represents geometry, and contains vertex and index buffers.
-/// As a reference: https://github.com/bevyengine/bevy/blob/main/crates/bevy_render/src/mesh/mesh/mod.rs
-#[derive(Debug)]
-pub struct Mesh {
-    pub vertices: Vec<ModelVertex>,
-    /// Each consecutive triplet of indices defines a triangle.
-    pub indices: Vec<usize>,
-}
-
-// todo: You don't really want this bytemuck and WGPU buffer stuff here; use a vec etc.
-impl Mesh {
-    pub fn from_brush(brush: Brush) -> Self {
-        // Create triangles from faces, which in turn reference vertex indices.
-        // faces must be defined continously around their edge, with no jumps.
-        let mut indices = Vec::new();
-
-        // There may be more efficient algos for this, but this one is conceptually simple.
-        for face in &brush.faces {
-            if face.len() < 3 {
-                panic!("Faces must have at least 3 vertices")
-            }
-
-            for i in 0..face.len() - 2 {
-                // vertex 0 is used for all triangles.
-                indices.push(face[0]);
-                for j in 1..3 {
-                    indices.push(face[i + j]);
-                }
-            }
-        }
-
-        Self {
-            vertices: brush.vertices.clone(),
-            indices,
-        }
-    }
 }
 
 #[derive(Clone, Debug)]
