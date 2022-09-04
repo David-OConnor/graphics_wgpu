@@ -18,7 +18,7 @@ use crate::{
     input,
     lighting::{Lighting, PointLight},
     texture::Texture,
-    types::{Brush, Entity, Instance, Mesh, ModelVertex, Scene},
+    types::{Brush, Entity, Instance, Mesh, ModelVertex, Scene, InputSettings, InputsCommanded},
 };
 
 use lin_alg2::f32::{Quaternion, Vec3};
@@ -97,6 +97,7 @@ fn create_vertices() -> (Vec<ModelVertex>, Vec<u32>) {
 }
 
 pub(crate) struct GraphicsState {
+    meshes: Vec<Mesh>,
     vertex_buf: wgpu::Buffer,
     index_buf: wgpu::Buffer,
     num_indices: usize,
@@ -112,6 +113,8 @@ pub(crate) struct GraphicsState {
     pipeline: wgpu::RenderPipeline,
     // depth_texture: wgpu::Texture,
     pub depth_texture: Texture,
+    pub input_settings: InputSettings,
+    inputs_commanded: InputsCommanded,
 
     // todo: Will this need to change for multiple models
     // obj_mesh: Mesh,
@@ -125,7 +128,17 @@ impl GraphicsState {
         queue: &wgpu::Queue,
         surface_cfg: &SurfaceConfiguration,
         scene: Scene,
+        input_settings: InputSettings,
     ) -> Self {
+        let meshes = vec![
+            Mesh {
+                vertex_buffer: vec![],
+                index_buffer: vec![],
+                num_elements: 0,
+                material: 0,
+            },
+        ];
+
         // Create the vertex and index buffers
         let (vertices, indices) = create_vertices();
 
@@ -236,6 +249,7 @@ impl GraphicsState {
         // let mut meshes_wgpu = vec![]; // todo!
 
         Self {
+            meshes,
             vertex_buf,
             index_buf,
             num_indices,
@@ -253,15 +267,20 @@ impl GraphicsState {
             // pipeline_wire,
             staging_belt: wgpu::util::StagingBelt::new(0x100),
             scene,
+            input_settings,
+            inputs_commanded: Default::default(),
         }
     }
 
     #[allow(clippy::single_match)]
     pub(crate) fn handle_input(&mut self, event: DeviceEvent, dt: Duration) {
-        // let dt_secs = dt.as_secs as f32 + dt.subsec_millis() / 1_000. + dt.subsec_micros() / 1_000_000.;
         let dt_secs = dt.as_secs() as f32 + dt.subsec_micros() as f32 / 1_000_000.;
-        input::handle_event(event, &mut self.camera, dt_secs);
-        // println!("Input");
+
+        // input::handle_event(event, &mut self.camera, &self.input_settings, dt_secs);
+        input::handle_event(event, &mut self.inputs_commanded);
+
+        // todo: WHere should this go?
+        input::adjust_camera(cam, &self.inputs_commandedu, &self.input_settings, dt_secs);
     }
 
     #[allow(clippy::single_match)]
@@ -315,7 +334,14 @@ impl GraphicsState {
                         store: true,
                     },
                 })],
-                depth_stencil_attachment: None,
+                depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
+                    view: &self.depth_texture.view,
+                    depth_ops: Some(wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(1.0),
+                        store: true,
+                    }),
+                    stencil_ops: None,
+                }),
             });
 
             rpass.set_pipeline(&self.pipeline);

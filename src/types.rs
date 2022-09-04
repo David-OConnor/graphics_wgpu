@@ -207,10 +207,10 @@ impl Instance {
 // todo: This shouldn't have WGP types in it.
 pub struct Mesh {
     // pub name: String,
-    pub vertex_buffer: wgpu::Buffer,
-    pub index_buffer: wgpu::Buffer,
-    // pub vertex_buffer: Vec<usize>,
-    // pub index_buffer: Vec<usize>,
+    // pub vertex_buffer: wgpu::Buffer,
+    // pub index_buffer: wgpu::Buffer,
+    pub vertex_buffer: Vec<usize>,
+    pub index_buffer: Vec<usize>,
     pub num_elements: u32,
     pub material: usize,
 }
@@ -335,4 +335,25 @@ impl Brush {
 pub struct Scene {
     pub entities: Vec<Entity>,
     pub lights: Vec<PointLight>,
+}
+
+#[derive(Clone, Debug)]
+/// These sensitivities are in units (position), or radians (orientation) per second.
+pub struct InputSettings {
+    pub move_sens: f32,
+    pub rotate_sens: f32,
+    pub rotate_key_sens: f32,
+    /// How much the move speed is multiplied when holding the run key.
+    pub run_factor: f32,
+}
+
+impl Default for InputSettings {
+    fn default() -> Self {
+        Self {
+            move_sens: 10.,
+            rotate_sens: 0.5,
+            rotate_key_sens: 0.5,
+            run_factor: 6.
+        }
+    }
 }

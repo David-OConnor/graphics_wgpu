@@ -10,7 +10,7 @@ use winit::{
 };
 
 use crate::{
-    init_graphics::GraphicsState, types::Scene, texture::Texture,
+    init_graphics::GraphicsState, types::{Scene, InputSettings}, texture::Texture,
 };
 
 const WINDOW_TITLE: &str = "Graphics";
@@ -34,7 +34,7 @@ struct State {
 }
 
 impl State {
-    pub(crate) fn new(window: &Window) -> Self {
+    pub(crate) fn new(window: &Window, scene: Scene, input_settings: InputSettings) -> Self {
         #[cfg(not(target_arch = "wasm32"))]
         {
             env_logger::init();
@@ -82,6 +82,8 @@ impl State {
             present_mode: wgpu::PresentMode::Fifo,
         };
 
+        surface.configure(&device, &surface_cfg);
+
         let mut sys = SystemState {
             instance,
             size,
@@ -92,7 +94,7 @@ impl State {
             surface_cfg,
         };
 
-        let mut graphics = GraphicsState::new(&sys.device, &sys.queue, &sys.surface_cfg, scene);
+        let mut graphics = GraphicsState::new(&sys.device, &sys.queue, &sys.surface_cfg, scene, input_settings);
 
         Self {
             sys,
@@ -105,10 +107,10 @@ impl State {
             self.sys.size = new_size;
             self.sys.surface_cfg.width = new_size.width;
             self.sys.surface_cfg.height = new_size.height;
-            self.sys.surface.configure(&self.device, &self.surface_cfg);
+            self.sys.surface.configure(&self.sys.device, &self.sys.surface_cfg);
 
-            self.graphics.camera.aspect_ratio = self.surface_cfg.width as f32 / self.surface_cfg.height as f32;
-            self.graphics.depth_texture = Texture::create_depth_texture(&self.device, &self.surface_cfg, "Depth texture");
+            self.graphics.camera.aspect = self.sys.surface_cfg.width as f32 / self.sys.surface_cfg.height as f32;
+            self.graphics.depth_texture = Texture::create_depth_texture(&self.sys.device, &self.sys.surface_cfg, "Depth texture");
 
         }
     }
@@ -118,7 +120,7 @@ impl State {
     }
 }
 
-pub fn run(scene: Scene) {
+pub fn run(scene: Scene, input_settings: InputSettings) {
     #[cfg(not(target_arch = "wasm32"))]
     let mut last_update_inst = Instant::now();
     #[cfg(not(target_arch = "wasm32"))]
@@ -133,9 +135,7 @@ pub fn run(scene: Scene) {
         .build(&event_loop)
         .unwrap();
 
-    let mut state = State::new(&window);
-
-    state.sys.surface.configure(&sys.device, &sys.surface_cfg);
+    let mut state = State::new(&window, scene, input_settings);
 
     let mut last_render_time = Instant::now();
     let mut dt = Duration::new(0, 0);
@@ -147,7 +147,7 @@ pub fn run(scene: Scene) {
         match event {
             Event::MainEventsCleared => window.request_redraw(),
             Event::DeviceEvent { event, .. } => {
-                graphics.handle_input(event, dt);
+                state.graphics.handle_input(event, dt);
             }
             Event::WindowEvent {
                 ref event,
@@ -189,7 +189,7 @@ pub fn run(scene: Scene) {
                     .texture
                     .create_view(&wgpu::TextureViewDescriptor::default());
 
-                graphics.render(&view, &state.sys.device, &state.sys.queue);
+                state.graphics.render(&view, &state.sys.device, &state.sys.queue);
                 // match state.render() {
                 //     Ok(_) => {}
                 //     // Reconfigure the surface if it's lost or outdated

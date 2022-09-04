@@ -3,19 +3,13 @@
 use crate::{
     camera::Camera,
     init_graphics::{FWD_VEC, RIGHT_VEC, UP_VEC},
+    types::InputSettings,
 };
 
 use lin_alg2::f32::{Quaternion, Vec3};
 
 // todo: remove Winit from this module if you can, and make it agnostic?
 use winit::event::{DeviceEvent, ElementState};
-
-// These sensitivities are in units (position), or radians (orientation) per second.
-const CAM_MOVE_SENS: f32 = 10.;
-const CAM_ROTATE_SENS: f32 = 0.5;
-const CAM_ROTATE_KEY_SENS: f32 = 0.5;
-// Move speed multiplier when the run modifier key is held.
-const RUN_FACTOR: f32 = 6.;
 
 #[derive(Default)]
 struct InputsCommanded {
@@ -33,7 +27,8 @@ struct InputsCommanded {
 }
 
 /// dt is in seconds.
-pub(crate) fn handle_event(event: DeviceEvent, cam: &mut Camera, dt: f32) {
+// pub(crate) fn handle_event(event: DeviceEvent, cam: &mut Camera, input_settings: &InputSettings, dt: f32) {
+pub(crate) fn handle_event(event: DeviceEvent, input: &mut InputsCommanded) {
     let mut inputs = InputsCommanded::default();
 
     match event {
@@ -84,15 +79,15 @@ pub(crate) fn handle_event(event: DeviceEvent, cam: &mut Camera, dt: f32) {
         _ => (),
     }
 
-    adjust_camera(cam, &inputs, dt);
+    // adjust_camera(cam, &inputs, &input_settings, dt);
 }
 
 /// Adjust the camera orientation and position.
 /// todo: copyied from `peptide`'s Bevy interface.
-fn adjust_camera(cam: &mut Camera, inputs: &InputsCommanded, dt: f32) {
-    let mut move_amt: f32 = CAM_MOVE_SENS * dt;
-    let rotate_amt: f32 = CAM_ROTATE_SENS * dt;
-    let mut rotate_key_amt: f32 = CAM_ROTATE_KEY_SENS * dt;
+pub fn adjust_camera(cam: &mut Camera, inputs: &InputsCommanded, input_settings: &InputSettings, dt: f32) {
+    let mut move_amt: f32 = input_settings.move_sens * dt;
+    let rotate_amt: f32 = input_settings.rotate_sens * dt;
+    let mut rotate_key_amt: f32 = input_settings.rotate_key_sens * dt;
 
     // todo: This split is where you can decouple WGPU-specific code from general code.
 
@@ -102,8 +97,8 @@ fn adjust_camera(cam: &mut Camera, inputs: &InputsCommanded, dt: f32) {
     let mut movement_vec = Vec3::new_zero();
 
     if inputs.run {
-        move_amt *= RUN_FACTOR;
-        rotate_key_amt *= RUN_FACTOR;
+        move_amt *= input_settings.run_factor;
+        rotate_key_amt *= input_settings.run_factor;
     }
 
     if inputs.fwd {

@@ -7,4 +7,4 @@ pub mod lighting;
 mod types;
 
 pub use init_system::run;
-pub use types::{Entity, Scene};
+pub use types::{Entity, Scene, InputSettings};
