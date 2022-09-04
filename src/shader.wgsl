@@ -46,6 +46,7 @@ struct InstanceIn {
     @location(9) normal_matrix_0: vec3<f32>,
     @location(10) normal_matrix_1: vec3<f32>,
     @location(11) normal_matrix_2: vec3<f32>,
+    @location(12) color: vec4<f32>,
 }
 
 struct VertexOut {
@@ -54,6 +55,9 @@ struct VertexOut {
     @location(1) tangent_position: vec3<f32>,
     @location(2) tangent_light_position: vec3<f32>,
     @location(3) tangent_view_position: vec3<f32>,
+    // Experimenting
+    @location(4) normal: vec3<f32>,
+    @location(5) color: vec4<f32>,
 }
 
 @vertex
@@ -75,30 +79,31 @@ fn vs_main(
         instance.normal_matrix_2,
     );
 
+//    let model_color = vec3<f32>(instance.color);
+
     // Construct the tangent matrix
     let world_normal = normalize(normal_mat * model.normal);
     let world_tangent = normalize(normal_mat * model.tangent);
     let world_bitangent = normalize(normal_mat * model.bitangent);
+
     let tangent_mat = transpose(mat3x3<f32>(
         world_tangent,
         world_bitangent,
         world_normal,
     ));
 
-
-//    result.tex_coords = model.tex_coords;
-
     // Pad the model position with 1., for use with the 4x4 transform mats.
-    var model_posit = vec4<f32>(model.position, 1.0);
-
-    let world_posit = model_mat * model_posit;
+    let world_posit = model_mat * vec4<f32>(model.position, 1.0);
 
     var result: VertexOut;
 
     result.clip_position = camera.proj_view * world_posit;
+
     result.tangent_position = tangent_mat * world_posit.xyz;
     result.tangent_view_position = tangent_mat * camera.position.xyz;
-//    result.tangent_light_position = tangent_mat * light.position;
+    result.normal = world_normal;
+//    result.color = model_color;
+    result.color = instance.color;
 
     return result;
 }
@@ -107,27 +112,28 @@ fn vs_main(
 fn fs_main(vertex: VertexOut) -> @location(0) vec4<f32> {
     var ambient = lighting.ambient_color * lighting.ambient_intensity;
 
-    // todo: How do we pass vnormal from the vector?
-    var v_normal = vec3<f32>(1., 0., 0.);
+    // Note: We currently don't use the model color's alpha value.
+    // todo: More elegant way of casting to vec3?
+    var vertex_color = vec3<f32>(vertex.color[0], vertex.color[1], vertex.color[2]);
+//    var vertex_color = vec3<f32>(vertex.color);
+
+//    var v_normal = vec3<f32>(1., 0., 0.);
 
 //    let light_dir = normalize(in.tangent_light_position - in.tangent_position);
 //    let view_dir = normalize(in.tangent_view_position - in.tangent_position);
 //    let half_dir = normalize(view_dir + light_dir);
 
-//    var diffuse_on_face = max(dot(vertex.normal, lighting.diffuse_dir), 0.);
-//    var diffuse = lighting.diffuse_color * diffuse_on_face * lighting.diffuse_intensity;
-    let diffuse = vec3<f32>(0., 0., 0.); // todo temp until we sort out normal passing.
+    var diffuse_on_face = max(dot(vertex.normal, lighting.diffuse_dir), 0.);
+    var diffuse = lighting.diffuse_color * diffuse_on_face * lighting.diffuse_intensity;
 
 // todo: Put this in once the rest works.
 //    let specular_strength = pow(max(dot(tangent_normal, half_dir), 0.0), 32.0);
 //    let specular_color = specular_strength * light.color;
     var specular = vec3<f32>(0., 0., 0.); // todo placeholder
 
-
     // todo: Vec4 with opacity?
-    var model_color = vec3<f32>(0., 0., 1.); // todo: Temp. Pass in from program.
+//    let result = (ambient + diffuse + specular) * vertex_color;
+    let result = (ambient) * vertex_color;
 
-    let result = (ambient + diffuse + specular) * model_color;
-
-    return vec4<f32>(result, 1.0); // todo: Alpha instead of 1. A/R
+    return vec4<f32>(result, 1.0);
 }

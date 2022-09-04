@@ -1,7 +1,8 @@
 use crate::{
-    lin_alg::Vec3,
     types::{F32_SIZE, VEC3_UNIFORM_SIZE},
 };
+
+use lin_alg2::f32::Vec3;
 
 pub const LIGHTING_SIZE: usize = 3 * VEC3_UNIFORM_SIZE + 2 * F32_SIZE;
 pub const POINT_LIGHT_SIZE: usize = 2 * VEC3_UNIFORM_SIZE + F32_SIZE;
@@ -20,9 +21,9 @@ impl Default for Lighting {
     fn default() -> Self {
         Self {
             ambient_color: Vec3::new(1., 0., 1.),
-            ambient_intensity: 0.1,
+            ambient_intensity: 800.,
             diffuse_color: Vec3::new(1., 1., 1.),
-            diffuse_intensity: 0.5,
+            diffuse_intensity: 1_000.,
             diffuse_dir: Vec3::new(0., 1., 0.),
         }
     }

@@ -1,6 +1,8 @@
-// use anyhow::*;
-use image::GenericImageView;
 use std::num::NonZeroU32;
+
+
+use image::GenericImageView;
+
 
 pub struct Texture {
     pub texture: wgpu::Texture,
@@ -59,8 +61,9 @@ impl Texture {
         bytes: &[u8],
         label: &str,
         is_normal_map: bool,
-    ) -> Result<Self> {
-        let img = image::load_from_memory(bytes)?;
+    ) -> Self {
+        // let img = image::load_from_memory(bytes)?;
+        let img = image::load_from_memory(bytes).unwrap();
         Self::from_image(device, queue, &img, Some(label), is_normal_map)
     }
 
@@ -70,7 +73,8 @@ impl Texture {
         img: &image::DynamicImage,
         label: Option<&str>,
         is_normal_map: bool,
-    ) -> Result<Self> {
+    // ) -> Result<Self> {
+    ) -> Self {
         let dimensions = img.dimensions();
         let rgba = img.to_rgba8();
 
@@ -120,10 +124,10 @@ impl Texture {
             ..Default::default()
         });
 
-        Ok(Self {
+        Self {
             texture,
             view,
             sampler,
-        })
+        }
     }
 }

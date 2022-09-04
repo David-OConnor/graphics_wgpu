@@ -4,8 +4,9 @@ use std::ops::Range;
 
 use crate::{
     lighting::PointLight,
-    lin_alg::{Mat4, Quaternion, Vec3},
 };
+
+use lin_alg2::f32::{Mat4, Quaternion, Vec3};
 
 // These sizes are in bytes. We do this, since that's the data format expected by the shader.
 pub const F32_SIZE: usize = 4;
@@ -16,7 +17,7 @@ pub const VERTEX_SIZE: usize = 14 * F32_SIZE;
 pub const MAT4_SIZE: usize = 16 * F32_SIZE;
 pub const MAT3_SIZE: usize = 9 * F32_SIZE;
 
-pub const INSTANCE_SIZE: usize = MAT4_SIZE + MAT3_SIZE;
+pub const INSTANCE_SIZE: usize = MAT4_SIZE + MAT3_SIZE + VEC3_UNIFORM_SIZE;
 
 #[derive(Clone, Copy, Debug)]
 /// Example attributes: https://github.com/bevyengine/bevy/blob/main/crates/bevy_render/src/mesh/mesh/mod.rs#L56
@@ -34,6 +35,8 @@ pub struct ModelVertex {
     /// they can be used alongside normal maps which allow you to create sub surface
     /// lighting detail to your model(bumpiness)."
     pub tangent: [f32; 3],
+    /// A bitangent vector is the result of the Cross Product between Vertex Normal and Vertex
+    /// Tangent which is a unit vector perpendicular to both vectors at a given point..
     pub bitangent: [f32; 3],
 }
 
@@ -114,10 +117,12 @@ impl ModelVertex {
 /// Instances allow the GPU to render the same object multiple times.
 /// "Instancing allows us to draw the same object multiple times with different properties
 /// (position, orientation, size, color, etc.). "
+/// todo: Relationship between this and entity?
 pub struct Instance {
     pub position: Vec3,
-    pub rotation: Quaternion,
+    pub orientation: Quaternion,
     pub scale: f32,
+    pub color: Vec3,
 }
 
 impl Instance {
@@ -129,14 +134,16 @@ impl Instance {
             // instance when the shader starts processing a new instance
             step_mode: wgpu::VertexStepMode::Instance,
             attributes: &[
+                // A mat4 takes up 4 vertex slots as it is technically 4 vec4s. We need to define a slot
+                // for each vec4. We'll have to reassemble the mat4 in
+                // the shader.
+
+                // Model matrix
                 wgpu::VertexAttribute {
                     offset: 0,
                     shader_location: 5,
                     format: wgpu::VertexFormat::Float32x4,
                 },
-                // A mat4 takes up 4 vertex slots as it is technically 4 vec4s. We need to define a slot
-                // for each vec4. We'll have to reassemble the mat4 in
-                // the shader.
                 wgpu::VertexAttribute {
                     offset: (F32_SIZE * 4) as wgpu::BufferAddress,
                     shader_location: 6,
@@ -152,6 +159,8 @@ impl Instance {
                     shader_location: 8,
                     format: wgpu::VertexFormat::Float32x4,
                 },
+
+                // Normal matrix.
                 wgpu::VertexAttribute {
                     offset: (F32_SIZE * 16) as wgpu::BufferAddress,
                     shader_location: 9,
@@ -167,6 +176,12 @@ impl Instance {
                     shader_location: 11,
                     format: wgpu::VertexFormat::Float32x3,
                 },
+                // model (and vertex) color
+                wgpu::VertexAttribute {
+                    offset: (F32_SIZE * 25) as wgpu::BufferAddress,
+                    shader_location: 12,
+                    format: wgpu::VertexFormat::Float32x4,
+                },
             ],
         }
     }
@@ -176,13 +191,14 @@ impl Instance {
         let mut result = [0; INSTANCE_SIZE];
 
         let model_mat = Mat4::new_translation(self.position)
-            * self.rotation.to_matrix()
+            * self.orientation.to_matrix()
             * Mat4::new_scaler(self.scale);
 
-        let normal_mat = self.rotation.to_matrix3();
+        let normal_mat = self.orientation.to_matrix3();
 
         result[0..MAT4_SIZE].clone_from_slice(&model_mat.to_bytes());
-        result[MAT4_SIZE..INSTANCE_SIZE].clone_from_slice(&normal_mat.to_bytes());
+        result[MAT4_SIZE..INSTANCE_SIZE - VEC3_UNIFORM_SIZE].clone_from_slice(&normal_mat.to_bytes());
+        result[INSTANCE_SIZE - VEC3_UNIFORM_SIZE..INSTANCE_SIZE].clone_from_slice(&self.color.to_bytes_uniform());
 
         result
     }
@@ -190,9 +206,11 @@ impl Instance {
 
 // todo: This shouldn't have WGP types in it.
 pub struct Mesh {
-    pub name: String,
+    // pub name: String,
     pub vertex_buffer: wgpu::Buffer,
     pub index_buffer: wgpu::Buffer,
+    // pub vertex_buffer: Vec<usize>,
+    // pub index_buffer: Vec<usize>,
     pub num_elements: u32,
     pub material: usize,
 }
@@ -233,6 +251,14 @@ pub struct Entity {
     /// Rotation, relative to up.
     pub orientation: Quaternion,
     pub scale: f32, // 1.0 is original.
+    pub color: (f32, f32, f32),
+}
+
+impl Entity {
+    pub fn new(mesh: usize, position: Vec3, orientation: Quaternion,
+               scale: f32, color: (f32, f32, f32)) -> Self {
+        Self { mesh, position, orientation, scale, color }
+    }
 }
 
 #[derive(Clone, Debug)]

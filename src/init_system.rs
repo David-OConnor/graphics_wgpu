@@ -9,62 +9,32 @@ use winit::{
     window::{Window, WindowBuilder},
 };
 
-use crate::{init_graphics::State, types::Scene};
+use crate::{
+    init_graphics::GraphicsState, types::Scene, texture::Texture,
+};
 
 const WINDOW_TITLE: &str = "Graphics";
 const WINDOW_SIZE_X: f32 = 900.0;
 const WINDOW_SIZE_Y: f32 = 600.0;
 
-pub(crate) struct GraphicsSystem {
-    instance: wgpu::Instance,
-    size: winit::dpi::PhysicalSize<u32>,
-    surface: wgpu::Surface,
-    adapter: wgpu::Adapter,
-    device: wgpu::Device,
-    queue: wgpu::Queue,
-    surface_cfg: wgpu::SurfaceConfiguration,
+pub(crate) struct SystemState {
+    pub instance: wgpu::Instance,
+    pub size: winit::dpi::PhysicalSize<u32>,
+    pub surface: wgpu::Surface,
+    pub adapter: wgpu::Adapter,
+    pub device: wgpu::Device,
+    pub queue: wgpu::Queue,
+    pub surface_cfg: wgpu::SurfaceConfiguration,
 }
 
-/// Quarantine for the Async part of the API
-async fn setup_async(
-    instance: &wgpu::Instance,
-    surface: &wgpu::Surface,
-) -> (wgpu::Adapter, wgpu::Device, wgpu::Queue) {
-    // The adapter is a handle to our actual graphics card. You can use this to get
-    // information about the graphics card such as its name and what backend the
-    // adapter uses. We use this to create our Device and Queue.
-    let adapter = instance
-        .request_adapter(&wgpu::RequestAdapterOptions {
-            // `Default` prefers low power when on battery, high performance when on mains.
-            power_preference: wgpu::PowerPreference::default(),
-            compatible_surface: Some(&surface),
-            force_fallback_adapter: false,
-        })
-        .await
-        .unwrap();
 
-    let (device, queue) = adapter
-        .request_device(
-            &wgpu::DeviceDescriptor {
-                label: None,
-                // https://docs.rs/wgpu/latest/wgpu/struct.Features.html
-                features: wgpu::Features::empty(),
-                // https://docs.rs/wgpu/latest/wgpu/struct.Limits.html
-                limits: wgpu::Limits::default(),
-            },
-            std::env::var("WGPU_TRACE")
-                .ok()
-                .as_ref()
-                .map(std::path::Path::new),
-        )
-        .await
-        .expect("Unable to find a suitable GPU adapter!");
-
-    (adapter, device, queue)
+struct State {
+    sys: SystemState,
+    graphics: GraphicsState,
 }
 
-impl GraphicsSystem {
-    pub(crate) fn new(window: &Window) -> GraphicsSystem {
+impl State {
+    pub(crate) fn new(window: &Window) -> Self {
         #[cfg(not(target_arch = "wasm32"))]
         {
             env_logger::init();
@@ -112,7 +82,7 @@ impl GraphicsSystem {
             present_mode: wgpu::PresentMode::Fifo,
         };
 
-        Self {
+        let mut sys = SystemState {
             instance,
             size,
             surface,
@@ -120,15 +90,26 @@ impl GraphicsSystem {
             device,
             queue,
             surface_cfg,
+        };
+
+        let mut graphics = GraphicsState::new(&sys.device, &sys.queue, &sys.surface_cfg, scene);
+
+        Self {
+            sys,
+            graphics
         }
     }
 
     pub(crate) fn resize(&mut self, new_size: winit::dpi::PhysicalSize<u32>) {
         if new_size.width > 0 && new_size.height > 0 {
-            self.size = new_size;
-            self.surface_cfg.width = new_size.width;
-            self.surface_cfg.height = new_size.height;
-            self.surface.configure(&self.device, &self.surface_cfg);
+            self.sys.size = new_size;
+            self.sys.surface_cfg.width = new_size.width;
+            self.sys.surface_cfg.height = new_size.height;
+            self.sys.surface.configure(&self.device, &self.surface_cfg);
+
+            self.graphics.camera.aspect_ratio = self.surface_cfg.width as f32 / self.surface_cfg.height as f32;
+            self.graphics.depth_texture = Texture::create_depth_texture(&self.device, &self.surface_cfg, "Depth texture");
+
         }
     }
 
@@ -152,22 +133,21 @@ pub fn run(scene: Scene) {
         .build(&event_loop)
         .unwrap();
 
-    let mut sys = GraphicsSystem::new(&window);
-    let mut state = State::new(&sys.device, &sys.queue, &sys.surface_cfg);
+    let mut state = State::new(&window);
 
-    sys.surface.configure(&sys.device, &sys.surface_cfg);
+    state.sys.surface.configure(&sys.device, &sys.surface_cfg);
 
     let mut last_render_time = Instant::now();
     let mut dt = Duration::new(0, 0);
 
     event_loop.run(move |event, _, control_flow| {
-        let _ = (&sys.instance, &sys.adapter); // force ownership by the closure
+        let _ = (&state.sys.instance, &state.sys.adapter); // force ownership by the closure
         *control_flow = ControlFlow::Poll;
 
         match event {
             Event::MainEventsCleared => window.request_redraw(),
             Event::DeviceEvent { event, .. } => {
-                state.handle_input(event, dt);
+                graphics.handle_input(event, dt);
             }
             Event::WindowEvent {
                 ref event,
@@ -188,10 +168,10 @@ pub fn run(scene: Scene) {
                     //     ..
                     // } => *control_flow = ControlFlow::Exit,
                     WindowEvent::Resized(physical_size) => {
-                        sys.resize(*physical_size);
+                        state.resize(*physical_size);
                     }
                     WindowEvent::ScaleFactorChanged { new_inner_size, .. } => {
-                        sys.resize(**new_inner_size);
+                        state.resize(**new_inner_size);
                     }
                     _ => {}
                 }
@@ -201,15 +181,15 @@ pub fn run(scene: Scene) {
                 let now = Instant::now();
                 dt = now - last_render_time;
                 last_render_time = now;
-                state.update(&sys.queue);
+                state.graphics.update(&state.sys.queue);
 
                 // todo: move this into `render`?
-                let output = sys.surface.get_current_texture().unwrap();
+                let output = state.sys.surface.get_current_texture().unwrap();
                 let view = output
                     .texture
                     .create_view(&wgpu::TextureViewDescriptor::default());
 
-                state.render(&view, &sys.device, &sys.queue);
+                graphics.render(&view, &state.sys.device, &state.sys.queue);
                 // match state.render() {
                 //     Ok(_) => {}
                 //     // Reconfigure the surface if it's lost or outdated
@@ -273,4 +253,42 @@ pub(crate) fn parse_url_query_string<'a>(query: &'a str, search_key: &str) -> Op
     }
 
     None
+}
+
+/// Quarantine for the Async part of the API
+async fn setup_async(
+    instance: &wgpu::Instance,
+    surface: &wgpu::Surface,
+) -> (wgpu::Adapter, wgpu::Device, wgpu::Queue) {
+    // The adapter is a handle to our actual graphics card. You can use this to get
+    // information about the graphics card such as its name and what backend the
+    // adapter uses. We use this to create our Device and Queue.
+    let adapter = instance
+        .request_adapter(&wgpu::RequestAdapterOptions {
+            // `Default` prefers low power when on battery, high performance when on mains.
+            power_preference: wgpu::PowerPreference::default(),
+            compatible_surface: Some(&surface),
+            force_fallback_adapter: false,
+        })
+        .await
+        .unwrap();
+
+    let (device, queue) = adapter
+        .request_device(
+            &wgpu::DeviceDescriptor {
+                label: None,
+                // https://docs.rs/wgpu/latest/wgpu/struct.Features.html
+                features: wgpu::Features::empty(),
+                // https://docs.rs/wgpu/latest/wgpu/struct.Limits.html
+                limits: wgpu::Limits::default(),
+            },
+            std::env::var("WGPU_TRACE")
+                .ok()
+                .as_ref()
+                .map(std::path::Path::new),
+        )
+        .await
+        .expect("Unable to find a suitable GPU adapter!");
+
+    (adapter, device, queue)
 }

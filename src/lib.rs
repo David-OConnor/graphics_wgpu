@@ -1,11 +1,10 @@
 mod init_graphics;
-pub mod init_system;
+mod init_system;
 mod input;
-mod lin_alg;
-// mod texture;
+mod texture;
 mod camera;
-mod lighting;
+pub mod lighting;
 mod types;
 
 pub use init_system::run;
-pub use types::Scene;
+pub use types::{Entity, Scene};

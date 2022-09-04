@@ -4,9 +4,10 @@ use core::f32::consts::TAU;
 
 use crate::{
     init_graphics::{FWD_VEC, RIGHT_VEC, UP_VEC},
-    lin_alg::{Mat4, Quaternion, Vec3},
     types::{MAT4_SIZE, VEC3_UNIFORM_SIZE},
 };
+
+use lin_alg2::f32::{Mat4, Quaternion, Vec3};
 
 // cam size is only the parts we pass to the shader.
 // For each of the 4 matrices in the camera, plus a padded vec3 for position.
@@ -32,7 +33,6 @@ impl Camera {
 
         let proj_view = self.proj_mat.clone() * self.view_mat();
 
-        // 64 is mat4 size in bytes.
         result[0..MAT4_SIZE].clone_from_slice(&proj_view.to_bytes());
         result[MAT4_SIZE..CAMERA_SIZE].clone_from_slice(&self.position.to_bytes_uniform());
 
@@ -40,13 +40,14 @@ impl Camera {
     }
 
     pub fn update_proj_mat(&mut self) {
-        self.proj_mat = Mat4::new_perspective_rh(self.fov_y, self.aspect, self.near, self.far);
+        self.proj_mat = Mat4::new_perspective_lh(self.fov_y, self.aspect, self.near, self.far);
     }
 
     /// Calculate the view matrix: This is a translation of the negative coordinates of the camera's
     /// position, applied before the camera's rotation.
     pub fn view_mat(&self) -> Mat4 {
         self.orientation.inverse().to_matrix() * Mat4::new_translation(self.position * -1.)
+        // self.orientation.to_matrix() * Mat4::new_translation(self.position * -1.)
     }
 
     pub fn view_size(&self, far: bool) -> (f32, f32) {
@@ -62,12 +63,12 @@ impl Camera {
 impl Default for Camera {
     fn default() -> Self {
         let mut result = Self {
-            position: Vec3::new(0., 0., -5.),
+            position: Vec3::new(0., 0., 0.),
             orientation: Quaternion::new_identity(),
-            fov_y: TAU / 3., // Vertical field of view in radians.
+            fov_y: TAU / 4., // Vertical field of view in radians.
             aspect: 4. / 3., // width / height.
             near: 1.,
-            far: 100.,
+            far: 30.,
             proj_mat: Mat4::new_identity(),
         };
 

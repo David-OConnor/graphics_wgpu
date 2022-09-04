@@ -17,9 +17,11 @@ use crate::{
     camera::Camera,
     input,
     lighting::{Lighting, PointLight},
-    lin_alg::{Quaternion, Vec3},
+    texture::Texture,
     types::{Brush, Entity, Instance, Mesh, ModelVertex, Scene},
 };
+
+use lin_alg2::f32::{Quaternion, Vec3};
 
 use winit::event::DeviceEvent;
 
@@ -80,7 +82,7 @@ fn create_vertices() -> (Vec<ModelVertex>, Vec<u32>) {
     vertices[0].normal = Vec3::new(1., 1., -1.).to_normalized();
     vertices[1].normal = Vec3::new(1., -1., 1.).to_normalized();
     vertices[2].normal = Vec3::new(-1., 1., 1.).to_normalized();
-    vertices[2].normal = Vec3::new(-1., -1., -1.).to_normalized();
+    vertices[3].normal = Vec3::new(-1., -1., -1.).to_normalized();
 
     // todo: Consider imlementing this.
     let faces = vec![
@@ -94,96 +96,53 @@ fn create_vertices() -> (Vec<ModelVertex>, Vec<u32>) {
     (vertices.to_vec(), indices.to_vec())
 }
 
-fn create_texels(size: usize) -> Vec<u8> {
-    (0..size * size)
-        .map(|id| {
-            // get high five for recognizing this ;)
-            let cx = 3.0 * (id % size) as f32 / (size - 1) as f32 - 2.0;
-            let cy = 2.0 * (id / size) as f32 / (size - 1) as f32 - 1.0;
-            let (mut x, mut y, mut count) = (cx, cy, 0);
-            while count < 0xFF && x * x + y * y < 4.0 {
-                let old_x = x;
-                x = x * x - y * y + cx;
-                y = 2.0 * old_x * y + cy;
-                count += 1;
-            }
-            count
-        })
-        .collect()
-}
-
-pub(crate) struct State {
+pub(crate) struct GraphicsState {
     vertex_buf: wgpu::Buffer,
     index_buf: wgpu::Buffer,
     num_indices: usize,
     instances: Vec<Instance>,
     instance_buf: wgpu::Buffer,
     bind_groups: BindGroupData,
-    camera: Camera,
+    pub camera: Camera,
     camera_buf: wgpu::Buffer,
     lighting: Lighting,
     lighting_buf: wgpu::Buffer,
     point_lights: Vec<PointLight>,
     point_light_buf: wgpu::Buffer,
     pipeline: wgpu::RenderPipeline,
+    // depth_texture: wgpu::Texture,
+    pub depth_texture: Texture,
+
     // todo: Will this need to change for multiple models
     // obj_mesh: Mesh,
-    staging_belt: wgpu::util::StagingBelt, // todo: Do we want this?
+    staging_belt: wgpu::util::StagingBelt, // todo: Do we want this? Probably in sys, not here.
+    scene: Scene,
 }
 
-impl State {
+impl GraphicsState {
     pub(crate) fn new(
         device: &wgpu::Device,
         queue: &wgpu::Queue,
         surface_cfg: &SurfaceConfiguration,
+        scene: Scene,
     ) -> Self {
         // Create the vertex and index buffers
         let (vertices, indices) = create_vertices();
 
         let num_indices = indices.len();
 
-        let instances = vec![
-            Instance {
-                position: Vec3::new(10., 10., 10.),
-                rotation: Quaternion::new_identity(),
-                scale: 1.,
-            },
-            Instance {
-                position: Vec3::new(-10., -10., -10.),
-                rotation: Quaternion::new_identity(),
-                scale: 1.,
-            },
-            Instance {
-                position: Vec3::new(5., 10., 5.),
-                rotation: Quaternion::new_identity(),
-                scale: 1.,
-            },
-            Instance {
-                position: Vec3::new(-5., 10., -5.),
-                rotation: Quaternion::new_identity(),
-                scale: 1.,
-            },
-            Instance {
-                position: Vec3::new(-3., 0., 3.),
-                rotation: Quaternion::new_identity(),
-                scale: 10.,
-            },
-            Instance {
-                position: Vec3::new(5., -3., -5.),
-                rotation: Quaternion::new_identity(),
-                scale: 1.,
-            },
-            Instance {
-                position: Vec3::new(0., 0., -3.),
-                rotation: Quaternion::new_identity(),
-                scale: 1.,
-            },
-            Instance {
-                position: Vec3::new(0., 0., 3.),
-                rotation: Quaternion::new_identity(),
-                scale: 1.,
-            },
-        ];
+        let mut instances = vec![];
+        for entity in &scene.entities {
+            instances.push(
+                Instance {
+                    // todo: eneity into method?
+                    position: entity.position,
+                    orientation: entity.orientation,
+                    scale: entity.scale,
+                    color: Vec3::new(entity.color.0, entity.color.1, entity.color.2),
+                },
+            );
+        }
 
         // Convert the vertex and index data to u8 buffers.
         let mut vertex_data = Vec::new();
@@ -257,6 +216,8 @@ impl State {
         let bind_groups = create_bindgroups(&device, &cam_buf, &lighting_buf);
         // let bind_groups = create_bindgroups(&device, &cam_buf, &lighting_buf, &point_light_buf);
 
+        let depth_texture = Texture::create_depth_texture(device, surface_cfg, "Depth texture");
+
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("Shader"),
             source: wgpu::ShaderSource::Wgsl(include_str!("shader.wgsl").into()),
@@ -288,8 +249,10 @@ impl State {
             point_lights,
             point_light_buf,
             pipeline,
+            depth_texture,
             // pipeline_wire,
             staging_belt: wgpu::util::StagingBelt::new(0x100),
+            scene,
         }
     }
 
@@ -372,7 +335,6 @@ impl State {
                 0..self.instances.len() as u32,
             );
 
-
             // mesh.draw_instanced(
             //     &mut rpass,
             //     0..1,
@@ -426,15 +388,13 @@ fn create_render_pipeline(
             polygon_mode: wgpu::PolygonMode::Fill,
             conservative: false,
         },
-        depth_stencil: None,
-        // todo
-        // depth_stencil: depth_format.map(|format| wgpu::DepthStencilState {
-        //     format,
-        //     depth_write_enabled: true,
-        //     depth_compare: wgpu::CompareFunction::Less,
-        //     stencil: wgpu::StencilState::default(),
-        //     bias: wgpu::DepthBiasState::default(),
-        // }),
+        depth_stencil: Some(wgpu::DepthStencilState {
+            format: Texture::DEPTH_FORMAT,
+            depth_write_enabled: true,
+            depth_compare: wgpu::CompareFunction::Less,
+            stencil: wgpu::StencilState::default(),
+            bias: wgpu::DepthBiasState::default(),
+        }),
         multisample: wgpu::MultisampleState::default(),
         // If the pipeline will be used with a multiview render pass, this
         // indicates how many array layers the attachments will have.

@@ -3,18 +3,19 @@
 use crate::{
     camera::Camera,
     init_graphics::{FWD_VEC, RIGHT_VEC, UP_VEC},
-    lin_alg::{Quaternion, Vec3},
 };
+
+use lin_alg2::f32::{Quaternion, Vec3};
 
 // todo: remove Winit from this module if you can, and make it agnostic?
 use winit::event::{DeviceEvent, ElementState};
 
 // These sensitivities are in units (position), or radians (orientation) per second.
-const CAM_MOVE_SENS: f32 = 1.1;
-const CAM_ROTATE_SENS: f32 = 1.0;
+const CAM_MOVE_SENS: f32 = 10.;
+const CAM_ROTATE_SENS: f32 = 0.5;
 const CAM_ROTATE_KEY_SENS: f32 = 0.5;
 // Move speed multiplier when the run modifier key is held.
-const RUN_FACTOR: f32 = 3.;
+const RUN_FACTOR: f32 = 6.;
 
 #[derive(Default)]
 struct InputsCommanded {
@@ -39,7 +40,6 @@ pub(crate) fn handle_event(event: DeviceEvent, cam: &mut Camera, dt: f32) {
         DeviceEvent::Key(key) => match key.scancode {
             17 => {
                 // W
-                println!("CAM: {:?}", cam);
                 inputs.fwd = true;
             }
             31 => {
@@ -107,10 +107,10 @@ fn adjust_camera(cam: &mut Camera, inputs: &InputsCommanded, dt: f32) {
     }
 
     if inputs.fwd {
-        movement_vec.z -= move_amt; // todo: Backwards; why?
+        movement_vec.z += move_amt;
         cam_moved = true;
     } else if inputs.back {
-        movement_vec.z += move_amt;
+        movement_vec.z -= move_amt;
         cam_moved = true;
     }
 
@@ -148,8 +148,9 @@ fn adjust_camera(cam: &mut Camera, inputs: &InputsCommanded, dt: f32) {
 
     let eps = 0.00001;
     if inputs.mouse_delta_x.abs() > eps || inputs.mouse_delta_y.abs() > eps {
-        rotation = Quaternion::from_axis_angle(up, inputs.mouse_delta_x * rotate_amt)
-            * Quaternion::from_axis_angle(right, inputs.mouse_delta_y * rotate_amt)
+        // todo: Why do we have the negative signs here?
+        rotation = Quaternion::from_axis_angle(up, -inputs.mouse_delta_x * rotate_amt)
+            * Quaternion::from_axis_angle(right, -inputs.mouse_delta_y * rotate_amt)
             * rotation;
 
         cam_rotated = true;
