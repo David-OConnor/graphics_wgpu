@@ -11,8 +11,8 @@ use lin_alg2::f32::{Quaternion, Vec3};
 // todo: remove Winit from this module if you can, and make it agnostic?
 use winit::event::{DeviceEvent, ElementState};
 
-#[derive(Default)]
-struct InputsCommanded {
+#[derive(Default, Debug)]
+pub struct InputsCommanded {
     fwd: bool,
     back: bool,
     left: bool,
@@ -28,9 +28,7 @@ struct InputsCommanded {
 
 /// dt is in seconds.
 // pub(crate) fn handle_event(event: DeviceEvent, cam: &mut Camera, input_settings: &InputSettings, dt: f32) {
-pub(crate) fn handle_event(event: DeviceEvent, input: &mut InputsCommanded) {
-    let mut inputs = InputsCommanded::default();
-
+pub(crate) fn handle_event(event: DeviceEvent, inputs: &mut InputsCommanded) {
     match event {
         DeviceEvent::Key(key) => match key.scancode {
             17 => {

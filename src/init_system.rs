@@ -147,7 +147,7 @@ pub fn run(scene: Scene, input_settings: InputSettings) {
         match event {
             Event::MainEventsCleared => window.request_redraw(),
             Event::DeviceEvent { event, .. } => {
-                state.graphics.handle_input(event, dt);
+                state.graphics.handle_input(event);
             }
             Event::WindowEvent {
                 ref event,
@@ -181,7 +181,8 @@ pub fn run(scene: Scene, input_settings: InputSettings) {
                 let now = Instant::now();
                 dt = now - last_render_time;
                 last_render_time = now;
-                state.graphics.update(&state.sys.queue);
+
+                state.graphics.update(&state.sys.queue, dt);
 
                 // todo: move this into `render`?
                 let output = state.sys.surface.get_current_texture().unwrap();

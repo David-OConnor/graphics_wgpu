@@ -8,3 +8,4 @@ mod types;
 
 pub use init_system::run;
 pub use types::{Entity, Scene, InputSettings};
+pub use input::InputsCommanded;

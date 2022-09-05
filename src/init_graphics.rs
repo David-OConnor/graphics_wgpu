@@ -15,10 +15,10 @@ use wgpu::{self, util::DeviceExt, BindGroup, BindGroupLayout, SurfaceConfigurati
 
 use crate::{
     camera::Camera,
-    input,
+    input::{self, InputsCommanded},
     lighting::{Lighting, PointLight},
     texture::Texture,
-    types::{Brush, Entity, Instance, Mesh, ModelVertex, Scene, InputSettings, InputsCommanded},
+    types::{Brush, Entity, Instance, Mesh, ModelVertex, Scene, InputSettings},
 };
 
 use lin_alg2::f32::{Quaternion, Vec3};
@@ -273,18 +273,12 @@ impl GraphicsState {
     }
 
     #[allow(clippy::single_match)]
-    pub(crate) fn handle_input(&mut self, event: DeviceEvent, dt: Duration) {
-        let dt_secs = dt.as_secs() as f32 + dt.subsec_micros() as f32 / 1_000_000.;
-
-        // input::handle_event(event, &mut self.camera, &self.input_settings, dt_secs);
+    pub(crate) fn handle_input(&mut self, event: DeviceEvent) {
         input::handle_event(event, &mut self.inputs_commanded);
-
-        // todo: WHere should this go?
-        input::adjust_camera(cam, &self.inputs_commandedu, &self.input_settings, dt_secs);
     }
 
     #[allow(clippy::single_match)]
-    pub(crate) fn update(&mut self, queue: &wgpu::Queue) {
+    pub(crate) fn update(&mut self, queue: &wgpu::Queue, dt: Duration) {
         // todo: ALternative approach that may be more performant:
         // "We can create a separate buffer and copy its contents to our camera_buffer. The new buffer
         // is known as a staging buffer. This method is usually how it's done
@@ -292,8 +286,14 @@ impl GraphicsState {
         // to only be accessible by the gpu. The gpu can do some speed optimizations which
         // it couldn't if we could access the buffer via the cpu."
 
+        let dt_secs = dt.as_secs() as f32 + dt.subsec_micros() as f32 / 1_000_000.;
+
+        input::adjust_camera(&mut self.camera, &self.inputs_commanded, &self.input_settings, dt_secs);
+
+        // Reset inputs so they don't stick through the next frame.
+        self.inputs_commanded = Default::default();
+
         queue.write_buffer(&self.camera_buf, 0, &self.camera.to_bytes());
-        // println!("Update");
     }
 
     pub(crate) fn render(
