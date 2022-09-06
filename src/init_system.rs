@@ -122,6 +122,7 @@ impl State {
                 &self.sys.surface_cfg,
                 "Depth texture",
             );
+            self.graphics.camera.update_proj_mat();
         }
     }
 
@@ -192,7 +193,7 @@ pub fn run(scene: Scene, input_settings: InputSettings) {
                 dt = now - last_render_time;
                 last_render_time = now;
 
-                state.graphics.update(&state.sys.queue, dt);
+                // state.graphics.update(&state.sys.queue, dt);
 
                 // todo: move this into `render`?
                 let output = state.sys.surface.get_current_texture().unwrap();
@@ -202,7 +203,8 @@ pub fn run(scene: Scene, input_settings: InputSettings) {
 
                 state
                     .graphics
-                    .render(&view, &state.sys.device, &state.sys.queue);
+                    .render(&view, &state.sys.device, &state.sys.queue, dt);
+
                 // match state.render() {
                 //     Ok(_) => {}
                 //     // Reconfigure the surface if it's lost or outdated

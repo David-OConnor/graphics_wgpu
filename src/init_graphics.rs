@@ -227,41 +227,58 @@ impl GraphicsState {
         }
     }
 
-    #[allow(clippy::single_match)]
     pub(crate) fn handle_input(&mut self, event: DeviceEvent) {
         input::add_input_cmd(event, &mut self.inputs_commanded);
     }
 
-    #[allow(clippy::single_match)]
-    pub(crate) fn update(&mut self, queue: &wgpu::Queue, dt: Duration) {
-        // todo: ALternative approach that may be more performant:
-        // "We can create a separate buffer and copy its contents to our camera_buffer. The new buffer
-        // is known as a staging buffer. This method is usually how it's done
-        // as it allows the contents of the main buffer (in this case camera_buffer)
-        // to only be accessible by the gpu. The gpu can do some speed optimizations which
-        // it couldn't if we could access the buffer via the cpu."
-
-        let dt_secs = dt.as_secs() as f32 + dt.subsec_micros() as f32 / 1_000_000.;
-
-        input::adjust_camera(
-            &mut self.camera,
-            &self.inputs_commanded,
-            &self.input_settings,
-            dt_secs,
-        );
-
-        // Reset inputs so they don't stick through the next frame.
-        self.inputs_commanded = Default::default();
-
-        queue.write_buffer(&self.camera_buf, 0, &self.camera.to_bytes());
-    }
+    // #[allow(clippy::single_match)]
+    // pub(crate) fn update(&mut self, queue: &wgpu::Queue, dt: Duration) {
+    //     // todo: What does this fn do? Probably remove it.
+    //
+    //     // todo: ALternative approach that may be more performant:
+    //     // "We can create a separate buffer and copy its contents to our camera_buffer. The new buffer
+    //     // is known as a staging buffer. This method is usually how it's done
+    //     // as it allows the contents of the main buffer (in this case camera_buffer)
+    //     // to only be accessible by the gpu. The gpu can do some speed optimizations which
+    //     // it couldn't if we could access the buffer via the cpu."
+    //
+    //     let dt_secs = dt.as_secs() as f32 + dt.subsec_micros() as f32 / 1_000_000.;
+    //
+    //     // input::adjust_camera(
+    //     //     &mut self.camera,
+    //     //     &self.inputs_commanded,
+    //     //     &self.input_settings,
+    //     //     dt_secs,
+    //     // );
+    //
+    //     // Reset inputs so they don't stick through the next frame.
+    //     self.inputs_commanded = Default::default();
+    //
+    //     queue.write_buffer(&self.camera_buf, 0, &self.camera.to_bytes());
+    // }
 
     pub(crate) fn render(
         &mut self,
         view: &wgpu::TextureView,
         device: &wgpu::Device,
         queue: &wgpu::Queue,
+        dt: Duration,
     ) {
+        if self.inputs_commanded.inputs_present() {
+            let dt_secs = dt.as_secs() as f32 + dt.subsec_micros() as f32 / 1_000_000.;
+            input::adjust_camera(
+                &mut self.camera,
+                &self.inputs_commanded,
+                &self.input_settings,
+                dt_secs,
+            );
+            queue.write_buffer(&self.camera_buf, 0, &self.camera.to_bytes());
+
+            // Reset the mouse inputs; keyboard inputs are reset by their release event.
+            self.inputs_commanded.mouse_delta_x = 0.;
+            self.inputs_commanded.mouse_delta_y = 0.;
+        }
+
         // We create a CommandEncoder to create the actual commands to send to the
         // gpu. Most modern graphics frameworks expect commands to be stored in a command buffer
         // before being sent to the gpu. The encoder builds a command buffer that we can then

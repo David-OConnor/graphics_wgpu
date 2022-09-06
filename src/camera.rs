@@ -65,7 +65,7 @@ impl Default for Camera {
         let mut result = Self {
             position: Vec3::new(0., 0., 0.),
             orientation: Quaternion::new_identity(),
-            fov_y: TAU / 4., // Vertical field of view in radians.
+            fov_y: TAU / 5., // Vertical field of view in radians.
             aspect: 4. / 3., // width / height.
             near: 0.5,
             far: 60.,

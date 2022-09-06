@@ -136,13 +136,7 @@ fn fs_main(vertex: VertexOut) -> @location(0) vec4<f32> {
 //    let specular_strength = pow(max(dot(tangent_normal, half_dir), 0.0), 32.0);
 //    let specular_color = specular_strength * light.color;
 
-    // todo: Vec4 with opacity?
-//    let result = (ambient + diffuse + specular) * vertex_color;
-//    let result = (ambient + diffuse) * vertex_color;
-
-    // todo: How to mix light with face color?
     let result = (ambient + diffuse) * vertex_color;
-//    let result = (ambient) * vertex_color;
 
     return vec4<f32>(result, 1.0);
 }

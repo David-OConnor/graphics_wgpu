@@ -267,10 +267,10 @@ pub struct InputSettings {
 impl Default for InputSettings {
     fn default() -> Self {
         Self {
-            move_sens: 10.,
-            rotate_sens: 0.5,
-            rotate_key_sens: 1.5,
-            run_factor: 6.,
+            move_sens: 1.5,
+            rotate_sens: 0.4,
+            rotate_key_sens: 1.0,
+            run_factor: 5.,
         }
     }
 }

@@ -13,25 +13,41 @@ use winit::event::{DeviceEvent, ElementState};
 
 #[derive(Default, Debug)]
 pub struct InputsCommanded {
-    fwd: bool,
-    back: bool,
-    left: bool,
-    right: bool,
-    up: bool,
-    down: bool,
-    roll_ccw: bool,
-    roll_cw: bool,
-    mouse_delta_x: f32,
-    mouse_delta_y: f32,
-    run: bool,
+    pub fwd: bool,
+    pub back: bool,
+    pub left: bool,
+    pub right: bool,
+    pub up: bool,
+    pub down: bool,
+    pub roll_ccw: bool,
+    pub roll_cw: bool,
+    pub mouse_delta_x: f32,
+    pub mouse_delta_y: f32,
+    pub run: bool,
 }
 
+impl InputsCommanded {
+    /// Return true if there are any inputs.
+    pub fn inputs_present(&self) -> bool {
+        const EPS: f32 = 0.00001;
+        // Note; We don't include `run` here, since it's a modifier.
+        self.fwd
+            || self.back
+            || self.left
+            || self.right
+            || self.up
+            || self.down
+            || self.roll_ccw
+            || self.roll_cw
+            || self.mouse_delta_x.abs() > EPS
+            || self.mouse_delta_y.abs() > EPS
+    }
+}
+
+/// Modifies the commanded inputs in place; triggered by a single input event.
 /// dt is in seconds.
-// pub(crate) fn handle_event(event: DeviceEvent, cam: &mut Camera, input_settings: &InputSettings, dt: f32) {
+/// pub(crate) fn handle_event(event: DeviceEvent, cam: &mut Camera, input_settings: &InputSettings, dt: f32) {
 pub(crate) fn add_input_cmd(event: DeviceEvent, inputs: &mut InputsCommanded) {
-    // pub(crate) fn add_input_cmd(event: DeviceEvent) -> InputsCommanded {
-    //     let mut inputs = Default::default();
-    //     println!("EV: {:?}", event);
     match event {
         DeviceEvent::Key(key) => {
             if key.state == ElementState::Pressed {
@@ -74,19 +90,46 @@ pub(crate) fn add_input_cmd(event: DeviceEvent, inputs: &mut InputsCommanded) {
                     }
                     _ => (),
                 }
+            } else if key.state == ElementState::Released {
+                // todo: DRY
+                match key.scancode {
+                    17 => {
+                        inputs.fwd = false;
+                    }
+                    31 => {
+                        inputs.back = false;
+                    }
+                    32 => {
+                        inputs.right = false;
+                    }
+                    30 => {
+                        inputs.left = false;
+                    }
+                    57 => {
+                        inputs.up = false;
+                    }
+                    46 => {
+                        inputs.down = false;
+                    }
+                    16 => {
+                        inputs.roll_ccw = false;
+                    }
+                    18 => {
+                        inputs.roll_cw = false;
+                    }
+                    42 => {
+                        inputs.run = false;
+                    }
+                    _ => (),
+                }
             }
         }
-
         DeviceEvent::MouseMotion { delta } => {
             inputs.mouse_delta_x += delta.0 as f32;
             inputs.mouse_delta_y += delta.1 as f32;
         }
         _ => (),
     }
-
-    // inputs
-
-    // adjust_camera(cam, &inputs, &input_settings, dt);
 }
 
 /// Adjust the camera orientation and position.

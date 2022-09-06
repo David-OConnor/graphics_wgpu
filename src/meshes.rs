@@ -3,15 +3,22 @@
 use core::f32::consts::TAU;
 
 use crate::{
-    init_graphics::{UP_VEC},
-    types::{Mesh, Vertex}
+    init_graphics::UP_VEC,
+    types::{Mesh, Vertex},
 };
 
 use lin_alg2::f32::Vec3;
 
 /// Rotate a 2d vector counter-clockwise a given angle.
-fn rotate_vec_2d(vec: [f32; 2], angle: f32) -> [f32; 2] {
-    [0., 0.] // todo temp
+fn rotate_vec_2d(vec: [f32; 2], θ: f32) -> [f32; 2] {
+    // Self-contained 2d rotation matrix (col-maj)
+    let (sin_θ, cos_θ) = θ.sin_cos();
+    let mat = [cos_θ, sin_θ, -sin_θ, cos_θ];
+
+    [
+        vec[0] * mat[0] + vec[1] * mat[2],
+        vec[0] * mat[1] + vec[1] * mat[3],
+    ]
 }
 
 impl Mesh {
@@ -108,17 +115,11 @@ impl Mesh {
 
         for vert in circle_vertices {
             // On top face
-            vertices.push(Vertex::new(
-                [vert[0], half_len, vert[1]],
-                UP_VEC,
-            ));
+            vertices.push(Vertex::new([vert[0], half_len, vert[1]], UP_VEC));
             i += 1;
 
             // On bottom face
-            vertices.push(Vertex::new(
-                [vert[0], -half_len, vert[1]],
-                -UP_VEC,
-            ));
+            vertices.push(Vertex::new([vert[0], -half_len, vert[1]], -UP_VEC));
             i += 1;
 
             // On edge face, top
