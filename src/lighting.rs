@@ -1,6 +1,4 @@
-use crate::{
-    types::{F32_SIZE, VEC3_UNIFORM_SIZE},
-};
+use crate::types::{F32_SIZE, VEC3_UNIFORM_SIZE};
 
 use lin_alg2::f32::Vec3;
 
@@ -14,17 +12,18 @@ pub struct Lighting {
     diffuse_color: Vec3,
     diffuse_intensity: f32,
     diffuse_dir: Vec3,
-    // todo: For now, just global lighting.
+    point_lights: Vec<PointLight>,
 }
 
 impl Default for Lighting {
     fn default() -> Self {
         Self {
-            ambient_color: Vec3::new(1., 0., 1.),
-            ambient_intensity: 800.,
-            diffuse_color: Vec3::new(1., 1., 1.),
-            diffuse_intensity: 1_000.,
-            diffuse_dir: Vec3::new(0., 1., 0.),
+            ambient_color: Vec3::new(1., 1., 1.).to_normalized(),
+            ambient_intensity: 0.05,
+            diffuse_color: Vec3::new(1., 1., 1.).to_normalized(),
+            diffuse_intensity: 1.,
+            diffuse_dir: Vec3::new(0., -1., 0.).to_normalized(),
+            point_lights: Vec::new(),
         }
     }
 }

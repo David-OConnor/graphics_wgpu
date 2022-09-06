@@ -28,61 +28,75 @@ pub struct InputsCommanded {
 
 /// dt is in seconds.
 // pub(crate) fn handle_event(event: DeviceEvent, cam: &mut Camera, input_settings: &InputSettings, dt: f32) {
-pub(crate) fn handle_event(event: DeviceEvent, inputs: &mut InputsCommanded) {
+pub(crate) fn add_input_cmd(event: DeviceEvent, inputs: &mut InputsCommanded) {
+    // pub(crate) fn add_input_cmd(event: DeviceEvent) -> InputsCommanded {
+    //     let mut inputs = Default::default();
+    //     println!("EV: {:?}", event);
     match event {
-        DeviceEvent::Key(key) => match key.scancode {
-            17 => {
-                // W
-                inputs.fwd = true;
+        DeviceEvent::Key(key) => {
+            if key.state == ElementState::Pressed {
+                match key.scancode {
+                    17 => {
+                        // W
+                        inputs.fwd = true;
+                    }
+                    31 => {
+                        // S
+                        inputs.back = true;
+                    }
+                    32 => {
+                        // D
+                        inputs.right = true;
+                    }
+                    30 => {
+                        // A
+                        inputs.left = true;
+                    }
+                    57 => {
+                        // Space
+                        inputs.up = true;
+                    }
+                    46 => {
+                        // C
+                        inputs.down = true;
+                    }
+                    16 => {
+                        // Q
+                        inputs.roll_ccw = true;
+                    }
+                    18 => {
+                        // E
+                        inputs.roll_cw = true;
+                    }
+                    42 => {
+                        // Shift
+                        inputs.run = true;
+                    }
+                    _ => (),
+                }
             }
-            31 => {
-                // S
-                inputs.back = true;
-            }
-            32 => {
-                // D
-                inputs.right = true;
-            }
-            30 => {
-                // A
-                inputs.left = true;
-            }
-            57 => {
-                // Space
-                inputs.up = true;
-            }
-            46 => {
-                // C
-                inputs.down = true;
-            }
-            16 => {
-                // Q
-                inputs.roll_ccw = true;
-            }
-            18 => {
-                // E
-                inputs.roll_cw = true;
-            }
-            42 => {
-                // Shift
-                inputs.run = true;
-            }
-            _ => (),
-        },
+        }
 
         DeviceEvent::MouseMotion { delta } => {
-            inputs.mouse_delta_x = delta.0 as f32;
-            inputs.mouse_delta_y = delta.1 as f32;
+            inputs.mouse_delta_x += delta.0 as f32;
+            inputs.mouse_delta_y += delta.1 as f32;
         }
         _ => (),
     }
+
+    // inputs
 
     // adjust_camera(cam, &inputs, &input_settings, dt);
 }
 
 /// Adjust the camera orientation and position.
 /// todo: copyied from `peptide`'s Bevy interface.
-pub fn adjust_camera(cam: &mut Camera, inputs: &InputsCommanded, input_settings: &InputSettings, dt: f32) {
+pub fn adjust_camera(
+    cam: &mut Camera,
+    inputs: &InputsCommanded,
+    input_settings: &InputSettings,
+    dt: f32,
+) {
     let mut move_amt: f32 = input_settings.move_sens * dt;
     let rotate_amt: f32 = input_settings.rotate_sens * dt;
     let mut rotate_key_amt: f32 = input_settings.rotate_key_sens * dt;

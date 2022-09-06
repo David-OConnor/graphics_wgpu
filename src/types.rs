@@ -2,9 +2,7 @@
 
 use std::ops::Range;
 
-use crate::{
-    lighting::PointLight,
-};
+use crate::lighting::{Lighting, PointLight};
 
 use lin_alg2::f32::{Mat4, Quaternion, Vec3};
 
@@ -22,7 +20,7 @@ pub const INSTANCE_SIZE: usize = MAT4_SIZE + MAT3_SIZE + VEC3_UNIFORM_SIZE;
 #[derive(Clone, Copy, Debug)]
 /// Example attributes: https://github.com/bevyengine/bevy/blob/main/crates/bevy_render/src/mesh/mesh/mod.rs#L56
 /// // todo: Vec3 vs arrays?
-pub struct ModelVertex {
+pub struct Vertex {
     /// Where the vertex is located in space
     pub position: [f32; 3],
     /// AKA UV mapping. https://en.wikipedia.org/wiki/UV_mapping
@@ -40,13 +38,13 @@ pub struct ModelVertex {
     pub bitangent: [f32; 3],
 }
 
-impl ModelVertex {
+impl Vertex {
     /// Initialize position; change the others after init.
-    pub fn new(x: f32, y: f32, z: f32) -> Self {
+    pub fn new(position: [f32; 3], normal: Vec3) -> Self {
         Self {
-            position: [x, y, z],
+            position,
             tex_coords: [0., 0.],
-            normal: Vec3::new_zero(),
+            normal,
             tangent: [0., 0., 0.],
             bitangent: [0., 0., 0.],
         }
@@ -159,7 +157,6 @@ impl Instance {
                     shader_location: 8,
                     format: wgpu::VertexFormat::Float32x4,
                 },
-
                 // Normal matrix.
                 wgpu::VertexAttribute {
                     offset: (F32_SIZE * 16) as wgpu::BufferAddress,
@@ -197,21 +194,25 @@ impl Instance {
         let normal_mat = self.orientation.to_matrix3();
 
         result[0..MAT4_SIZE].clone_from_slice(&model_mat.to_bytes());
-        result[MAT4_SIZE..INSTANCE_SIZE - VEC3_UNIFORM_SIZE].clone_from_slice(&normal_mat.to_bytes());
-        result[INSTANCE_SIZE - VEC3_UNIFORM_SIZE..INSTANCE_SIZE].clone_from_slice(&self.color.to_bytes_uniform());
+        result[MAT4_SIZE..INSTANCE_SIZE - VEC3_UNIFORM_SIZE]
+            .clone_from_slice(&normal_mat.to_bytes());
+        result[INSTANCE_SIZE - VEC3_UNIFORM_SIZE..INSTANCE_SIZE]
+            .clone_from_slice(&self.color.to_bytes_uniform());
 
         result
     }
 }
 
-// todo: This shouldn't have WGP types in it.
+#[derive(Clone, Debug)]
 pub struct Mesh {
     // pub name: String,
     // pub vertex_buffer: wgpu::Buffer,
     // pub index_buffer: wgpu::Buffer,
-    pub vertex_buffer: Vec<usize>,
-    pub index_buffer: Vec<usize>,
-    pub num_elements: u32,
+    // pub vertex_buffer: Vec<usize>,
+    // pub index_buffer: Vec<usize>,
+    // pub num_elements: u32,
+    pub vertices: Vec<Vertex>,
+    pub indices: Vec<usize>,
     pub material: usize,
 }
 
@@ -255,86 +256,28 @@ pub struct Entity {
 }
 
 impl Entity {
-    pub fn new(mesh: usize, position: Vec3, orientation: Quaternion,
-               scale: f32, color: (f32, f32, f32)) -> Self {
-        Self { mesh, position, orientation, scale, color }
-    }
-}
-
-#[derive(Clone, Debug)]
-/// A brush is a geometry representation that can be converted to a mesh. Unlike a mesh, it's not
-/// designed to be passed directly to the GPU.
-pub struct Brush {
-    pub vertices: Vec<ModelVertex>,
-    /// Faces are defined in terms of vertex index, and must be defined in an order of adjacent
-    /// edges. (LH or RH?)
-    pub faces: Vec<Vec<usize>>,
-}
-
-impl Brush {
-    pub fn new(vertices: Vec<ModelVertex>, faces: Vec<Vec<usize>>) -> Self {
-        Self { vertices, faces }
-    }
-
-    pub fn make_cuboid(x: f32, y: f32, z: f32) -> Self {
-        // todo: Normals and/or tex coords?
-
-        // Divide by 2 to get coordinates from len, width, heigh
-        let x = x / 2.;
-        let y = y / 2.;
-        let z = z / 2.;
-
+    pub fn new(
+        mesh: usize,
+        position: Vec3,
+        orientation: Quaternion,
+        scale: f32,
+        color: (f32, f32, f32),
+    ) -> Self {
         Self {
-            vertices: vec![
-                // top
-                ModelVertex::new(x, y, z),
-                ModelVertex::new(x, y, -z),
-                ModelVertex::new(-x, y, -z),
-                ModelVertex::new(-x, y, z),
-                // bottom
-                ModelVertex::new(x, -y, z),
-                ModelVertex::new(x, -y, -z),
-                ModelVertex::new(-x, -y, -z),
-                ModelVertex::new(-x, -y, z),
-            ],
-
-            faces: vec![
-                // top
-                vec![0, 1, 2, 3],
-                // bottom
-                vec![4, 5, 6, 7],
-                // left
-                vec![2, 3, 6, 7],
-                // right
-                vec![0, 1, 4, 5],
-                // front
-                vec![0, 3, 4, 7],
-                // back
-                vec![1, 2, 5, 6],
-            ],
+            mesh,
+            position,
+            orientation,
+            scale,
+            color,
         }
     }
-
-    // pub fn make_cuboid(x: f32, y: f32, z: f32) -> Self {
-
-    // }
-
-    // pub fn compute_normals(&mut self) {
-    //     for face in &self.faces_vert {
-    //         // todo make sure these aren't reversed!
-    //         let line1 = self.vertices[&face[1]].subtract(&self.vertices[&face[0]]);
-    //         let line2 = self.vertices[&face[2]].subtract(&self.vertices[&face[0]]);
-    //         normals.push(line1.cross(&line2));
-    //     }
-    //
-    //     self.normals = normals;
-    // }
 }
 
 #[derive(Clone, Debug, Default)]
 pub struct Scene {
+    pub meshes: Vec<Mesh>,
     pub entities: Vec<Entity>,
-    pub lights: Vec<PointLight>,
+    pub lighting: Lighting,
 }
 
 #[derive(Clone, Debug)]
@@ -352,8 +295,8 @@ impl Default for InputSettings {
         Self {
             move_sens: 10.,
             rotate_sens: 0.5,
-            rotate_key_sens: 0.5,
-            run_factor: 6.
+            rotate_key_sens: 1.5,
+            run_factor: 6.,
         }
     }
 }

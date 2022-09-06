@@ -18,7 +18,7 @@ use crate::{
     input::{self, InputsCommanded},
     lighting::{Lighting, PointLight},
     texture::Texture,
-    types::{Brush, Entity, Instance, Mesh, ModelVertex, Scene, InputSettings},
+    types::{Entity, InputSettings, Instance, Mesh, Scene, Vertex},
 };
 
 use lin_alg2::f32::{Quaternion, Vec3};
@@ -53,51 +53,8 @@ pub(crate) const FWD_VEC: Vec3 = Vec3 {
     z: 1.,
 };
 
-// todo: INstead of this, create a brush, then convert it to a mesh.
-// todo: Do this once your renderer works using this hardcoded tetrahedron.
-fn create_vertices() -> (Vec<ModelVertex>, Vec<u32>) {
-    // todo: Normals etc on these?
-    // This forms a tetrahedron
-    let mut vertices = [
-        ModelVertex::new(1., 1., 1.),
-        ModelVertex::new(1., -1., -1.),
-        ModelVertex::new(-1., 1., -1.),
-        ModelVertex::new(-1., -1., 1.),
-    ];
-
-    // These indices define faces by triangles. (each 3 represent a triangle, starting at index 0.
-    // todo: You have code in `types` to split a face into triangles for mesh construction.
-
-    // Indices are arranged CCW, from front of face
-    #[rustfmt::skip]
-    let indices: &[u32] = &[
-        0, 2, 1,
-        0, 1, 3,
-        0, 3, 2,
-        1, 2, 3,
-    ];
-
-    // Note: For tetrahedrons, these are the corners of the cube we
-    // didn't use for vertices.
-    vertices[0].normal = Vec3::new(1., 1., -1.).to_normalized();
-    vertices[1].normal = Vec3::new(1., -1., 1.).to_normalized();
-    vertices[2].normal = Vec3::new(-1., 1., 1.).to_normalized();
-    vertices[3].normal = Vec3::new(-1., -1., -1.).to_normalized();
-
-    // todo: Consider imlementing this.
-    let faces = vec![
-        vec![0, 1, 2], // since each face is a tri, this is the same as indices
-        vec![0, 1, 3],
-        vec![0, 2, 3],
-        vec![1, 2, 3],
-    ];
-    let brush = Brush::new(vertices.to_vec(), faces);
-
-    (vertices.to_vec(), indices.to_vec())
-}
-
 pub(crate) struct GraphicsState {
-    meshes: Vec<Mesh>,
+    // meshes: Vec<Mesh>,
     vertex_buf: wgpu::Buffer,
     index_buf: wgpu::Buffer,
     num_indices: usize,
@@ -106,7 +63,7 @@ pub(crate) struct GraphicsState {
     bind_groups: BindGroupData,
     pub camera: Camera,
     camera_buf: wgpu::Buffer,
-    lighting: Lighting,
+    // lighting: Lighting,
     lighting_buf: wgpu::Buffer,
     point_lights: Vec<PointLight>,
     point_light_buf: wgpu::Buffer,
@@ -130,31 +87,22 @@ impl GraphicsState {
         scene: Scene,
         input_settings: InputSettings,
     ) -> Self {
-        let meshes = vec![
-            Mesh {
-                vertex_buffer: vec![],
-                index_buffer: vec![],
-                num_elements: 0,
-                material: 0,
-            },
-        ];
-
-        // Create the vertex and index buffers
-        let (vertices, indices) = create_vertices();
+        // todo: Temp way of doing this; need a way to support multiple meshes
+        // todo and entities
+        let vertices = &scene.meshes[0].vertices;
+        let indices = &scene.meshes[0].indices;
 
         let num_indices = indices.len();
 
         let mut instances = vec![];
         for entity in &scene.entities {
-            instances.push(
-                Instance {
-                    // todo: eneity into method?
-                    position: entity.position,
-                    orientation: entity.orientation,
-                    scale: entity.scale,
-                    color: Vec3::new(entity.color.0, entity.color.1, entity.color.2),
-                },
-            );
+            instances.push(Instance {
+                // todo: eneity into method?
+                position: entity.position,
+                orientation: entity.orientation,
+                scale: entity.scale,
+                color: Vec3::new(entity.color.0, entity.color.1, entity.color.2),
+            });
         }
 
         // Convert the vertex and index data to u8 buffers.
@@ -209,11 +157,9 @@ impl GraphicsState {
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
         });
 
-        let mut lighting = Lighting::default();
-
         let lighting_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Lighting buffer"),
-            contents: &lighting.to_bytes(),
+            contents: &scene.lighting.to_bytes(),
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
         });
 
@@ -249,7 +195,7 @@ impl GraphicsState {
         // let mut meshes_wgpu = vec![]; // todo!
 
         Self {
-            meshes,
+            // meshes,
             vertex_buf,
             index_buf,
             num_indices,
@@ -258,7 +204,7 @@ impl GraphicsState {
             bind_groups,
             camera,
             camera_buf: cam_buf,
-            lighting,
+            // lighting,
             lighting_buf,
             point_lights,
             point_light_buf,
@@ -274,7 +220,7 @@ impl GraphicsState {
 
     #[allow(clippy::single_match)]
     pub(crate) fn handle_input(&mut self, event: DeviceEvent) {
-        input::handle_event(event, &mut self.inputs_commanded);
+        input::add_input_cmd(event, &mut self.inputs_commanded);
     }
 
     #[allow(clippy::single_match)]
@@ -288,7 +234,12 @@ impl GraphicsState {
 
         let dt_secs = dt.as_secs() as f32 + dt.subsec_micros() as f32 / 1_000_000.;
 
-        input::adjust_camera(&mut self.camera, &self.inputs_commanded, &self.input_settings, dt_secs);
+        input::adjust_camera(
+            &mut self.camera,
+            &self.inputs_commanded,
+            &self.input_settings,
+            dt_secs,
+        );
 
         // Reset inputs so they don't stick through the next frame.
         self.inputs_commanded = Default::default();
@@ -390,7 +341,7 @@ fn create_render_pipeline(
         vertex: wgpu::VertexState {
             module: &shader,
             entry_point: "vs_main",
-            buffers: &[ModelVertex::desc(), Instance::desc()],
+            buffers: &[Vertex::desc(), Instance::desc()],
         },
         fragment: Some(wgpu::FragmentState {
             module: &shader,
@@ -495,34 +446,4 @@ fn create_bindgroups(
         layout_lighting,
         lighting,
     }
-}
-
-fn add_scene_entities(entities: &mut Vec<Entity>) {
-    // todo: 2022-08-22: Use this to create your scene.
-
-    let cuboid1 = Brush::make_cuboid(10., 10., 10.);
-    // let mesh1 = Mesh::from_brush(cuboid1);
-    //
-    // let entity1 = Entity {
-    //     mesh: MESH_I.fetch_add(1, Ordering::Release),
-    //     position: Vec3::new(70., 5., 20.),
-    //     orientation: Quaternion::new_identity(),
-    //     scale: 1.,
-    // };
-    //
-    // entities.push(entity1);
-    // meshes.push(mesh1);
-    //
-    // let floor_brush = Brush::make_cuboid(100., -1., 100.);
-    // let floor_mesh = Mesh::from_brush(floor_brush);
-    //
-    // let floor_entity = Entity {
-    //     mesh: MESH_I.fetch_add(1, Ordering::Release),
-    //     position: Vec3::new(0., -0.5, 0.),
-    //     orientation: Quaternion::new_identity(),
-    //     scale: 1.,
-    // };
-    //
-    // // entities.push(floor_entity);
-    // // meshes.push(floor_mesh);
 }

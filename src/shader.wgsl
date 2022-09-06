@@ -58,6 +58,8 @@ struct VertexOut {
     // Experimenting
     @location(4) normal: vec3<f32>,
     @location(5) color: vec4<f32>,
+//    @location(6) world_normal: vec3<f32>,
+//    @location(7) world_position: vec3<f32>,
 }
 
 @vertex
@@ -78,8 +80,6 @@ fn vs_main(
         instance.normal_matrix_1,
         instance.normal_matrix_2,
     );
-
-//    let model_color = vec3<f32>(instance.color);
 
     // Construct the tangent matrix
     let world_normal = normalize(normal_mat * model.normal);
@@ -102,38 +102,47 @@ fn vs_main(
     result.tangent_position = tangent_mat * world_posit.xyz;
     result.tangent_view_position = tangent_mat * camera.position.xyz;
     result.normal = world_normal;
-//    result.color = model_color;
+
     result.color = instance.color;
+
+//    result.world_normal = normal_mat * model.normal;
+//    var world_position: vec4<f32> = model_mat * vec4<f32>(model.position, 1.0);
+//    result.world_position = world_position.xyz;
 
     return result;
 }
 
 @fragment
 fn fs_main(vertex: VertexOut) -> @location(0) vec4<f32> {
-    var ambient = lighting.ambient_color * lighting.ambient_intensity;
+    // Ambient lighting
+    // todo: Don't multiply this for every fragment; do it on the CPU.
+    // todo: Why isn't the ambient intensity passed from the cpu working?
+//    var ambient = lighting.ambient_color * lighting.ambient_intensity;
+    var ambient = lighting.ambient_color * 0.05;
 
     // Note: We currently don't use the model color's alpha value.
     // todo: More elegant way of casting to vec3?
     var vertex_color = vec3<f32>(vertex.color[0], vertex.color[1], vertex.color[2]);
-//    var vertex_color = vec3<f32>(vertex.color);
 
-//    var v_normal = vec3<f32>(1., 0., 0.);
-
-//    let light_dir = normalize(in.tangent_light_position - in.tangent_position);
-//    let view_dir = normalize(in.tangent_view_position - in.tangent_position);
-//    let half_dir = normalize(view_dir + light_dir);
-
+    // Diffuse lighting
     var diffuse_on_face = max(dot(vertex.normal, lighting.diffuse_dir), 0.);
     var diffuse = lighting.diffuse_color * diffuse_on_face * lighting.diffuse_intensity;
 
-// todo: Put this in once the rest works.
+    // Specular lighting
+//    let light_dir = normalize(vertex.tangent_light_position - vertex.tangent_position);
+//    let view_dir = normalize(vertex.tangent_view_position - vertex.tangent_position);
+//    let half_dir = normalize(view_dir + light_dir);
+
 //    let specular_strength = pow(max(dot(tangent_normal, half_dir), 0.0), 32.0);
 //    let specular_color = specular_strength * light.color;
-    var specular = vec3<f32>(0., 0., 0.); // todo placeholder
 
     // todo: Vec4 with opacity?
 //    let result = (ambient + diffuse + specular) * vertex_color;
-    let result = (ambient) * vertex_color;
+//    let result = (ambient + diffuse) * vertex_color;
+
+    // todo: How to mix light with face color?
+    let result = (ambient + diffuse) * vertex_color;
+//    let result = (ambient) * vertex_color;
 
     return vec4<f32>(result, 1.0);
 }

@@ -1,8 +1,6 @@
 use std::num::NonZeroU32;
 
-
 use image::GenericImageView;
-
 
 pub struct Texture {
     pub texture: wgpu::Texture,
@@ -73,7 +71,7 @@ impl Texture {
         img: &image::DynamicImage,
         label: Option<&str>,
         is_normal_map: bool,
-    // ) -> Result<Self> {
+        // ) -> Result<Self> {
     ) -> Self {
         let dimensions = img.dimensions();
         let rgba = img.to_rgba8();

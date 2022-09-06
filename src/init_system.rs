@@ -10,7 +10,9 @@ use winit::{
 };
 
 use crate::{
-    init_graphics::GraphicsState, types::{Scene, InputSettings}, texture::Texture,
+    init_graphics::GraphicsState,
+    texture::Texture,
+    types::{InputSettings, Scene},
 };
 
 const WINDOW_TITLE: &str = "Graphics";
@@ -26,7 +28,6 @@ pub(crate) struct SystemState {
     pub queue: wgpu::Queue,
     pub surface_cfg: wgpu::SurfaceConfiguration,
 }
-
 
 struct State {
     sys: SystemState,
@@ -94,12 +95,15 @@ impl State {
             surface_cfg,
         };
 
-        let mut graphics = GraphicsState::new(&sys.device, &sys.queue, &sys.surface_cfg, scene, input_settings);
+        let mut graphics = GraphicsState::new(
+            &sys.device,
+            &sys.queue,
+            &sys.surface_cfg,
+            scene,
+            input_settings,
+        );
 
-        Self {
-            sys,
-            graphics
-        }
+        Self { sys, graphics }
     }
 
     pub(crate) fn resize(&mut self, new_size: winit::dpi::PhysicalSize<u32>) {
@@ -107,11 +111,17 @@ impl State {
             self.sys.size = new_size;
             self.sys.surface_cfg.width = new_size.width;
             self.sys.surface_cfg.height = new_size.height;
-            self.sys.surface.configure(&self.sys.device, &self.sys.surface_cfg);
+            self.sys
+                .surface
+                .configure(&self.sys.device, &self.sys.surface_cfg);
 
-            self.graphics.camera.aspect = self.sys.surface_cfg.width as f32 / self.sys.surface_cfg.height as f32;
-            self.graphics.depth_texture = Texture::create_depth_texture(&self.sys.device, &self.sys.surface_cfg, "Depth texture");
-
+            self.graphics.camera.aspect =
+                self.sys.surface_cfg.width as f32 / self.sys.surface_cfg.height as f32;
+            self.graphics.depth_texture = Texture::create_depth_texture(
+                &self.sys.device,
+                &self.sys.surface_cfg,
+                "Depth texture",
+            );
         }
     }
 
@@ -190,7 +200,9 @@ pub fn run(scene: Scene, input_settings: InputSettings) {
                     .texture
                     .create_view(&wgpu::TextureViewDescriptor::default());
 
-                state.graphics.render(&view, &state.sys.device, &state.sys.queue);
+                state
+                    .graphics
+                    .render(&view, &state.sys.device, &state.sys.queue);
                 // match state.render() {
                 //     Ok(_) => {}
                 //     // Reconfigure the surface if it's lost or outdated
