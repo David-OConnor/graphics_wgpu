@@ -118,7 +118,7 @@ fn fs_main(vertex: VertexOut) -> @location(0) vec4<f32> {
     // todo: Don't multiply this for every fragment; do it on the CPU.
     // todo: Why isn't the ambient intensity passed from the cpu working?
 //    var ambient = lighting.ambient_color * lighting.ambient_intensity;
-    var ambient = lighting.ambient_color * 0.05;
+    var ambient = lighting.ambient_color * 0.10;
 
     // Note: We currently don't use the model color's alpha value.
     // todo: More elegant way of casting to vec3?

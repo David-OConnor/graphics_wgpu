@@ -21,7 +21,7 @@ impl Default for Lighting {
             ambient_color: Vec3::new(1., 1., 1.).to_normalized(),
             ambient_intensity: 0.05,
             diffuse_color: Vec3::new(1., 1., 1.).to_normalized(),
-            diffuse_intensity: 1.,
+            diffuse_intensity: 1.5,
             diffuse_dir: Vec3::new(0., -1., 0.).to_normalized(),
             point_lights: Vec::new(),
         }

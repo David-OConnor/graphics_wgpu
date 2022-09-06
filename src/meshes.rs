@@ -1,8 +1,18 @@
 //! This module generates meshes
 
-use crate::types::{Mesh, Vertex};
+use core::f32::consts::TAU;
+
+use crate::{
+    init_graphics::{UP_VEC},
+    types::{Mesh, Vertex}
+};
 
 use lin_alg2::f32::Vec3;
+
+/// Rotate a 2d vector counter-clockwise a given angle.
+fn rotate_vec_2d(vec: [f32; 2], angle: f32) -> [f32; 2] {
+    [0., 0.] // todo temp
+}
 
 impl Mesh {
     /// Create a tetrahedron mesh
@@ -43,7 +53,7 @@ impl Mesh {
         // Note that because we're using "hard" lighting on faces, we can't repeat any vertices, since
         // they each have a different normal.
         #[rustfmt::skip]
-            // let indices: &[u32] = &[
+        // let indices: &[u32] = &[
         let indices = vec![
             0, 1, 2,
             3, 4, 5,
@@ -57,6 +67,83 @@ impl Mesh {
             // vertex_buffer: Vec<usize>,
             // index_buffer: Vec<usize>,
             // num_elements: u32,
+            material: 0,
+        }
+    }
+
+    /// Create a cylinder
+    pub fn new_cylinder(len: f32, radius: f32, num_sides: usize) -> Self {
+        let angle_between_vertices = TAU / num_sides as f32;
+
+        let mut circle_vertices = Vec::new();
+        for i in 0..num_sides {
+            circle_vertices.push(rotate_vec_2d([1., 0.], i as f32 * angle_between_vertices));
+        }
+
+        let half_len = len * 0.5;
+
+        let mut vertices = Vec::new();
+        // let mut indices = Vec::new();
+
+        // let mut faces = Vec::new();
+
+        let mut i = 0;
+
+        // // Top center
+        // vertices.push(Vertex::new(
+        //     [0., half_len, 0.],
+        //     UP_VEC,
+        // ));
+        // i += 1;
+        //
+        // // Bottom center
+        // vertices.push(Vertex::new(
+        //     [0., -half_len, 0.],
+        //     -UP_VEC
+        // ));
+        // i += 1;
+
+        // let mut vertices_top = Vec::new();
+        // let mut vertices_bottom = Vec::new();
+
+        for vert in circle_vertices {
+            // On top face
+            vertices.push(Vertex::new(
+                [vert[0], half_len, vert[1]],
+                UP_VEC,
+            ));
+            i += 1;
+
+            // On bottom face
+            vertices.push(Vertex::new(
+                [vert[0], -half_len, vert[1]],
+                -UP_VEC,
+            ));
+            i += 1;
+
+            // On edge face, top
+            vertices.push(Vertex::new(
+                [vert[0], half_len, vert[1]],
+                Vec3::new(vert[0], 0., vert[1]),
+            ));
+            i += 1;
+
+            // On edge face, bottom
+            vertices.push(Vertex::new(
+                [vert[0], -half_len, vert[1]],
+                Vec3::new(vert[0], 0., vert[1]),
+            ));
+            i += 1;
+
+            // Top
+            // indices.append(vec![0]);
+        }
+
+        let indices = Vec::new();
+
+        Mesh {
+            vertices,
+            indices,
             material: 0,
         }
     }

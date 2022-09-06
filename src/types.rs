@@ -216,32 +216,6 @@ pub struct Mesh {
     pub material: usize,
 }
 
-// impl<'a> Mesh {
-//     // pub fn draw_instanced<'a, 'b>(
-//     //     &'b self,
-//     //     rpass: &mut wgpu::RenderPass<'a>,
-//     //     // material: &'b Material,
-//     //     instances: Range<u32>,
-//     //     camera_bind_group: &'b wgpu::BindGroup,
-//     //     // light_bind_group: &'b wgpu::BindGroup,
-//     // ) {
-//     pub fn draw_instanced(
-//         &'a self,
-//         rpass: &mut wgpu::RenderPass<'a>,
-//         // material: &'b Material,
-//         instances: Range<u32>,
-//         camera_bind_group: &'a wgpu::BindGroup,
-//         // light_bind_group: &'b wgpu::BindGroup,
-//     ) {
-//         rpass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
-//         rpass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint32);
-//         // rpass.set_bind_group(0, &material.bind_group, &[]);
-//         rpass.set_bind_group(0, camera_bind_group, &[]);
-//         // rpass.set_bind_group(2, light_bind_group, &[]);
-//         rpass.draw_indexed(0..self.num_elements, 0, instances);
-//     }
-// }
-
 /// Represents an entity in the world. This is not fundamental to the WGPU system.
 #[derive(Clone, Debug)]
 pub struct Entity {

@@ -89,8 +89,17 @@ impl GraphicsState {
     ) -> Self {
         // todo: Temp way of doing this; need a way to support multiple meshes
         // todo and entities
-        let vertices = &scene.meshes[0].vertices;
-        let indices = &scene.meshes[0].indices;
+        let mut vertices = Vec::new();
+        let mut indices = Vec::new();
+
+        for mesh in &scene.meshes {
+            for vertex in &mesh.vertices {
+                vertices.push(vertex)
+            }
+            for index in &mesh.indices {
+                indices.push(index)
+            }
+        }
 
         let num_indices = indices.len();
 

@@ -67,8 +67,8 @@ impl Default for Camera {
             orientation: Quaternion::new_identity(),
             fov_y: TAU / 4., // Vertical field of view in radians.
             aspect: 4. / 3., // width / height.
-            near: 1.,
-            far: 30.,
+            near: 0.5,
+            far: 60.,
             proj_mat: Mat4::new_identity(),
         };
 
