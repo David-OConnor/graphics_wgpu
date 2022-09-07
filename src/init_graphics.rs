@@ -54,11 +54,9 @@ pub(crate) const FWD_VEC: Vec3 = Vec3 {
 };
 
 pub(crate) struct GraphicsState {
-    // meshes: Vec<Mesh>,
     vertex_buf: wgpu::Buffer,
     index_buf: wgpu::Buffer,
-    // num_indices: usize,
-    instances: Vec<Instance>,
+    // instances: Vec<Instance>,
     instance_buf: wgpu::Buffer,
     bind_groups: BindGroupData,
     pub camera: Camera,
@@ -68,7 +66,6 @@ pub(crate) struct GraphicsState {
     point_lights: Vec<PointLight>,
     point_light_buf: wgpu::Buffer,
     pipeline: wgpu::RenderPipeline,
-    // depth_texture: wgpu::Texture,
     pub depth_texture: Texture,
     pub input_settings: InputSettings,
     inputs_commanded: InputsCommanded,
@@ -89,16 +86,8 @@ impl GraphicsState {
         scene: Scene,
         input_settings: InputSettings,
     ) -> Self {
-        // todo: Temp way of doing this; need a way to support multiple meshes
-        // todo and entities
         let mut vertices = Vec::new();
         let mut indices = Vec::new();
-        let mut instances = Vec::new();
-
-        let mut mesh_mappings = Vec::new();
-
-        let mut vertex_start_this_mesh = 0;
-        let mut instance_start_this_mesh = 0;
 
         for (i, mesh) in scene.meshes.iter().enumerate() {
             for vertex in &mesh.vertices {
@@ -106,34 +95,9 @@ impl GraphicsState {
             }
 
             for index in &mesh.indices {
-                // indices.push(index + vertex_start_this_mesh);
                 indices.push(index);
             }
-
-            let mut instance_count_this_mesh = 0;
-            for entity in scene.entities.iter().filter(|e| e.mesh == i) {
-                instances.push(Instance {
-                    // todo: eneity into method?
-                    position: entity.position,
-                    orientation: entity.orientation,
-                    scale: entity.scale,
-                    color: Vec3::new(entity.color.0, entity.color.1, entity.color.2),
-                });
-                instance_count_this_mesh += 1;
-            }
-
-            mesh_mappings.push((
-                vertex_start_this_mesh,
-                instance_start_this_mesh,
-                instance_count_this_mesh,
-            ));
-
-            vertex_start_this_mesh += mesh.vertices.len() as i32;
-            instance_start_this_mesh += instance_count_this_mesh;
         }
-
-        // let num_indices = indices.len();
-
         // Convert the vertex and index data to u8 buffers.
         let mut vertex_data = Vec::new();
         for vertex in vertices {
@@ -161,20 +125,6 @@ impl GraphicsState {
             label: Some("Index buffer"),
             contents: &index_data,
             usage: wgpu::BufferUsages::INDEX,
-        });
-
-        // todo: Heper fn that takes a `ToBytes` trait we haven't made?
-        let mut instance_data = Vec::new();
-        for instance in &instances {
-            for byte in instance.to_bytes() {
-                instance_data.push(byte);
-            }
-        }
-
-        let instance_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Instance buffer"),
-            contents: &instance_data,
-            usage: wgpu::BufferUsages::VERTEX,
         });
 
         let mut camera = Camera::default();
@@ -219,16 +169,23 @@ impl GraphicsState {
 
         let pipeline = create_render_pipeline(device, &pipeline_layout, shader, surface_cfg);
 
-        // let mut entities = vec![]; // todo!
-        // let mut meshes = vec![]; // todo!
-        // let mut meshes_wgpu = vec![]; // todo!
+        // We initialize instances, the instance buffer and mesh mappings in `setup_entities`.
+        // let instances = Vec::new();
+        let instance_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Instance buffer"),
+            contents: &[], // empty on init
+            usage: wgpu::BufferUsages::VERTEX,
+        });
 
-        Self {
-            // meshes,
+        let mesh_mappings = Vec::new();
+
+        let entities2 = scene.entities.clone(); // todo temp hack to get it into setup_entities
+        let meshes2 = scene.meshes.clone(); // todo temp hack to get it into setup_entities
+
+        let mut result = Self {
             vertex_buf,
             index_buf,
-            // num_indices,
-            instances,
+            // instances,
             instance_buf,
             bind_groups,
             camera,
@@ -245,12 +202,70 @@ impl GraphicsState {
             input_settings,
             inputs_commanded: Default::default(),
             mesh_mappings,
-        }
+        };
+
+        result.setup_entities(&entities2, &meshes2, &device);
+
+        result
     }
 
     pub(crate) fn handle_input(&mut self, event: DeviceEvent) {
         input::add_input_cmd(event, &mut self.inputs_commanded);
     }
+
+    /// Currently, sets up entities, but doesn't change meshes, lights, or the camera.
+    /// The vertex and index buffers aren't changed; only the instances.
+    /// todo: Consider what you want out of this.
+    pub(crate) fn setup_entities(&mut self, entities: &Vec<Entity>, meshes: &Vec<Mesh>, device: &wgpu::Device) {
+        let mut instances = Vec::new();
+
+        let mut mesh_mappings = Vec::new();
+
+        let mut vertex_start_this_mesh = 0;
+        let mut instance_start_this_mesh = 0;
+
+        for (i, mesh) in meshes.iter().enumerate() {
+
+            let mut instance_count_this_mesh = 0;
+            for entity in entities.iter().filter(|e| e.mesh == i) {
+                instances.push(Instance {
+                    // todo: entity into method?
+                    position: entity.position,
+                    orientation: entity.orientation,
+                    scale: entity.scale,
+                    color: Vec3::new(entity.color.0, entity.color.1, entity.color.2),
+                });
+                instance_count_this_mesh += 1;
+            }
+
+            mesh_mappings.push((
+                vertex_start_this_mesh,
+                instance_start_this_mesh,
+                instance_count_this_mesh,
+            ));
+
+            vertex_start_this_mesh += mesh.vertices.len() as i32;
+            instance_start_this_mesh += instance_count_this_mesh;
+        }
+
+        // todo: Heper fn that takes a `ToBytes` trait we haven't made?
+        let mut instance_data = Vec::new();
+        for instance in &instances {
+            for byte in instance.to_bytes() {
+                instance_data.push(byte);
+            }
+        }
+
+        let instance_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Instance buffer"),
+            contents: &instance_data,
+            usage: wgpu::BufferUsages::VERTEX,
+        });
+
+        self.instance_buf = instance_buf;
+        self.mesh_mappings = mesh_mappings;
+    }
+
 
     // #[allow(clippy::single_match)]
     // pub(crate) fn update(&mut self, queue: &wgpu::Queue, dt: Duration) {
@@ -354,15 +369,19 @@ impl GraphicsState {
             // rpass.set_bind_group(0, &material.bind_group, &[]);
 
             // rpass.set_bind_group(2, light_bind_group, &[]);
+            let mut start_ind = 0; // todo temp?
             for (i, mesh) in self.scene.meshes.iter().enumerate() {
                 let (vertex_start_this_mesh, instance_start_this_mesh, instance_count_this_mesh) =
                     self.mesh_mappings[i];
 
                 rpass.draw_indexed(
-                    0..mesh.indices.len() as u32,
+                    // 0..mesh.indices.len() as u32,
+                    start_ind..start_ind + mesh.indices.len() as u32,
                     vertex_start_this_mesh,
                     instance_start_this_mesh..instance_start_this_mesh + instance_count_this_mesh,
                 );
+
+                start_ind += mesh.indices.len() as u32; // todo temp?
             }
         }
 
@@ -393,14 +412,6 @@ fn create_render_pipeline(
             module: &shader,
             entry_point: "fs_main",
             targets: &[Some(config.format.into())],
-            // targets: &[Some(wgpu::ColorTargetState {
-            //     format: color_format,
-            //     blend: Some(wgpu::BlendState {
-            //         alpha: wgpu::BlendComponent::REPLACE,
-            //         color: wgpu::BlendComponent::REPLACE,
-            //     }),
-            //     write_mask: wgpu::ColorWrites::ALL,
-            // })],
         }),
         primitive: wgpu::PrimitiveState {
             topology: wgpu::PrimitiveTopology::TriangleList,

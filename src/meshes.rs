@@ -60,8 +60,8 @@ impl Mesh {
         // Note that because we're using "hard" lighting on faces, we can't repeat any vertices, since
         // they each have a different normal.
         #[rustfmt::skip]
-        // let indices: &[u32] = &[
-        let indices = vec![
+            // let indices: &[u32] = &[
+            let indices = vec![
             0, 1, 2,
             3, 4, 5,
             6, 7, 8,
@@ -91,69 +91,56 @@ impl Mesh {
         }
 
         let half_len = len * 0.5;
+        let mod_ = 2*num_sides;
 
         let mut vertices = Vec::new();
         let mut indices = Vec::new();
 
-        // let mut faces = Vec::new();
+        let mut i_vertex = 0;
 
-        let mut i_index = 0;
-
-        // // Top center
-        // vertices.push(Vertex::new(
-        //     [0., half_len, 0.],
-        //     UP_VEC,
-        // ));
-        // i += 1;
-        //
-        // // Bottom center
-        // vertices.push(Vertex::new(
-        //     [0., -half_len, 0.],
-        //     -UP_VEC
-        // ));
-        // i += 1;
-
-        // let mut vertices_top_edge = Vec::new();
-        // let mut vertices_bottom_edge = Vec::new();
-
-        for (j, vert) in circle_vertices.iter().enumerate() {
+        for vert in &circle_vertices {
             // The number of faces is the number of angles - 1.
-            if j != num_sides {
-                // Triangle 1: This top, this bottom, next top.
-                indices.append(&mut vec![i_index, i_index + 1, i_index + 2]);
-                // Triangle 2: This bottom, next bottom, next top.
-                indices.append(&mut vec![i_index + 1, i_index + 3, i_index + 2]);
-            }
+            // Triangle 1: This top, this bottom, next top.
+            indices.append(&mut vec![i_vertex, i_vertex + 1, (i_vertex + 2) % mod_,]);
+            // Triangle 2: This bottom, next bottom, next top.
+            indices.append(&mut vec![i_vertex + 1, (i_vertex + 3) % mod_, (i_vertex + 2) % mod_]);
 
             // On edge face, top
             vertices.push(Vertex::new(
                 [vert[0], half_len, vert[1]],
-                Vec3::new(vert[0], 0., vert[1]),
+                Vec3::new(vert[0], 0., vert[1]).to_normalized(),
             ));
-            i_index += 1;
+            i_vertex += 1;
 
             // On edge face, bottom
             vertices.push(Vertex::new(
                 [vert[0], -half_len, vert[1]],
-                Vec3::new(vert[0], 0., vert[1]),
+                Vec3::new(vert[0], 0., vert[1]).to_normalized(),
             ));
-            i_index += 1;
+            i_vertex += 1;
         }
 
         // let mut vertices_top_face = Vec::new();
         // let mut vertices_bottom_face = Vec::new();
-        for vert in circle_vertices {
-            // todo: Add these.
+        let top_anchor = i_vertex;
+        let bottom_anchor = i_vertex + 1;
 
-            // todo: For now, we are skipping the top face vertices; add back in second
-            // todo loop later
-            // On top face
-            // vertices_top_face.push(Vertex::new([vert[0], half_len, vert[1]], UP_VEC));
-            // i += 1;
-            //
-            // // On bottom face
-            // vertices_bottom_face.push(Vertex::new([vert[0], -half_len, vert[1]], -UP_VEC));
-            // i += 1;
+        for (j, vert) in circle_vertices.iter().enumerate() {
+
+            // We need num_sides - 2 triangles using this anchor-vertex algorithm.
+            if j != 0 && j != num_sides - 1 {
+                indices.append(&mut vec![top_anchor, i_vertex, i_vertex + 2]);
+                // We need CCW triangles for both, so reverse order on the bottom face.
+                indices.append(&mut vec![bottom_anchor, i_vertex + 3, i_vertex + 1]);
+            }
+
+            // Top face
+            vertices.push(Vertex::new([vert[0], half_len, vert[1]], UP_VEC));
+            i_vertex += 1;
+
+            // Bottom face
+            vertices.push(Vertex::new([vert[0], -half_len, vert[1]], -UP_VEC));
+            i_vertex += 1;
         }
 
         Mesh {
