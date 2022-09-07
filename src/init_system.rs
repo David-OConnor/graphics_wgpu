@@ -168,7 +168,7 @@ pub fn run(scene: Scene, input_settings: InputSettings) {
                 match event {
                     // todo: Put back for window-closing.
                     // #[cfg(not(target_arch="wasm32"))]
-                    // WindowEvent::CloseRequested
+                    WindowEvent::CloseRequested
                     // | WindowEvent::KeyboardInput {
                     //     input:
                     //     KeyboardInput {
@@ -177,7 +177,7 @@ pub fn run(scene: Scene, input_settings: InputSettings) {
                     //         ..
                     //     },
                     //     ..
-                    // } => *control_flow = ControlFlow::Exit,
+                    => *control_flow = ControlFlow::Exit,
                     WindowEvent::Resized(physical_size) => {
                         state.resize(*physical_size);
                     }

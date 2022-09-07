@@ -57,7 +57,7 @@ pub(crate) struct GraphicsState {
     // meshes: Vec<Mesh>,
     vertex_buf: wgpu::Buffer,
     index_buf: wgpu::Buffer,
-    num_indices: usize,
+    // num_indices: usize,
     instances: Vec<Instance>,
     instance_buf: wgpu::Buffer,
     bind_groups: BindGroupData,
@@ -77,6 +77,8 @@ pub(crate) struct GraphicsState {
     // obj_mesh: Mesh,
     staging_belt: wgpu::util::StagingBelt, // todo: Do we want this? Probably in sys, not here.
     scene: Scene,
+    // todo: FIgure out if youw ant this.
+    mesh_mappings: Vec<(i32, u32, u32)>,
 }
 
 impl GraphicsState {
@@ -91,28 +93,46 @@ impl GraphicsState {
         // todo and entities
         let mut vertices = Vec::new();
         let mut indices = Vec::new();
+        let mut instances = Vec::new();
 
-        for mesh in &scene.meshes {
+        let mut mesh_mappings = Vec::new();
+
+        let mut vertex_start_this_mesh = 0;
+        let mut instance_start_this_mesh = 0;
+
+        for (i, mesh) in scene.meshes.iter().enumerate() {
             for vertex in &mesh.vertices {
                 vertices.push(vertex)
             }
+
             for index in &mesh.indices {
-                indices.push(index)
+                // indices.push(index + vertex_start_this_mesh);
+                indices.push(index);
             }
+
+            let mut instance_count_this_mesh = 0;
+            for entity in scene.entities.iter().filter(|e| e.mesh == i) {
+                instances.push(Instance {
+                    // todo: eneity into method?
+                    position: entity.position,
+                    orientation: entity.orientation,
+                    scale: entity.scale,
+                    color: Vec3::new(entity.color.0, entity.color.1, entity.color.2),
+                });
+                instance_count_this_mesh += 1;
+            }
+
+            mesh_mappings.push((
+                vertex_start_this_mesh,
+                instance_start_this_mesh,
+                instance_count_this_mesh,
+            ));
+
+            vertex_start_this_mesh += mesh.vertices.len() as i32;
+            instance_start_this_mesh += instance_count_this_mesh;
         }
 
-        let num_indices = indices.len();
-
-        let mut instances = vec![];
-        for entity in &scene.entities {
-            instances.push(Instance {
-                // todo: eneity into method?
-                position: entity.position,
-                orientation: entity.orientation,
-                scale: entity.scale,
-                color: Vec3::new(entity.color.0, entity.color.1, entity.color.2),
-            });
-        }
+        // let num_indices = indices.len();
 
         // Convert the vertex and index data to u8 buffers.
         let mut vertex_data = Vec::new();
@@ -151,7 +171,7 @@ impl GraphicsState {
             }
         }
 
-        let instance_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+        let instance_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Instance buffer"),
             contents: &instance_data,
             usage: wgpu::BufferUsages::VERTEX,
@@ -207,9 +227,9 @@ impl GraphicsState {
             // meshes,
             vertex_buf,
             index_buf,
-            num_indices,
+            // num_indices,
             instances,
-            instance_buf: instance_buffer,
+            instance_buf,
             bind_groups,
             camera,
             camera_buf: cam_buf,
@@ -224,6 +244,7 @@ impl GraphicsState {
             scene,
             input_settings,
             inputs_commanded: Default::default(),
+            mesh_mappings,
         }
     }
 
@@ -322,28 +343,27 @@ impl GraphicsState {
             });
 
             rpass.set_pipeline(&self.pipeline);
+
             rpass.set_bind_group(0, &self.bind_groups.cam, &[]);
             rpass.set_bind_group(1, &self.bind_groups.lighting, &[]);
 
             rpass.set_vertex_buffer(0, self.vertex_buf.slice(..));
             rpass.set_vertex_buffer(1, self.instance_buf.slice(..));
-
             rpass.set_index_buffer(self.index_buf.slice(..), wgpu::IndexFormat::Uint32);
+
             // rpass.set_bind_group(0, &material.bind_group, &[]);
 
             // rpass.set_bind_group(2, light_bind_group, &[]);
-            rpass.draw_indexed(
-                0..self.num_indices as u32,
-                0,
-                0..self.instances.len() as u32,
-            );
+            for (i, mesh) in self.scene.meshes.iter().enumerate() {
+                let (vertex_start_this_mesh, instance_start_this_mesh, instance_count_this_mesh) =
+                    self.mesh_mappings[i];
 
-            // mesh.draw_instanced(
-            //     &mut rpass,
-            //     0..1,
-            //     // 0..self.instances.len() as u32,
-            //     &self.bind_groups.cam,
-            // );
+                rpass.draw_indexed(
+                    0..mesh.indices.len() as u32,
+                    vertex_start_this_mesh,
+                    instance_start_this_mesh..instance_start_this_mesh + instance_count_this_mesh,
+                );
+            }
         }
 
         // todo: Make sure if you add new instances to the Vec, that you recreate the instance_buffer

@@ -212,6 +212,8 @@ pub struct Mesh {
     // pub index_buffer: Vec<usize>,
     // pub num_elements: u32,
     pub vertices: Vec<Vertex>,
+    /// These indices are relative to 0 for this mesh. When adding to a global index
+    /// buffer, we offset them by previous meshes' vertex counts.
     pub indices: Vec<usize>,
     pub material: usize,
 }
@@ -268,7 +270,7 @@ impl Default for InputSettings {
     fn default() -> Self {
         Self {
             move_sens: 1.5,
-            rotate_sens: 0.4,
+            rotate_sens: 0.45,
             rotate_key_sens: 1.0,
             run_factor: 5.,
         }

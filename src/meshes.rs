@@ -84,17 +84,20 @@ impl Mesh {
 
         let mut circle_vertices = Vec::new();
         for i in 0..num_sides {
-            circle_vertices.push(rotate_vec_2d([1., 0.], i as f32 * angle_between_vertices));
+            circle_vertices.push(rotate_vec_2d(
+                [radius, 0.],
+                i as f32 * angle_between_vertices,
+            ));
         }
 
         let half_len = len * 0.5;
 
         let mut vertices = Vec::new();
-        // let mut indices = Vec::new();
+        let mut indices = Vec::new();
 
         // let mut faces = Vec::new();
 
-        let mut i = 0;
+        let mut i_index = 0;
 
         // // Top center
         // vertices.push(Vertex::new(
@@ -110,37 +113,48 @@ impl Mesh {
         // ));
         // i += 1;
 
-        // let mut vertices_top = Vec::new();
-        // let mut vertices_bottom = Vec::new();
+        // let mut vertices_top_edge = Vec::new();
+        // let mut vertices_bottom_edge = Vec::new();
 
-        for vert in circle_vertices {
-            // On top face
-            vertices.push(Vertex::new([vert[0], half_len, vert[1]], UP_VEC));
-            i += 1;
-
-            // On bottom face
-            vertices.push(Vertex::new([vert[0], -half_len, vert[1]], -UP_VEC));
-            i += 1;
+        for (j, vert) in circle_vertices.iter().enumerate() {
+            // The number of faces is the number of angles - 1.
+            if j != num_sides {
+                // Triangle 1: This top, this bottom, next top.
+                indices.append(&mut vec![i_index, i_index + 1, i_index + 2]);
+                // Triangle 2: This bottom, next bottom, next top.
+                indices.append(&mut vec![i_index + 1, i_index + 3, i_index + 2]);
+            }
 
             // On edge face, top
             vertices.push(Vertex::new(
                 [vert[0], half_len, vert[1]],
                 Vec3::new(vert[0], 0., vert[1]),
             ));
-            i += 1;
+            i_index += 1;
 
             // On edge face, bottom
             vertices.push(Vertex::new(
                 [vert[0], -half_len, vert[1]],
                 Vec3::new(vert[0], 0., vert[1]),
             ));
-            i += 1;
-
-            // Top
-            // indices.append(vec![0]);
+            i_index += 1;
         }
 
-        let indices = Vec::new();
+        // let mut vertices_top_face = Vec::new();
+        // let mut vertices_bottom_face = Vec::new();
+        for vert in circle_vertices {
+            // todo: Add these.
+
+            // todo: For now, we are skipping the top face vertices; add back in second
+            // todo loop later
+            // On top face
+            // vertices_top_face.push(Vertex::new([vert[0], half_len, vert[1]], UP_VEC));
+            // i += 1;
+            //
+            // // On bottom face
+            // vertices_bottom_face.push(Vertex::new([vert[0], -half_len, vert[1]], -UP_VEC));
+            // i += 1;
+        }
 
         Mesh {
             vertices,
