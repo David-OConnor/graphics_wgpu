@@ -177,10 +177,10 @@ impl GraphicsState {
             usage: wgpu::BufferUsages::VERTEX,
         });
 
+        // Placeholder values; scnee placeholder to avoid ownership issues while setting up
+        // instances.
         let mesh_mappings = Vec::new();
-
-        let entities2 = scene.entities.clone(); // todo temp hack to get it into setup_entities
-        let meshes2 = scene.meshes.clone(); // todo temp hack to get it into setup_entities
+        let scene_temp = Scene::default();
 
         let mut result = Self {
             vertex_buf,
@@ -198,13 +198,14 @@ impl GraphicsState {
             depth_texture,
             // pipeline_wire,
             staging_belt: wgpu::util::StagingBelt::new(0x100),
-            scene,
+            scene: scene_temp,
             input_settings,
             inputs_commanded: Default::default(),
             mesh_mappings,
         };
 
-        result.setup_entities(&entities2, &meshes2, &device);
+        result.setup_entities(&scene.entities, &scene.meshes, &device);
+        result.scene = scene;
 
         result
     }
