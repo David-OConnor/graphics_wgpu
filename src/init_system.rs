@@ -12,7 +12,7 @@ use winit::{
 use crate::{
     init_graphics::GraphicsState,
     texture::Texture,
-    types::{InputSettings, Scene},
+    types::{InputSettings, Entity, Scene},
 };
 
 const WINDOW_TITLE: &str = "Graphics";
@@ -131,7 +131,8 @@ impl State {
     }
 }
 
-pub fn run(scene: Scene, input_settings: InputSettings) {
+// pub fn run(scene: Scene, input_settings: InputSettings, render_handler: &mut dyn FnMut() -> u8) {
+pub fn run(scene: Scene, input_settings: InputSettings, render_handler: fn() -> Option<Vec<Entity>>) {
     #[cfg(not(target_arch = "wasm32"))]
     let mut last_update_inst = Instant::now();
     #[cfg(not(target_arch = "wasm32"))]
@@ -192,6 +193,11 @@ pub fn run(scene: Scene, input_settings: InputSettings) {
                 let now = Instant::now();
                 dt = now - last_render_time;
                 last_render_time = now;
+
+                if let Some(entities_updated) = render_handler() {
+                    state.graphics.scene.entities = entities_updated;
+                    state.graphics.setup_entities(&state.sys.device);
+                }
 
                 // state.graphics.update(&state.sys.queue, dt);
 

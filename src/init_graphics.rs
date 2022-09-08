@@ -56,12 +56,10 @@ pub(crate) const FWD_VEC: Vec3 = Vec3 {
 pub(crate) struct GraphicsState {
     vertex_buf: wgpu::Buffer,
     index_buf: wgpu::Buffer,
-    // instances: Vec<Instance>,
     instance_buf: wgpu::Buffer,
     bind_groups: BindGroupData,
     pub camera: Camera,
     camera_buf: wgpu::Buffer,
-    // lighting: Lighting,
     lighting_buf: wgpu::Buffer,
     point_lights: Vec<PointLight>,
     point_light_buf: wgpu::Buffer,
@@ -73,7 +71,7 @@ pub(crate) struct GraphicsState {
     // todo: Will this need to change for multiple models
     // obj_mesh: Mesh,
     staging_belt: wgpu::util::StagingBelt, // todo: Do we want this? Probably in sys, not here.
-    scene: Scene,
+    pub scene: Scene,
     // todo: FIgure out if youw ant this.
     mesh_mappings: Vec<(i32, u32, u32)>,
 }
@@ -177,35 +175,29 @@ impl GraphicsState {
             usage: wgpu::BufferUsages::VERTEX,
         });
 
-        // Placeholder values; scnee placeholder to avoid ownership issues while setting up
-        // instances.
+        // Placeholder value
         let mesh_mappings = Vec::new();
-        let scene_temp = Scene::default();
 
         let mut result = Self {
             vertex_buf,
             index_buf,
-            // instances,
             instance_buf,
             bind_groups,
             camera,
             camera_buf: cam_buf,
-            // lighting,
             lighting_buf,
             point_lights,
             point_light_buf,
             pipeline,
             depth_texture,
-            // pipeline_wire,
             staging_belt: wgpu::util::StagingBelt::new(0x100),
-            scene: scene_temp,
+            scene,
             input_settings,
             inputs_commanded: Default::default(),
             mesh_mappings,
         };
 
-        result.setup_entities(&scene.entities, &scene.meshes, &device);
-        result.scene = scene;
+        result.setup_entities(&device);
 
         result
     }
@@ -217,7 +209,7 @@ impl GraphicsState {
     /// Currently, sets up entities, but doesn't change meshes, lights, or the camera.
     /// The vertex and index buffers aren't changed; only the instances.
     /// todo: Consider what you want out of this.
-    pub(crate) fn setup_entities(&mut self, entities: &Vec<Entity>, meshes: &Vec<Mesh>, device: &wgpu::Device) {
+    pub(crate) fn setup_entities(&mut self, device: &wgpu::Device) {
         let mut instances = Vec::new();
 
         let mut mesh_mappings = Vec::new();
@@ -225,10 +217,10 @@ impl GraphicsState {
         let mut vertex_start_this_mesh = 0;
         let mut instance_start_this_mesh = 0;
 
-        for (i, mesh) in meshes.iter().enumerate() {
+        for (i, mesh) in self.scene.meshes.iter().enumerate() {
 
             let mut instance_count_this_mesh = 0;
-            for entity in entities.iter().filter(|e| e.mesh == i) {
+            for entity in self.scene.entities.iter().filter(|e| e.mesh == i) {
                 instances.push(Instance {
                     // todo: entity into method?
                     position: entity.position,
