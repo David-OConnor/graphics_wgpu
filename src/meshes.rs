@@ -41,57 +41,64 @@ impl Mesh {
 
         let mut current_i = 0;
 
-        for i in 0..num_lats {
+        // Don't include the top or bottom (0, TAU/2) angles in lats.
+        for i in 1..num_lats + 1 {
             // todo: Faces for top and bottom sections
             if i == 0 {
                 vertices.push(Vertex::new(
                     [0., -radius, 0.],
-                    Vec3::new(0., -1., 0.) .to_normalized(),
-                ));
-            } else if i == num_lats - 1 {
-                vertices.push(Vertex::new(
-                    [0., radius, 0.],
-                    Vec3::new(0., 1., 0.) .to_normalized(),
-                ));
-            }
-
-            let lat = i as f32 * lat_size;
-
-            for j in 0..num_lons {
-                let lon = j as f32 * lon_size;
-
-                let x = (lat).cos() * (lon).cos() * 1. * radius;
-                let y = (lat).cos() * (lon).sin() * 1. * radius;
-                let z = (lat).sin() * 1. * radius;
-
-                vertices.push(Vertex::new(
-                    [x, y, z],
-                    Vec3::new(
-                        radius * radius * lon.cos() * lat.sin() * lat.sin(),
-                        radius * radius * lon.sin() * lat.sin() * lat.sin(),
-                        -radius * radius * lat.sin() * lat.cos(),
-                    )
-                    .to_normalized(),
+                    Vec3::new(0., -1., 0.).to_normalized(),
                 ));
                 current_i += 1;
+                continue;
+            } else if i == num_lats {
+                vertices.push(Vertex::new(
+                    [0., radius, 0.],
+                    Vec3::new(0., 1., 0.).to_normalized(),
+                ));
+                current_i += 1;
+                continue;
+            }
 
-                if i != num_lats && j != num_lons {
+            let θ = i as f32 * lat_size;
+
+            for j in 0..num_lons {
+                let φ = j as f32 * lon_size;
+
+                // https://en.wikipedia.org/wiki/Spherical_coordinate_system
+                let x = radius * φ.cos() * θ.sin();
+                let y = radius * φ.sin() * θ.sin();
+                let z = radius * θ.cos();
+
+                vertices.push(Vertex::new([x, y, z], Vec3::new(x, y, z).to_normalized()));
+                current_i += 1;
+
+                if i < num_lats - 1 && j < num_lons - 1 {
                     // In CCW order
-                    faces.push([
-                        current_i,  current_i + 1, current_i + num_lons + 1,
-                        current_i + num_lons
-                    ]);
-                    // face.push(current_i);
-                    // face.push(current_i + 1);
-                    // face.push();
-                    // face.push();
+                    if j == num_lons - 1 {
+                    //     faces.push([
+                    //         current_i,
+                    //         current_i - (num_lons - 1),
+                    //         current_i + num_lons - (num_lons - 1),
+                    //         current_i + num_lons,
+                    //     ]);
+                    } else {
+                        faces.push([
+                            current_i,
+                            current_i + 1,
+                            current_i + num_lons + 1,
+                            current_i + num_lons,
+                        ]);
+                    }
                 }
-
             }
         }
 
         for f in faces {
-            indices.append(&mut vec![f[0], f[1], f[2], f[0], f[2], f[3]]);
+            indices.append(&mut vec![
+                f[0], f[1], f[2],
+                f[0], f[2], f[3]
+            ]);
         }
 
         Mesh {
