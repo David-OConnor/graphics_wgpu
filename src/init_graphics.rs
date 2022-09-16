@@ -25,6 +25,14 @@ use lin_alg2::f32::{Quaternion, Vec3};
 
 use winit::event::DeviceEvent;
 
+// use egui::Window;
+// use egui_winit::{
+//     gfx_backends::wgpu_backend::WgpuBackend, window_backends::winit_backend::WinitBackend,
+//     BackendSettings, GfxBackend, UserApp, WindowBackend,
+// };
+
+use eframe::egui;
+
 const BG_COLOR: wgpu::Color = wgpu::Color {
     r: 0.7,
     g: 0.7,
@@ -52,6 +60,27 @@ pub(crate) const FWD_VEC: Vec3 = Vec3 {
     y: 0.,
     z: 1.,
 };
+
+#[derive(Default)]
+struct MyEguiApp {}
+
+impl MyEguiApp {
+    fn new(cc: &eframe::CreationContext<'_>) -> Self {
+        // Customize egui here with cc.egui_ctx.set_fonts and cc.egui_ctx.set_visuals.
+        // Restore app state using cc.storage (requires the "persistence" feature).
+        // Use the cc.gl (a glow::Context) to create graphics shaders and buffers that you can use
+        // for e.g. egui::PaintCallback.
+        Self::default()
+    }
+}
+
+impl eframe::App for MyEguiApp {
+    fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
+        egui::CentralPanel::default().show(ctx, |ui| {
+            ui.heading("Hello World!");
+        });
+    }
+}
 
 pub(crate) struct GraphicsState {
     vertex_buf: wgpu::Buffer,
@@ -84,6 +113,16 @@ impl GraphicsState {
         scene: Scene,
         input_settings: InputSettings,
     ) -> Self {
+        // GUI code
+
+        let mut native_options = eframe::NativeOptions::default();
+        native_options.renderer = eframe::Renderer::Wgpu;
+        // eframe::run_native(
+        //     "My egui App", native_options, Box::new(|cc| Box::new(MyEguiApp::new(cc)))
+        // );
+
+        // end GUI code test
+
         let mut vertices = Vec::new();
         let mut indices = Vec::new();
 
@@ -218,7 +257,6 @@ impl GraphicsState {
         let mut instance_start_this_mesh = 0;
 
         for (i, mesh) in self.scene.meshes.iter().enumerate() {
-
             let mut instance_count_this_mesh = 0;
             for entity in self.scene.entities.iter().filter(|e| e.mesh == i) {
                 instances.push(Instance {
@@ -227,6 +265,7 @@ impl GraphicsState {
                     orientation: entity.orientation,
                     scale: entity.scale,
                     color: Vec3::new(entity.color.0, entity.color.1, entity.color.2),
+                    shinyness: entity.shinyness,
                 });
                 instance_count_this_mesh += 1;
             }
@@ -258,7 +297,6 @@ impl GraphicsState {
         self.instance_buf = instance_buf;
         self.mesh_mappings = mesh_mappings;
     }
-
 
     // #[allow(clippy::single_match)]
     // pub(crate) fn update(&mut self, queue: &wgpu::Queue, dt: Duration) {

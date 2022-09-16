@@ -1,7 +1,11 @@
 //! This module initiates the window, and graphics hardware.
 
 #[cfg(not(target_arch = "wasm32"))]
-use std::time::{Duration, Instant};
+use std::{
+    boxed::Box,
+    include_bytes,
+    time::{Duration, Instant},
+};
 
 use winit::{
     event::{DeviceEvent, Event, KeyboardInput, WindowEvent},
@@ -12,8 +16,10 @@ use winit::{
 use crate::{
     init_graphics::GraphicsState,
     texture::Texture,
-    types::{InputSettings, Entity, Scene},
+    types::{Entity, InputSettings, Scene},
 };
+
+use wgpu_text::section::{HorizontalAlign, Layout, Section, Text};
 
 const WINDOW_TITLE: &str = "Graphics";
 const WINDOW_SIZE_X: f32 = 900.0;
@@ -117,12 +123,19 @@ impl State {
 
             self.graphics.camera.aspect =
                 self.sys.surface_cfg.width as f32 / self.sys.surface_cfg.height as f32;
+
             self.graphics.depth_texture = Texture::create_depth_texture(
                 &self.sys.device,
                 &self.sys.surface_cfg,
                 "Depth texture",
             );
+            println!("aspect: {:?}", self.graphics.camera.aspect);
+
             self.graphics.camera.update_proj_mat();
+
+            // todo: Temp(?) for drawing text
+            // self.brush.resize_view(self.sys.surface_cfg.width as f32,
+            //                   self.sys.surface_cfg.height as f32, &self.sys.queue);
         }
     }
 
@@ -132,7 +145,16 @@ impl State {
 }
 
 // pub fn run(scene: Scene, input_settings: InputSettings, render_handler: &mut dyn FnMut() -> u8) {
-pub fn run(scene: Scene, input_settings: InputSettings, render_handler: fn() -> Option<Vec<Entity>>) {
+pub fn run<'a>(
+    scene: Scene,
+    input_settings: InputSettings,
+    // todo: Pass whole scene to render handler?
+    render_handler: fn() -> Option<Vec<Entity>>,
+    // Note: The below `Box<dyn Fn` code works as well, and may be a better approach for use with
+    // a closure API. If so, try to keep the boxing code in this library, vice in the user/application code.
+    event_handler: fn(DeviceEvent, &mut Scene, f32) -> bool,
+    // event_handler: Box<dyn Fn(DeviceEvent, &mut Scene, f32) -> bool>,
+) {
     #[cfg(not(target_arch = "wasm32"))]
     let mut last_update_inst = Instant::now();
     #[cfg(not(target_arch = "wasm32"))]
@@ -147,10 +169,32 @@ pub fn run(scene: Scene, input_settings: InputSettings, render_handler: fn() -> 
         .build(&event_loop)
         .unwrap();
 
+    // // todo: Long-term, this may not make sense in this lib.
+    // let window_gui = WindowBuilder::new()
+    //     .with_title("GUI")
+    //     .with_inner_size(winit::dpi::LogicalSize::new(320, 480))
+    //     .build(&event_loop)
+    //     .unwrap();
+
     let mut state = State::new(&window, scene, input_settings);
 
     let mut last_render_time = Instant::now();
     let mut dt = Duration::new(0, 0);
+
+    // GUI code
+    let font: &[u8] = include_bytes!("../fonts/calibri.ttf");
+    let mut brush = wgpu_text::BrushBuilder::using_font_bytes(font)
+        .unwrap()
+        /* .initial_cache_size((1024, 1024))) */ // use this to avoid resizing cache texture
+        /* .with_depth_testing(true) */ // enable/disable depth testing
+        .build(&state.sys.device, &state.sys.surface_cfg);
+
+    // Directly implemented from glyph_brush.
+    let section = Section::default()
+        .add_text(Text::new("Hello World"))
+        .with_layout(Layout::default().h_align(HorizontalAlign::Center));
+
+    // End GUI code
 
     event_loop.run(move |event, _, control_flow| {
         let _ = (&state.sys.instance, &state.sys.adapter); // force ownership by the closure
@@ -159,6 +203,14 @@ pub fn run(scene: Scene, input_settings: InputSettings, render_handler: fn() -> 
         match event {
             Event::MainEventsCleared => window.request_redraw(),
             Event::DeviceEvent { event, .. } => {
+                let dt_secs = dt.as_secs() as f32 + dt.subsec_micros() as f32 / 1_000_000.;
+                let changed = event_handler(event.clone(), &mut state.graphics.scene, dt_secs);
+
+                // Entities have been updated in the scene; update the buffers
+                if changed {
+                    state.graphics.setup_entities(&state.sys.device);
+                }
+
                 state.graphics.handle_input(event);
             }
             Event::WindowEvent {
@@ -194,6 +246,7 @@ pub fn run(scene: Scene, input_settings: InputSettings, render_handler: fn() -> 
                 dt = now - last_render_time;
                 last_render_time = now;
 
+                // todo: Pass whole scene to render handler?
                 if let Some(entities_updated) = render_handler() {
                     state.graphics.scene.entities = entities_updated;
                     state.graphics.setup_entities(&state.sys.device);
@@ -210,6 +263,20 @@ pub fn run(scene: Scene, input_settings: InputSettings, render_handler: fn() -> 
                 state
                     .graphics
                     .render(&view, &state.sys.device, &state.sys.queue, dt);
+
+                // Text draw code start
+
+                // Has to be queued every frame.
+                brush.queue(&section);
+
+                // todo: Put this text draw back
+                // let text_buffer = brush.draw(&state.sys.device, &view, &state.sys.queue);
+
+                // Has to be submitted last so text won't be overlapped.
+                // todo: Figure out how to submit encoder.
+                // state.sys.queue.submit([some_other_encoder.finish(), text_buffer]);
+
+                // text draw code end
 
                 // match state.render() {
                 //     Ok(_) => {}

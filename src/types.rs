@@ -15,7 +15,7 @@ pub const VERTEX_SIZE: usize = 14 * F32_SIZE;
 pub const MAT4_SIZE: usize = 16 * F32_SIZE;
 pub const MAT3_SIZE: usize = 9 * F32_SIZE;
 
-pub const INSTANCE_SIZE: usize = MAT4_SIZE + MAT3_SIZE + VEC3_UNIFORM_SIZE;
+pub const INSTANCE_SIZE: usize = MAT4_SIZE + MAT3_SIZE + VEC3_UNIFORM_SIZE + F32_SIZE;
 
 #[derive(Clone, Copy, Debug)]
 /// Example attributes: https://github.com/bevyengine/bevy/blob/main/crates/bevy_render/src/mesh/mesh/mod.rs#L56
@@ -32,9 +32,11 @@ pub struct Vertex {
     /// coordinates with respect to the surface that you are trying to render. Typically
     /// they can be used alongside normal maps which allow you to create sub surface
     /// lighting detail to your model(bumpiness)."
+    /// This is used to orient normal maps; corresponds to the +X texture direction.
     pub tangent: [f32; 3],
     /// A bitangent vector is the result of the Cross Product between Vertex Normal and Vertex
-    /// Tangent which is a unit vector perpendicular to both vectors at a given point..
+    /// Tangent which is a unit vector perpendicular to both vectors at a given point.
+    /// This is used to orient normal maps; corresponds to the +Y texture direction.
     pub bitangent: [f32; 3],
 }
 
@@ -121,6 +123,7 @@ pub struct Instance {
     pub orientation: Quaternion,
     pub scale: f32,
     pub color: Vec3,
+    pub shinyness: f32,
 }
 
 impl Instance {
@@ -179,6 +182,12 @@ impl Instance {
                     shader_location: 12,
                     format: wgpu::VertexFormat::Float32x4,
                 },
+                // Shinyness
+                wgpu::VertexAttribute {
+                    offset: (F32_SIZE * 26) as wgpu::BufferAddress,
+                    shader_location: 13,
+                    format: wgpu::VertexFormat::Float32,
+                },
             ],
         }
     }
@@ -194,10 +203,11 @@ impl Instance {
         let normal_mat = self.orientation.to_matrix3();
 
         result[0..MAT4_SIZE].clone_from_slice(&model_mat.to_bytes());
-        result[MAT4_SIZE..INSTANCE_SIZE - VEC3_UNIFORM_SIZE]
-            .clone_from_slice(&normal_mat.to_bytes());
-        result[INSTANCE_SIZE - VEC3_UNIFORM_SIZE..INSTANCE_SIZE]
+        result[MAT4_SIZE..MAT4_SIZE + MAT3_SIZE].clone_from_slice(&normal_mat.to_bytes());
+        result[MAT4_SIZE + MAT3_SIZE..INSTANCE_SIZE - F32_SIZE]
             .clone_from_slice(&self.color.to_bytes_uniform());
+        result[INSTANCE_SIZE - F32_SIZE..INSTANCE_SIZE]
+            .clone_from_slice(&self.shinyness.to_ne_bytes());
 
         result
     }
@@ -229,6 +239,7 @@ pub struct Entity {
     pub orientation: Quaternion,
     pub scale: f32, // 1.0 is original.
     pub color: (f32, f32, f32),
+    pub shinyness: f32, // 0 to 1.
 }
 
 impl Entity {
@@ -238,6 +249,7 @@ impl Entity {
         orientation: Quaternion,
         scale: f32,
         color: (f32, f32, f32),
+        shinyness: f32,
     ) -> Self {
         Self {
             mesh,
@@ -245,6 +257,7 @@ impl Entity {
             orientation,
             scale,
             color,
+            shinyness,
         }
     }
 }

@@ -5,15 +5,25 @@ authors = ["David O'Connor <david.alan.oconnor@gmail.com>"]
 edition = "2021"
 
 [dependencies]
-chrono = "^0.4.22"
-
 wgpu = "^0.13.1"
-#wgpu = { git = "https://github.com/gfx-rs/wgpu" }  # Use GH version so examples work.
 lin_alg2 = { path = "../lin_alg", features = ["computer_graphics"] }
 
-# That's a lot of deps for WGPU examples. Try to trim it down?
-
 winit = "^0.27.2"
-pollster = "^0.2.5"  # Todo: Remove if able. For 2 WGPU init fns
+pollster = "^0.2.5"  # For 2 WGPU init fnsthat use async.
 env_logger = "^0.9.0"
 image = "^0.24.1"
+
+# todo: Should this GUI lib be in the application or here?
+#egui = "^0.19.0"
+#eframe = "^0.19.0"
+# todo: Which of these egui integrations do you want?
+#egui-winit = "^0.19.0"
+#egui-wgpu = "^0.19.0"
+#egui_wgpu_backend = "0.18"
+# todo??
+#epi = "^0.17"
+#egui_winit_platform = "^0.16"
+eframe = { version="0.19.0", features=["wgpu"] }
+
+# Display-text-only workaround for not getting a GUI working in WGPU
+wgpu_text = "^0.6.3"

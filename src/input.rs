@@ -11,6 +11,8 @@ use lin_alg2::f32::{Quaternion, Vec3};
 // todo: remove Winit from this module if you can, and make it agnostic?
 use winit::event::{DeviceEvent, ElementState};
 
+const MOUSE_1_ID: u32 = 1;
+
 #[derive(Default, Debug)]
 pub struct InputsCommanded {
     pub fwd: bool,
@@ -24,13 +26,14 @@ pub struct InputsCommanded {
     pub mouse_delta_x: f32,
     pub mouse_delta_y: f32,
     pub run: bool,
+    pub free_look: bool,
 }
 
 impl InputsCommanded {
     /// Return true if there are any inputs.
     pub fn inputs_present(&self) -> bool {
         const EPS: f32 = 0.00001;
-        // Note; We don't include `run` here, since it's a modifier.
+        // Note; We don't include `run` or `free_look` here, since it's a modifier.
         self.fwd
             || self.back
             || self.left
@@ -124,6 +127,13 @@ pub(crate) fn add_input_cmd(event: DeviceEvent, inputs: &mut InputsCommanded) {
                 }
             }
         }
+        DeviceEvent::Button { button, state } => match button {
+            MOUSE_1_ID => match state {
+                ElementState::Pressed => inputs.free_look = true,
+                ElementState::Released => inputs.free_look = false,
+            },
+            _ => (),
+        },
         DeviceEvent::MouseMotion { delta } => {
             inputs.mouse_delta_x += delta.0 as f32;
             inputs.mouse_delta_y += delta.1 as f32;
@@ -197,13 +207,16 @@ pub fn adjust_camera(
     }
 
     let eps = 0.00001;
-    if inputs.mouse_delta_x.abs() > eps || inputs.mouse_delta_y.abs() > eps {
-        // todo: Why do we have the negative signs here?
-        rotation = Quaternion::from_axis_angle(up, -inputs.mouse_delta_x * rotate_amt)
-            * Quaternion::from_axis_angle(right, -inputs.mouse_delta_y * rotate_amt)
-            * rotation;
 
-        cam_rotated = true;
+    if inputs.free_look {
+        if inputs.mouse_delta_x.abs() > eps || inputs.mouse_delta_y.abs() > eps {
+            // todo: Why do we have the negative signs here?
+            rotation = Quaternion::from_axis_angle(up, -inputs.mouse_delta_x * rotate_amt)
+                * Quaternion::from_axis_angle(right, -inputs.mouse_delta_y * rotate_amt)
+                * rotation;
+
+            cam_rotated = true;
+        }
     }
 
     if cam_moved {

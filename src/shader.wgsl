@@ -1,14 +1,19 @@
+// todo: Implement point lights and multiple diffuse lights.
+
 struct Camera {
     proj_view: mat4x4<f32>,
     position: vec3<f32>,
 }
 
+// Note: Don't us vec3 in uniforms due to alignment issues.
 struct Lighting {
-    ambient_color: vec3<f32>,
+    ambient_color: vec4<f32>,
+    diffuse_dir: vec4<f32>,
+    diffuse_color: vec4<f32>,
+    specular_color: vec4<f32>,
     ambient_intensity: f32,
-    diffuse_color: vec3<f32>,
     diffuse_intensity: f32,
-    diffuse_dir: vec3<f32>,
+    specular_intensity: f32,
 }
 
 struct PointLight {
@@ -16,8 +21,6 @@ struct PointLight {
     color: vec3<f32>,
     intensity: f32,
 }
-
-// todo: with temp: 64. Without: 48. Why is vec3 16 bytes?
 
 @group(0) @binding(0)
 var<uniform> camera: Camera;
@@ -47,19 +50,18 @@ struct InstanceIn {
     @location(10) normal_matrix_1: vec3<f32>,
     @location(11) normal_matrix_2: vec3<f32>,
     @location(12) color: vec4<f32>,
+    @location(13) shinyness: f32,
 }
 
 struct VertexOut {
-    @builtin(position) clip_position: vec4<f32>,
+    @builtin(position) position: vec4<f32>,
     @location(0) tex_coords: vec2<f32>,
-    @location(1) tangent_position: vec3<f32>,
-    @location(2) tangent_light_position: vec3<f32>,
-    @location(3) tangent_view_position: vec3<f32>,
-    // Experimenting
-    @location(4) normal: vec3<f32>,
-    @location(5) color: vec4<f32>,
-//    @location(6) world_normal: vec3<f32>,
-//    @location(7) world_position: vec3<f32>,
+    @location(1) normal: vec3<f32>,
+    @location(2) color: vec4<f32>,
+    @location(3) shinyness: f32,
+    //    @location(1) tangent_position: vec3<f32>,
+    //    @location(2) tangent_light_position: vec3<f32>,
+    //    @location(3) tangent_view_position: vec3<f32>,
 }
 
 @vertex
@@ -67,7 +69,6 @@ fn vs_main(
     model: VertexIn,
     instance: InstanceIn,
 ) -> VertexOut {
-    // todo: Why do we construct the matrix from parts instead of passing whole?
     var model_mat = mat4x4<f32>(
         instance.model_matrix_0,
         instance.model_matrix_1,
@@ -75,68 +76,83 @@ fn vs_main(
         instance.model_matrix_3,
     );
 
-    let normal_mat = mat3x3<f32>(
+    var normal_mat = mat3x3<f32>(
         instance.normal_matrix_0,
         instance.normal_matrix_1,
         instance.normal_matrix_2,
     );
 
-    // Construct the tangent matrix
-    let world_normal = normalize(normal_mat * model.normal);
-    let world_tangent = normalize(normal_mat * model.tangent);
-    let world_bitangent = normalize(normal_mat * model.bitangent);
+    var world_normal = normalize(normal_mat * model.normal);
+//    var world_tangent = normalize(normal_mat * model.tangent);
+//    var world_bitangent = normalize(normal_mat * model.bitangent);
 
-    let tangent_mat = transpose(mat3x3<f32>(
-        world_tangent,
-        world_bitangent,
-        world_normal,
-    ));
+// We use the tangent matrix, and tangent out values for normal mapping.
+// This is currently unimplemented.
+// Construct the tangent matrix
+//    var tangent_mat = transpose(mat3x3<f32>(
+//        world_tangent,
+//        world_bitangent,
+//        world_normal,
+//    ));
 
     // Pad the model position with 1., for use with the 4x4 transform mats.
-    let world_posit = model_mat * vec4<f32>(model.position, 1.0);
+    var world_posit = model_mat * vec4<f32>(model.position, 1.0);
 
     var result: VertexOut;
 
-    result.clip_position = camera.proj_view * world_posit;
+    result.position = camera.proj_view * world_posit;
 
-    result.tangent_position = tangent_mat * world_posit.xyz;
-    result.tangent_view_position = tangent_mat * camera.position.xyz;
+//    result.tangent_position = tangent_mat * world_posit.xyz;
+//    result.tangent_view_position = tangent_mat * camera.position.xyz;
     result.normal = world_normal;
 
     result.color = instance.color;
-
-//    result.world_normal = normal_mat * model.normal;
-//    var world_position: vec4<f32> = model_mat * vec4<f32>(model.position, 1.0);
-//    result.world_position = world_position.xyz;
+    result.shinyness = instance.shinyness;
 
     return result;
 }
 
+/// Blinn-Phong shader.
 @fragment
 fn fs_main(vertex: VertexOut) -> @location(0) vec4<f32> {
     // Ambient lighting
     // todo: Don't multiply this for every fragment; do it on the CPU.
     // todo: Why isn't the ambient intensity passed from the cpu working?
-//    var ambient = lighting.ambient_color * lighting.ambient_intensity;
-    var ambient = lighting.ambient_color * 0.10;
+
+    // Convert the vec4s passed in the uniform to vec3.
+    var ambient_color = lighting.ambient_color.xyz;
+    var diffuse_color = lighting.diffuse_color.xyz;
+    var specular_color = lighting.specular_color.xyz;
+    var diffuse_dir = lighting.diffuse_dir.xyz;
+
+    var ambient = ambient_color * lighting.ambient_intensity;
 
     // Note: We currently don't use the model color's alpha value.
-    // todo: More elegant way of casting to vec3?
-    var vertex_color = vec3<f32>(vertex.color[0], vertex.color[1], vertex.color[2]);
+    var vertex_color = vertex.color.xyz;
 
     // Diffuse lighting
-    var diffuse_on_face = max(dot(vertex.normal, lighting.diffuse_dir), 0.);
-    var diffuse = lighting.diffuse_color * diffuse_on_face * lighting.diffuse_intensity;
+    var diffuse_on_face = max(dot(vertex.normal, diffuse_dir), 0.);
+    var diffuse = diffuse_color * diffuse_on_face * lighting.diffuse_intensity;
 
-    // Specular lighting
-//    let light_dir = normalize(vertex.tangent_light_position - vertex.tangent_position);
-//    let view_dir = normalize(vertex.tangent_view_position - vertex.tangent_position);
-//    let half_dir = normalize(view_dir + light_dir);
+    // Specular lighting.
 
-//    let specular_strength = pow(max(dot(tangent_normal, half_dir), 0.0), 32.0);
-//    let specular_color = specular_strength * light.color;
+    // Lambert's cosine law
+    var specular = vec3<f32>(0., 0., 0.);
 
-    let result = (ambient + diffuse) * vertex_color;
+    if (diffuse_on_face > 0.0) {
+//        var eye = normalize(-camera_position.xyz);
+        var view_dir = normalize(camera.position.xyz - vertex.position.xyz);
+
+        // Blinn half vector
+//        var half_vec = normalize(diffuse_dir + eye);
+        var half_dir = normalize(view_dir + diffuse_dir);
+
+        var specular_coeff = pow(max(dot(vertex.normal, half_dir), 0.), vertex.shinyness);
+
+        specular = specular_color * specular_coeff * lighting.specular_intensity;
+    }
+
+    var result = (ambient + diffuse + specular) * vertex_color;
 
     return vec4<f32>(result, 1.0);
 }
