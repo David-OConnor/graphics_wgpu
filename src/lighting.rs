@@ -29,7 +29,7 @@ impl Default for Lighting {
             diffuse_color: Vec3::new(1., 1., 1.).to_normalized(),
             specular_color: Vec3::new(1., 1., 1.).to_normalized(),
             ambient_intensity: 0.15,
-            diffuse_intensity: 0.3,
+            diffuse_intensity: 0.7,
             specular_intensity: 0.3,
             point_lights: Vec::new(),
         }
