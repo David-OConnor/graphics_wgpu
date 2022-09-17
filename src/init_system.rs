@@ -121,7 +121,7 @@ impl State {
                 .surface
                 .configure(&self.sys.device, &self.sys.surface_cfg);
 
-            self.graphics.camera.aspect =
+            self.graphics.scene.camera.aspect =
                 self.sys.surface_cfg.width as f32 / self.sys.surface_cfg.height as f32;
 
             self.graphics.depth_texture = Texture::create_depth_texture(
@@ -129,9 +129,9 @@ impl State {
                 &self.sys.surface_cfg,
                 "Depth texture",
             );
-            println!("aspect: {:?}", self.graphics.camera.aspect);
+            println!("aspect: {:?}", self.graphics.scene.camera.aspect);
 
-            self.graphics.camera.update_proj_mat();
+            self.graphics.scene.camera.update_proj_mat();
 
             // todo: Temp(?) for drawing text
             // self.brush.resize_view(self.sys.surface_cfg.width as f32,

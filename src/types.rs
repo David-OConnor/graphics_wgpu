@@ -2,7 +2,10 @@
 
 use std::ops::Range;
 
-use crate::lighting::{Lighting, PointLight};
+use crate::{
+    camera::Camera,
+    lighting::{Lighting, PointLight},
+};
 
 use lin_alg2::f32::{Mat4, Quaternion, Vec3};
 
@@ -266,6 +269,7 @@ impl Entity {
 pub struct Scene {
     pub meshes: Vec<Mesh>,
     pub entities: Vec<Entity>,
+    pub camera: Camera,
     pub lighting: Lighting,
 }
 

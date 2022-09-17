@@ -87,7 +87,7 @@ pub(crate) struct GraphicsState {
     index_buf: wgpu::Buffer,
     instance_buf: wgpu::Buffer,
     bind_groups: BindGroupData,
-    pub camera: Camera,
+    // pub camera: Camera,
     camera_buf: wgpu::Buffer,
     lighting_buf: wgpu::Buffer,
     point_lights: Vec<PointLight>,
@@ -110,7 +110,7 @@ impl GraphicsState {
         device: &wgpu::Device,
         queue: &wgpu::Queue,
         surface_cfg: &SurfaceConfiguration,
-        scene: Scene,
+        mut scene: Scene,
         input_settings: InputSettings,
     ) -> Self {
         // GUI code
@@ -164,12 +164,12 @@ impl GraphicsState {
             usage: wgpu::BufferUsages::INDEX,
         });
 
-        let mut camera = Camera::default();
-        camera.update_proj_mat();
+        // let mut camera = Camera::default();
+        scene.camera.update_proj_mat();
 
         let cam_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Camera buffer"),
-            contents: &camera.to_bytes(),
+            contents: &scene.camera.to_bytes(),
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
         });
 
@@ -222,7 +222,7 @@ impl GraphicsState {
             index_buf,
             instance_buf,
             bind_groups,
-            camera,
+            // camera,
             camera_buf: cam_buf,
             lighting_buf,
             point_lights,
@@ -312,7 +312,7 @@ impl GraphicsState {
     //     let dt_secs = dt.as_secs() as f32 + dt.subsec_micros() as f32 / 1_000_000.;
     //
     //     // input::adjust_camera(
-    //     //     &mut self.camera,
+    //     //     &mut self.scene.camera,
     //     //     &self.inputs_commanded,
     //     //     &self.input_settings,
     //     //     dt_secs,
@@ -334,12 +334,12 @@ impl GraphicsState {
         if self.inputs_commanded.inputs_present() {
             let dt_secs = dt.as_secs() as f32 + dt.subsec_micros() as f32 / 1_000_000.;
             input::adjust_camera(
-                &mut self.camera,
+                &mut self.scene.camera,
                 &self.inputs_commanded,
                 &self.input_settings,
                 dt_secs,
             );
-            queue.write_buffer(&self.camera_buf, 0, &self.camera.to_bytes());
+            queue.write_buffer(&self.camera_buf, 0, &self.scene.camera.to_bytes());
 
             // Reset the mouse inputs; keyboard inputs are reset by their release event.
             self.inputs_commanded.mouse_delta_x = 0.;
@@ -363,7 +363,7 @@ impl GraphicsState {
         //         wgpu::BufferSize::new(CAM_UNIFORM_SIZE as wgpu::BufferAddress).unwrap(),
         //         device,
         //     )
-        //     .copy_from_slice(&self.camera.to_uniform().to_bytes());
+        //     .copy_from_slice(&self.scene.camera.to_uniform().to_bytes());
         //
         // self.staging_belt.finish();
 
