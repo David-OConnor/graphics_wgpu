@@ -33,13 +33,6 @@ use winit::event::DeviceEvent;
 
 use eframe::egui;
 
-const BG_COLOR: wgpu::Color = wgpu::Color {
-    r: 0.7,
-    g: 0.7,
-    b: 0.7,
-    a: 1.0,
-};
-
 static MESH_I: AtomicUsize = AtomicUsize::new(0);
 
 const DEPTH_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Depth24Plus;
@@ -90,8 +83,6 @@ pub(crate) struct GraphicsState {
     // pub camera: Camera,
     camera_buf: wgpu::Buffer,
     lighting_buf: wgpu::Buffer,
-    point_lights: Vec<PointLight>,
-    point_light_buf: wgpu::Buffer,
     pipeline: wgpu::RenderPipeline,
     pub depth_texture: Texture,
     pub input_settings: InputSettings,
@@ -173,23 +164,31 @@ impl GraphicsState {
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
         });
 
+        let mut light_array = Vec::new();
+        for light in &scene.lighting.point_lights {
+            for byte in light.to_bytes() {
+                light_array.push(byte);
+            }
+        }
+
+        let mut lighting_bytes = Vec::new();
+
+        // Add the non-array portion
+        for byte in scene.lighting.to_bytes().iter() {
+            lighting_bytes.push(*byte);
+        }
+        // Add the array portion.
+        for byte in light_array.iter() {
+            lighting_bytes.push(*byte);
+        }
+
         let lighting_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Lighting buffer"),
-            contents: &scene.lighting.to_bytes(),
-            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-        });
-
-        let mut point_lights = vec![];
-
-        // todo
-        let point_light_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Point light buffer"),
-            contents: &[],
+            contents: &lighting_bytes,
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
         });
 
         let bind_groups = create_bindgroups(&device, &cam_buf, &lighting_buf);
-        // let bind_groups = create_bindgroups(&device, &cam_buf, &lighting_buf, &point_light_buf);
 
         let depth_texture = Texture::create_depth_texture(device, surface_cfg, "Depth texture");
 
@@ -225,8 +224,6 @@ impl GraphicsState {
             // camera,
             camera_buf: cam_buf,
             lighting_buf,
-            point_lights,
-            point_light_buf,
             pipeline,
             depth_texture,
             staging_belt: wgpu::util::StagingBelt::new(0x100),
@@ -374,7 +371,12 @@ impl GraphicsState {
                     view,
                     resolve_target: None,
                     ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(BG_COLOR),
+                        load: wgpu::LoadOp::Clear(wgpu::Color {
+                            r: self.scene.background_color.0 as f64,
+                            g: self.scene.background_color.1 as f64,
+                            b: self.scene.background_color.2 as f64,
+                            a: 1.0,
+                        }),
                         store: true,
                     },
                 })],

@@ -11,7 +11,11 @@ lin_alg2 = { path = "../lin_alg", features = ["computer_graphics"] }
 winit = "^0.27.2"
 pollster = "^0.2.5"  # For 2 WGPU init fnsthat use async.
 env_logger = "^0.9.0"
-image = "^0.24.1"
+
+
+image = "^0.24.1" # For loading textures
+
+obj = "^0.10.2"  # We use this load OBJ meshes.
 
 # todo: Should this GUI lib be in the application or here?
 #egui = "^0.19.0"
@@ -28,4 +32,3 @@ eframe = { version="^0.19.0", features=["wgpu"] }
 # Display-text-only workaround for not getting a GUI working in WGPU
 wgpu_text = "^0.6.3"
 
-obj = "^0.10.2"  # We use this load OBJ meshes.

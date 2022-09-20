@@ -265,12 +265,25 @@ impl Entity {
     }
 }
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug)]
 pub struct Scene {
     pub meshes: Vec<Mesh>,
     pub entities: Vec<Entity>,
     pub camera: Camera,
     pub lighting: Lighting,
+    pub background_color: (f32, f32, f32),
+}
+
+impl Default for Scene {
+    fn default() -> Self {
+        Self {
+            meshes: Vec::new(),
+            entities: Vec::new(),
+            camera: Default::default(),
+            lighting: Default::default(),
+            background_color: (0.7, 0.7, 0.7),
+        }
+    }
 }
 
 #[derive(Clone, Debug)]

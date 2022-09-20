@@ -5,6 +5,12 @@ struct Camera {
     position: vec3<f32>,
 }
 
+struct Light {
+    position: vec3<f32>,
+    color: vec3<f32>,
+    intensity: f32,
+}
+
 // Note: Don't us vec3 in uniforms due to alignment issues.
 struct Lighting {
     ambient_color: vec4<f32>,
@@ -14,12 +20,7 @@ struct Lighting {
     ambient_intensity: f32,
     diffuse_intensity: f32,
     specular_intensity: f32,
-}
-
-struct PointLight {
-    position: vec3<f32>,
-    color: vec3<f32>,
-    intensity: f32,
+    lights: array<Light>
 }
 
 @group(0) @binding(0)
@@ -129,6 +130,10 @@ fn fs_main(vertex: VertexOut) -> @location(0) vec4<f32> {
 
     // Note: We currently don't use the model color's alpha value.
     var vertex_color = vertex.color.xyz;
+
+    for (i=0; i < num_lights; i++) {
+        var light = lighting.lights[i];
+    }
 
     // Diffuse lighting
     var diffuse_on_face = max(dot(vertex.normal, diffuse_dir), 0.);

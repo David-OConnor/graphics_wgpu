@@ -18,7 +18,7 @@ pub struct Lighting {
     ambient_intensity: f32,
     diffuse_intensity: f32,
     specular_intensity: f32,
-    point_lights: Vec<PointLight>,
+    pub point_lights: Vec<PointLight>,
 }
 
 impl Default for Lighting {

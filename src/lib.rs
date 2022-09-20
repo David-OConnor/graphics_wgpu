@@ -7,9 +7,9 @@ mod meshes;
 mod texture;
 mod types;
 
+pub use camera::Camera;
 pub use init_system::run;
 pub use input::InputsCommanded;
-pub use camera::Camera;
 pub use lighting::{LightType, Lighting, PointLight};
 pub use types::{Entity, InputSettings, Mesh, Scene};
 
