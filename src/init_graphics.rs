@@ -31,8 +31,6 @@ use winit::event::DeviceEvent;
 //     BackendSettings, GfxBackend, UserApp, WindowBackend,
 // };
 
-use eframe::egui;
-
 static MESH_I: AtomicUsize = AtomicUsize::new(0);
 
 const DEPTH_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Depth24Plus;
@@ -53,27 +51,6 @@ pub(crate) const FWD_VEC: Vec3 = Vec3 {
     y: 0.,
     z: 1.,
 };
-
-#[derive(Default)]
-struct MyEguiApp {}
-
-impl MyEguiApp {
-    fn new(cc: &eframe::CreationContext<'_>) -> Self {
-        // Customize egui here with cc.egui_ctx.set_fonts and cc.egui_ctx.set_visuals.
-        // Restore app state using cc.storage (requires the "persistence" feature).
-        // Use the cc.gl (a glow::Context) to create graphics shaders and buffers that you can use
-        // for e.g. egui::PaintCallback.
-        Self::default()
-    }
-}
-
-impl eframe::App for MyEguiApp {
-    fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
-        egui::CentralPanel::default().show(ctx, |ui| {
-            ui.heading("Hello World!");
-        });
-    }
-}
 
 pub(crate) struct GraphicsState {
     vertex_buf: wgpu::Buffer,
@@ -105,12 +82,6 @@ impl GraphicsState {
         input_settings: InputSettings,
     ) -> Self {
         // GUI code
-
-        let mut native_options = eframe::NativeOptions::default();
-        native_options.renderer = eframe::Renderer::Wgpu;
-        // eframe::run_native(
-        //     "My egui App", native_options, Box::new(|cc| Box::new(MyEguiApp::new(cc)))
-        // );
 
         // end GUI code test
 
@@ -164,28 +135,12 @@ impl GraphicsState {
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
         });
 
-        let mut light_array = Vec::new();
-        for light in &scene.lighting.point_lights {
-            for byte in light.to_bytes() {
-                light_array.push(byte);
-            }
-        }
-
-        let mut lighting_bytes = Vec::new();
-
-        // Add the non-array portion
-        for byte in scene.lighting.to_bytes().iter() {
-            lighting_bytes.push(*byte);
-        }
-        // Add the array portion.
-        for byte in light_array.iter() {
-            lighting_bytes.push(*byte);
-        }
-
         let lighting_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Lighting buffer"),
-            contents: &lighting_bytes,
-            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+            contents: &scene.lighting.to_bytes(),
+            // We use a storage buffer, since our lighting size is unknown by the shader;
+            // this is due to the dynamic-sized point light array.
+            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
         });
 
         let bind_groups = create_bindgroups(&device, &cam_buf, &lighting_buf);
@@ -512,7 +467,7 @@ fn create_bindgroups(
             binding: 0,
             visibility: wgpu::ShaderStages::FRAGMENT,
             ty: wgpu::BindingType::Buffer {
-                ty: wgpu::BufferBindingType::Uniform,
+                ty: wgpu::BufferBindingType::Storage { read_only: true }, // todo read-only?
                 has_dynamic_offset: false,
                 min_binding_size: None,
             },

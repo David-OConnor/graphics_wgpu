@@ -5,33 +5,28 @@ struct Camera {
     position: vec3<f32>,
 }
 
-struct Light {
-    position: vec3<f32>,
-    color: vec3<f32>,
-    intensity: f32,
+struct PointLight {
+    position: vec4<f32>,
+    diffuse_color: vec4<f32>,
+    specular_color: vec4<f32>,
+    diffuse_intensity: f32,
+    specular_intensity: f32,
 }
 
 // Note: Don't us vec3 in uniforms due to alignment issues.
 struct Lighting {
     ambient_color: vec4<f32>,
-    diffuse_dir: vec4<f32>,
-    diffuse_color: vec4<f32>,
-    specular_color: vec4<f32>,
     ambient_intensity: f32,
-    diffuse_intensity: f32,
-    specular_intensity: f32,
-    lights: array<Light>
+    point_lights: array<PointLight>
 }
 
 @group(0) @binding(0)
 var<uniform> camera: Camera;
 
 @group(1) @binding(0)
-var<uniform> lighting: Lighting;
-
-//@group(2) @binding(0)
-//var<uniform> point_light: PointLight;
-
+// We use a storage buffer, since our lighting size is unknown by the shader;
+// this is due to the dynamic-sized point light array.
+var<storage> lighting: Lighting;
 
 struct VertexIn {
     @location(0) position: vec3<f32>,
@@ -117,47 +112,44 @@ fn vs_main(
 @fragment
 fn fs_main(vertex: VertexOut) -> @location(0) vec4<f32> {
     // Ambient lighting
-    // todo: Don't multiply this for every fragment; do it on the CPU.
-    // todo: Why isn't the ambient intensity passed from the cpu working?
+    // todo: Don't multiply ambient for every fragment; do it on the CPU.
+    var ambient = lighting.ambient_color * lighting.ambient_intensity;
 
-    // Convert the vec4s passed in the uniform to vec3.
-    var ambient_color = lighting.ambient_color.xyz;
-    var diffuse_color = lighting.diffuse_color.xyz;
-    var specular_color = lighting.specular_color.xyz;
-    var diffuse_dir = lighting.diffuse_dir.xyz;
+    // These values include color and intensity
+    // todo: More concise constructor?
+    var diffuse = vec4<f32>(0., 0., 0., 0.);
+    var specular = vec4<f32>(0., 0., 0., 0.);
 
-    var ambient = ambient_color * lighting.ambient_intensity;
+//    for (var i=0; i < arrayLength(lighting.point_lights); i++) { // todo glitching
+    for (var i=0; i < 1; i++) {
+        var light = lighting.point_lights[i];
 
-    // Note: We currently don't use the model color's alpha value.
-    var vertex_color = vertex.color.xyz;
+        var diff = vertex.position.xyz - light.position.xyz;
 
-    for (i=0; i < num_lights; i++) {
-        var light = lighting.lights[i];
+        var light_dir = normalize(diff);
+        // This expr applies the inverse square to find falloff with distance.
+        var dist_intensity = 1. / (pow(diff.x, 2.) + pow(diff.y, 2.) + pow(diff.z, 2.));
+
+        // Diffuse lighting
+        var diffuse_on_face = max(dot(vertex.normal, light_dir), 0.);
+        var diffuse = light.diffuse_color * diffuse_on_face * light.diffuse_intensity * dist_intensity;
+
+        // Specular lighting.
+
+        // Lambert's cosine law
+        var specular = vec4<f32>(0., 0., 0., 0.);
+
+        if (diffuse_on_face > 0.0) {
+            var view_dir = normalize(camera.position.xyz - vertex.position.xyz);
+
+            // Blinn half vector
+            var half_dir = normalize(view_dir + light_dir);
+
+            var specular_coeff = pow(max(dot(vertex.normal, half_dir), 0.), vertex.shinyness);
+
+            specular = light.specular_color * specular_coeff * light.specular_intensity * dist_intensity;
+        }
     }
 
-    // Diffuse lighting
-    var diffuse_on_face = max(dot(vertex.normal, diffuse_dir), 0.);
-    var diffuse = diffuse_color * diffuse_on_face * lighting.diffuse_intensity;
-
-    // Specular lighting.
-
-    // Lambert's cosine law
-    var specular = vec3<f32>(0., 0., 0.);
-
-    if (diffuse_on_face > 0.0) {
-//        var eye = normalize(-camera_position.xyz);
-        var view_dir = normalize(camera.position.xyz - vertex.position.xyz);
-
-        // Blinn half vector
-//        var half_vec = normalize(diffuse_dir + eye);
-        var half_dir = normalize(view_dir + diffuse_dir);
-
-        var specular_coeff = pow(max(dot(vertex.normal, half_dir), 0.), vertex.shinyness);
-
-        specular = specular_color * specular_coeff * lighting.specular_intensity;
-    }
-
-    var result = (ambient + diffuse + specular) * vertex_color;
-
-    return vec4<f32>(result, 1.0);
+    return (ambient + diffuse + specular) * vertex.color;
 }
