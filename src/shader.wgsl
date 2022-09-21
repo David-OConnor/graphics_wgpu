@@ -1,4 +1,4 @@
-// todo: Implement point lights and multiple diffuse lights.
+// Reference: https://www.w3.org/TR/WGSL
 
 struct Camera {
     proj_view: mat4x4<f32>,
@@ -17,6 +17,8 @@ struct PointLight {
 struct Lighting {
     ambient_color: vec4<f32>,
     ambient_intensity: f32,
+    // We use this as a workaround for array len not working.
+    lights_len: i32,
     point_lights: array<PointLight>
 }
 
@@ -120,8 +122,10 @@ fn fs_main(vertex: VertexOut) -> @location(0) vec4<f32> {
     var diffuse = vec4<f32>(0., 0., 0., 0.);
     var specular = vec4<f32>(0., 0., 0., 0.);
 
-//    for (var i=0; i < arrayLength(lighting.point_lights); i++) { // todo glitching
-    for (var i=0; i < 1; i++) {
+    // todo: arrayLength on this variable is not working. Use size passed from CPU in the
+    // todo meanwhile.
+//    for (var i=0; i < arrayLength(lighting.point_lights); i++) {
+    for (var i=0; i < lighting.lights_len; i++) {
         var light = lighting.point_lights[i];
 
         var diff = vertex.position.xyz - light.position.xyz;

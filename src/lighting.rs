@@ -73,8 +73,15 @@ impl Lighting {
         buf_fixed_size[VEC3_UNIFORM_SIZE..VEC3_UNIFORM_SIZE + F32_SIZE]
             .clone_from_slice(&self.ambient_intensity.to_ne_bytes());
 
-        buf_fixed_size[VEC3_UNIFORM_SIZE + F32_SIZE..LIGHTING_SIZE_FIXED]
-            .clone_from_slice(&[0; 12]);
+        // We pass size manually, due to trouble getting the array len in the shader.
+        buf_fixed_size[VEC3_UNIFORM_SIZE + F32_SIZE..VEC3_UNIFORM_SIZE + F32_SIZE + 4]
+            .clone_from_slice(&(self.point_lights.len() as i32).to_le_bytes());
+
+        buf_fixed_size[VEC3_UNIFORM_SIZE + F32_SIZE + 4..LIGHTING_SIZE_FIXED]
+            .clone_from_slice(&[0; 8]);
+
+        // buf_fixed_size[VEC3_UNIFORM_SIZE + F32_SIZE..LIGHTING_SIZE_FIXED]
+        //     .clone_from_slice(&[0; 12]);
 
         for byte in buf_fixed_size.into_iter() {
             result.push(byte);
