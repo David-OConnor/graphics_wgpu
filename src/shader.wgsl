@@ -136,12 +136,12 @@ fn fs_main(vertex: VertexOut) -> @location(0) vec4<f32> {
 
         // Diffuse lighting
         var diffuse_on_face = max(dot(vertex.normal, light_dir), 0.);
-        var diffuse = light.diffuse_color * diffuse_on_face * light.diffuse_intensity * dist_intensity;
+        diffuse = light.diffuse_color * diffuse_on_face * light.diffuse_intensity * dist_intensity;
 
         // Specular lighting.
 
         // Lambert's cosine law
-        var specular = vec4<f32>(0., 0., 0., 0.);
+        specular = vec4<f32>(0., 0., 0., 0.);
 
         if (diffuse_on_face > 0.0) {
             var view_dir = normalize(camera.position.xyz - vertex.position.xyz);

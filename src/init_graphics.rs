@@ -9,7 +9,7 @@
 //!
 //! 2022-08-21: https://github.com/gfx-rs/wgpu/blob/master/wgpu/examples/cube/main.rs
 
-use std::{sync::atomic::AtomicUsize, time::Duration};
+use std::{collections::HashMap, sync::atomic::AtomicUsize, time::Duration};
 
 use wgpu::{self, util::DeviceExt, BindGroup, BindGroupLayout, SurfaceConfiguration};
 
@@ -24,6 +24,8 @@ use crate::{
 use lin_alg2::f32::{Quaternion, Vec3};
 
 use winit::event::DeviceEvent;
+
+use egui::epaint;
 
 // use egui::Window;
 // use egui_winit::{
@@ -53,10 +55,10 @@ pub(crate) const FWD_VEC: Vec3 = Vec3 {
 };
 
 pub(crate) struct GraphicsState {
-    vertex_buf: wgpu::Buffer,
-    index_buf: wgpu::Buffer,
+    pub vertex_buf: wgpu::Buffer,
+    pub index_buf: wgpu::Buffer,
     instance_buf: wgpu::Buffer,
-    bind_groups: BindGroupData,
+    pub bind_groups: BindGroupData,
     // pub camera: Camera,
     camera_buf: wgpu::Buffer,
     lighting_buf: wgpu::Buffer,
@@ -64,13 +66,16 @@ pub(crate) struct GraphicsState {
     pub depth_texture: Texture,
     pub input_settings: InputSettings,
     inputs_commanded: InputsCommanded,
-
     // todo: Will this need to change for multiple models
     // obj_mesh: Mesh,
     staging_belt: wgpu::util::StagingBelt, // todo: Do we want this? Probably in sys, not here.
     pub scene: Scene,
     // todo: FIgure out if youw ant this.
     mesh_mappings: Vec<(i32, u32, u32)>,
+    /// For EGUI
+    pub next_user_texture_id: u64,
+    /// For GUI
+    pub textures: HashMap<egui::TextureId, (Option<wgpu::Texture>, wgpu::BindGroup)>,
 }
 
 impl GraphicsState {
@@ -81,10 +86,6 @@ impl GraphicsState {
         mut scene: Scene,
         input_settings: InputSettings,
     ) -> Self {
-        // GUI code
-
-        // end GUI code test
-
         let mut vertices = Vec::new();
         let mut indices = Vec::new();
 
@@ -186,6 +187,8 @@ impl GraphicsState {
             input_settings,
             inputs_commanded: Default::default(),
             mesh_mappings,
+            next_user_texture_id: 0,
+            textures: HashMap::new(),
         };
 
         result.setup_entities(&device);
@@ -371,6 +374,37 @@ impl GraphicsState {
 
                 start_ind += mesh.indices.len() as u32; // todo temp?
             }
+
+            // GUI code
+            // https://github.com/hasenbanck/egui_wgpu_backend/blob/master/src/lib.rs
+
+            // todo: Don't re-create this struct each time.
+            let screen_descriptor = egui_wgpu_backend::ScreenDescriptor {
+                // todo: Don't hard-code these. Pull from sys::size. maybe pass width and height
+                // todo as params to this fn.
+                physical_width: 900,
+                physical_height: 600,
+                scale_factor: 1.,
+            };
+
+            let paint_jobs = [epaint::ClippedPrimitive {
+                clip_rect: epaint::Rect {
+                    min: epain::Pos2 { x: 0., y: 0. },
+                    max: epaint::Pos2 { x: 400., y: 200. },
+                },
+                primitive: epaint::Primitive::Mesh(epaint::Mesh {
+                    indices: vec![],
+                    vertices: vec![],
+                    texture_id: 0,
+                }),
+            }];
+
+            self.execute_with_renderpass(&mut rpass, &paint_jobs, screen_descriptor)
+                .unwrap();
+            // todo: Call remove_textures
+            // self.remove_textures(textures).unwrap();
+
+            // end GUI code test
         }
 
         // todo: Make sure if you add new instances to the Vec, that you recreate the instance_buffer
@@ -429,6 +463,9 @@ struct BindGroupData {
     pub cam: BindGroup,
     pub layout_lighting: BindGroupLayout,
     pub lighting: BindGroup,
+    /// We use this for GUI.
+    pub layout_texture: BindGroupLayout,
+    // pub texture: BindGroup,
 }
 
 fn create_bindgroups(
@@ -485,10 +522,34 @@ fn create_bindgroups(
         label: Some("Lighting bind group"),
     });
 
+    let layout_texture = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+        label: Some("egui_texture_bind_group_layout"),
+        entries: &[
+            wgpu::BindGroupLayoutEntry {
+                binding: 0,
+                visibility: wgpu::ShaderStages::FRAGMENT,
+                ty: wgpu::BindingType::Texture {
+                    multisampled: false,
+                    sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                    view_dimension: wgpu::TextureViewDimension::D2,
+                },
+                count: None,
+            },
+            wgpu::BindGroupLayoutEntry {
+                binding: 1,
+                visibility: wgpu::ShaderStages::FRAGMENT,
+                ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                count: None,
+            },
+        ],
+    });
+
     BindGroupData {
         layout_cam,
         cam,
         layout_lighting,
         lighting,
+        layout_texture,
+        // texture
     }
 }

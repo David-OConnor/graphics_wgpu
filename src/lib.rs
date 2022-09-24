@@ -1,4 +1,5 @@
 mod camera;
+mod gui;
 mod init_graphics;
 mod init_system;
 mod input;

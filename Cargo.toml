@@ -6,7 +6,7 @@ edition = "2021"
 
 [dependencies]
 wgpu = "^0.13.1"
-lin_alg2 = { path = "../lin_alg", features = ["computer_graphics"] }
+lin-alg2 = { path = "../lin_alg", features = ["computer_graphics"] }
 
 winit = "^0.27.3"
 pollster = "^0.2.5"  # For 2 WGPU init fnsthat use async.
@@ -40,3 +40,6 @@ egui_wgpu_backend = "^0.19"
 # Display-text-only workaround for not getting a GUI working in WGPU
 wgpu_text = "^0.6.3"
 
+# todo temp: bytemuck is jus for use in integrating an EGUI example.
+# todo: Remove it.
+bytemuck = "1.7"
