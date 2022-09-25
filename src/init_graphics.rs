@@ -62,7 +62,7 @@ pub(crate) struct GraphicsState {
     // pub camera: Camera,
     camera_buf: wgpu::Buffer,
     lighting_buf: wgpu::Buffer,
-    pipeline: wgpu::RenderPipeline,
+    pub pipeline: wgpu::RenderPipeline,
     pub depth_texture: Texture,
     pub input_settings: InputSettings,
     inputs_commanded: InputsCommanded,
@@ -387,19 +387,21 @@ impl GraphicsState {
                 scale_factor: 1.,
             };
 
-            let paint_jobs = [epaint::ClippedPrimitive {
-                clip_rect: epaint::Rect {
-                    min: epain::Pos2 { x: 0., y: 0. },
-                    max: epaint::Pos2 { x: 400., y: 200. },
-                },
-                primitive: epaint::Primitive::Mesh(epaint::Mesh {
-                    indices: vec![],
-                    vertices: vec![],
-                    texture_id: 0,
-                }),
-            }];
+            // let paint_jobs = [epaint::ClippedPrimitive {
+            //     clip_rect: epaint::Rect {
+            //         min: epain::Pos2 { x: 0., y: 0. },
+            //         max: epaint::Pos2 { x: 400., y: 200. },
+            //     },
+            //     primitive: epaint::Primitive::Mesh(epaint::Mesh {
+            //         indices: vec![],
+            //         vertices: vec![],
+            //         texture_id: 0,
+            //     }),
+            // }];
+            //
+            let paint_jobs = [];
 
-            self.execute_with_renderpass(&mut rpass, &paint_jobs, screen_descriptor)
+            self.execute_with_renderpass(&mut rpass, &paint_jobs, &screen_descriptor, device)
                 .unwrap();
             // todo: Call remove_textures
             // self.remove_textures(textures).unwrap();

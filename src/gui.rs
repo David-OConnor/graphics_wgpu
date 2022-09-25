@@ -12,9 +12,10 @@ use std::{
 
 use bytemuck::{Pod, Zeroable};
 
-use egui::epaint;
-pub use wgpu;
-use wgpu::util::DeviceExt;
+use egui::{self, epaint};
+use wgpu::{self, util::DeviceExt};
+
+use egui_wgpu_backend::ScreenDescriptor;
 
 /// Error that the backend can return.
 #[derive(Debug)]
@@ -23,6 +24,12 @@ pub enum BackendError {
     InvalidTextureId(String),
     /// Internal implementation error.
     Internal(String),
+}
+
+#[derive(Debug)]
+struct SizedBuffer {
+    pub buffer: wgpu::Buffer,
+    pub size: usize,
 }
 
 impl std::fmt::Display for BackendError {
@@ -358,14 +365,73 @@ impl GraphicsState {
         rpass: &mut wgpu::RenderPass<'rpass>,
         paint_jobs: &[egui::epaint::ClippedPrimitive],
         screen_descriptor: &ScreenDescriptor,
+        device: &wgpu::Device,
     ) -> Result<(), BackendError> {
-        rpass.set_pipeline(&self.render_pipeline);
+        rpass.set_pipeline(&self.pipeline);
 
-        rpass.set_bind_group(0, &self.uniform_bind_group, &[]);
+        // rpass.set_bind_group(0, &self.uniform_bind_group, &[]);
+
+        // todo: You should have a sep bind group for this?
+        rpass.set_bind_group(0, &self.bind_groups.cam, &[]);
 
         let scale_factor = screen_descriptor.scale_factor;
         let physical_width = screen_descriptor.physical_width;
         let physical_height = screen_descriptor.physical_height;
+
+        // todo: Start DRY of vertex/index code to fit into this ex
+
+        let mut vertices = Vec::new();
+        let mut indices = Vec::new();
+
+        for (i, mesh) in self.scene.meshes.iter().enumerate() {
+            for vertex in &mesh.vertices {
+                vertices.push(vertex)
+            }
+
+            for index in &mesh.indices {
+                indices.push(index);
+            }
+        }
+        // Convert the vertex and index data to u8 buffers.
+        let mut vertex_data = Vec::new();
+        for vertex in vertices {
+            for byte in vertex.to_bytes() {
+                vertex_data.push(byte);
+            }
+        }
+
+        let vertex_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Vertex buffer"),
+            contents: &vertex_data,
+            usage: wgpu::BufferUsages::VERTEX,
+        });
+
+        let mut index_data = Vec::new();
+        for index in indices {
+            let bytes = index.to_ne_bytes();
+            index_data.push(bytes[0]);
+            index_data.push(bytes[1]);
+            index_data.push(bytes[2]);
+            index_data.push(bytes[3]);
+        }
+
+        let index_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Index buffer"),
+            contents: &index_data,
+            usage: wgpu::BufferUsages::INDEX,
+        });
+
+        // Convert out bufs to
+        let vertex_buf_egui = vec![SizedBuffer {
+            buffer: vertex_buf,
+            size: vertices.len(),
+        }];
+        let index_buf_egui = vec![SizedBuffer {
+            buffer: index_buf,
+            size: index_data.len(),
+        }];
+
+        // todo end of vertex/index DRY
 
         for (
             (
@@ -377,9 +443,9 @@ impl GraphicsState {
             ),
             index_buffer,
         ) in paint_jobs
-            .iter()
-            .zip(self.vertex_buf.iter())
-            .zip(self.index_buf.iter())
+            .iter() // todo
+            .zip(vertex_buf_egui.iter())
+            .zip(index_buf_egui.iter())
         {
             // Transform clip rect to physical pixels.
             let clip_min_x = scale_factor * clip_rect.min.x;
@@ -489,4 +555,17 @@ fn create_texture_and_bind_group(
     });
 
     (texture, bind_group)
+}
+
+fn ui_counter(ui: &mut egui::Ui, counter: &mut i32) {
+    // Put the buttons and label on the same row:
+    ui.horizontal(|ui| {
+        if ui.button("-").clicked() {
+            *counter -= 1;
+        }
+        ui.label(counter.to_string());
+        if ui.button("+").clicked() {
+            *counter += 1;
+        }
+    });
 }
