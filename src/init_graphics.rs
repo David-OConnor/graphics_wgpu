@@ -25,7 +25,7 @@ use lin_alg2::f32::{Quaternion, Vec3};
 
 use winit::event::DeviceEvent;
 
-use egui::epaint;
+use egui::{self, epaint};
 
 // use egui::Window;
 // use egui_winit::{
@@ -285,6 +285,8 @@ impl GraphicsState {
         device: &wgpu::Device,
         queue: &wgpu::Queue,
         dt: Duration,
+        width: u32,
+        height: u32,
     ) {
         if self.inputs_commanded.inputs_present() {
             let dt_secs = dt.as_secs() as f32 + dt.subsec_micros() as f32 / 1_000_000.;
@@ -378,28 +380,57 @@ impl GraphicsState {
             // GUI code
             // https://github.com/hasenbanck/egui_wgpu_backend/blob/master/src/lib.rs
 
+            // todo: Once working, move this gui code to the GUI module.
+
             // todo: Don't re-create this struct each time.
             let screen_descriptor = egui_wgpu_backend::ScreenDescriptor {
                 // todo: Don't hard-code these. Pull from sys::size. maybe pass width and height
                 // todo as params to this fn.
-                physical_width: 900,
-                physical_height: 600,
+                physical_width: width,
+                physical_height: height,
                 scale_factor: 1.,
             };
 
-            // let paint_jobs = [epaint::ClippedPrimitive {
-            //     clip_rect: epaint::Rect {
-            //         min: epain::Pos2 { x: 0., y: 0. },
-            //         max: epaint::Pos2 { x: 400., y: 200. },
-            //     },
-            //     primitive: epaint::Primitive::Mesh(epaint::Mesh {
-            //         indices: vec![],
-            //         vertices: vec![],
-            //         texture_id: 0,
-            //     }),
-            // }];
-            //
-            let paint_jobs = [];
+            let mut gui_ctx = egui::Context::default();
+
+            let raw_input = egui::RawInput {
+                screen_rect: Some(egui::Rect {
+                    min: egui::Pos2 { x: 0., y: 0. },
+                    max: egui::Pos2 {
+                        x: width as f32,
+                        y: height as f32,
+                    },
+                }),
+                pixels_per_point: None,
+                max_texture_side: None,
+                time: Some(0.),
+                predicted_dt: 0.,
+                modifiers: egui::Modifiers {
+                    alt: false,
+                    ctrl: false,
+                    shift: false,
+                    mac_cmd: false,
+                    command: false,
+                },
+                events: Vec::new(), // todo
+                hovered_files: Vec::new(),
+                dropped_files: Vec::new(),
+                has_focus: true,
+            };
+
+            let full_output = gui_ctx.run(raw_input, |ctx| {
+                egui::CentralPanel::default().show(&ctx, |ui| {
+                    ui.label("Hello world!");
+                    if ui.button("Click me").clicked() {
+                        // take some action here
+                    }
+                });
+            });
+            // handle_platform_output(full_output.platform_output);
+            let paint_jobs = gui_ctx.tessellate(full_output.shapes); // create triangles to paint
+
+            // paint(full_output.textures_delta, clipped_primitives);
+            // let paint_jobs = [];
 
             self.execute_with_renderpass(&mut rpass, &paint_jobs, &screen_descriptor, device)
                 .unwrap();

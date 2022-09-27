@@ -44,9 +44,9 @@ struct InstanceIn {
     @location(6) model_matrix_1: vec4<f32>,
     @location(7) model_matrix_2: vec4<f32>,
     @location(8) model_matrix_3: vec4<f32>,
-    @location(9) normal_matrix_0: vec3<f32>,
-    @location(10) normal_matrix_1: vec3<f32>,
-    @location(11) normal_matrix_2: vec3<f32>,
+    @location(9) normal_matrix_0: vec4<f32>,
+    @location(10) normal_matrix_1: vec4<f32>,
+    @location(11) normal_matrix_2: vec4<f32>,
     @location(12) color: vec4<f32>,
     @location(13) shinyness: f32,
 }
@@ -75,9 +75,9 @@ fn vs_main(
     );
 
     var normal_mat = mat3x3<f32>(
-        instance.normal_matrix_0,
-        instance.normal_matrix_1,
-        instance.normal_matrix_2,
+        instance.normal_matrix_0.xyz,
+        instance.normal_matrix_1.xyz,
+        instance.normal_matrix_2.xyz,
     );
 
     var world_normal = normalize(normal_mat * model.normal);
@@ -127,15 +127,16 @@ fn fs_main(vertex: VertexOut) -> @location(0) vec4<f32> {
     for (var i=0; i < lighting.lights_len; i++) {
         var light = lighting.point_lights[i];
 
-        var diff = vertex.position.xyz - light.position.xyz;
+        var diff =  light.position.xyz - vertex.position.xyz;
 
         var light_dir = normalize(diff);
+
         // This expr applies the inverse square to find falloff with distance.
-        var dist_intensity = 1. / (pow(diff.x, 2.) + pow(diff.y, 2.) + pow(diff.z, 2.));
+        var attentuation = 1. / (pow(diff.x, 2.) + pow(diff.y, 2.) + pow(diff.z, 2.));
 
         // Diffuse lighting
         var diffuse_on_face = max(dot(vertex.normal, light_dir), 0.);
-        diffuse = light.diffuse_color * diffuse_on_face * light.diffuse_intensity * dist_intensity;
+        diffuse = light.diffuse_color * diffuse_on_face * light.diffuse_intensity * attentuation;
 
         // Specular lighting.
         specular = vec4<f32>(0., 0., 0., 0.);
@@ -148,9 +149,10 @@ fn fs_main(vertex: VertexOut) -> @location(0) vec4<f32> {
 
             var specular_coeff = pow(max(dot(vertex.normal, half_dir), 0.), vertex.shinyness);
 
-            specular = light.specular_color * specular_coeff * light.specular_intensity * dist_intensity;
+            specular = light.specular_color * specular_coeff * light.specular_intensity * attentuation;
         }
     }
 
-    return (ambient + diffuse + specular) * vertex.color;
+//    return (ambient + diffuse + specular) * vertex.color;
+    return (ambient + diffuse) * vertex.color;
 }

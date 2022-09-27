@@ -372,10 +372,6 @@ impl GraphicsState {
         let physical_width = screen_descriptor.physical_width;
         let physical_height = screen_descriptor.physical_height;
 
-
-
-
-
         for job in paint_jobs {
             // Transform clip rect to physical pixels.
             let clip_min_x = scale_factor * job.clip_rect.min.x;

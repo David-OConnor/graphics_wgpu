@@ -260,9 +260,14 @@ pub fn run<'a>(
                     .texture
                     .create_view(&wgpu::TextureViewDescriptor::default());
 
-                state
-                    .graphics
-                    .render(&view, &state.sys.device, &state.sys.queue, dt);
+                state.graphics.render(
+                    &view,
+                    &state.sys.device,
+                    &state.sys.queue,
+                    dt,
+                    state.sys.surface_cfg.width,
+                    state.sys.surface_cfg.height,
+                );
 
                 // Text draw code start
 
