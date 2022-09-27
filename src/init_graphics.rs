@@ -19,6 +19,7 @@ use crate::{
     lighting::{Lighting, PointLight},
     texture::Texture,
     types::{Entity, InputSettings, Instance, Mesh, Scene, Vertex},
+    gui,
 };
 
 use lin_alg2::f32::{Quaternion, Vec3};
@@ -144,7 +145,10 @@ impl GraphicsState {
             usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
         });
 
+
+
         let bind_groups = create_bindgroups(&device, &cam_buf, &lighting_buf);
+
 
         let depth_texture = Texture::create_depth_texture(device, surface_cfg, "Depth texture");
 
@@ -379,8 +383,7 @@ impl GraphicsState {
 
             // GUI code
             // https://github.com/hasenbanck/egui_wgpu_backend/blob/master/src/lib.rs
-
-            // todo: Once working, move this gui code to the GUI module.
+            let paint_jobs = gui::build_paint_jobs(width, height);
 
             // todo: Don't re-create this struct each time.
             let screen_descriptor = egui_wgpu_backend::ScreenDescriptor {
@@ -390,48 +393,6 @@ impl GraphicsState {
                 physical_height: height,
                 scale_factor: 1.,
             };
-
-            let mut gui_ctx = egui::Context::default();
-
-            let raw_input = egui::RawInput {
-                screen_rect: Some(egui::Rect {
-                    min: egui::Pos2 { x: 0., y: 0. },
-                    max: egui::Pos2 {
-                        x: width as f32,
-                        y: height as f32,
-                    },
-                }),
-                pixels_per_point: None,
-                max_texture_side: None,
-                time: Some(0.),
-                predicted_dt: 0.,
-                modifiers: egui::Modifiers {
-                    alt: false,
-                    ctrl: false,
-                    shift: false,
-                    mac_cmd: false,
-                    command: false,
-                },
-                events: Vec::new(), // todo
-                hovered_files: Vec::new(),
-                dropped_files: Vec::new(),
-                has_focus: true,
-            };
-
-            let full_output = gui_ctx.run(raw_input, |ctx| {
-                egui::CentralPanel::default().show(&ctx, |ui| {
-                    ui.label("Hello world!");
-                    if ui.button("Click me").clicked() {
-                        // take some action here
-                    }
-                });
-            });
-            // handle_platform_output(full_output.platform_output);
-            let paint_jobs = gui_ctx.tessellate(full_output.shapes); // create triangles to paint
-
-            // paint(full_output.textures_delta, clipped_primitives);
-            // let paint_jobs = [];
-
             self.execute_with_renderpass(&mut rpass, &paint_jobs, &screen_descriptor, device)
                 .unwrap();
             // todo: Call remove_textures
@@ -498,7 +459,7 @@ pub(crate) struct BindGroupData {
     pub lighting: BindGroup,
     /// We use this for GUI.
     pub layout_texture: BindGroupLayout,
-    // pub texture: BindGroup,
+    pub texture: BindGroup,
 }
 
 fn create_bindgroups(
@@ -555,6 +516,25 @@ fn create_bindgroups(
         label: Some("Lighting bind group"),
     });
 
+
+    // todo: Don't create these (diffuse tex view, sampler0 every time. Pass as args.
+    // We don't need to configure the texture view much, so let's
+    // let wgpu define it.
+    // let diffuse_bytes = include_bytes!("happy-tree.png");
+    let diffuse_bytes = [];
+    let diffuse_texture = wgpu::texture::Texture::from_bytes(&device, &queue, diffuse_bytes, "happy-tree.png").unwrap();
+
+    let diffuse_texture_view = diffuse_texture.create_view(&wgpu::TextureViewDescriptor::default());
+    let diffuse_sampler = device.create_sampler(&wgpu::SamplerDescriptor {
+        address_mode_u: wgpu::AddressMode::ClampToEdge,
+        address_mode_v: wgpu::AddressMode::ClampToEdge,
+        address_mode_w: wgpu::AddressMode::ClampToEdge,
+        mag_filter: wgpu::FilterMode::Linear,
+        min_filter: wgpu::FilterMode::Nearest,
+        mipmap_filter: wgpu::FilterMode::Nearest,
+        ..Default::default()
+    });
+
     let layout_texture = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
         label: Some("egui_texture_bind_group_layout"),
         entries: &[
@@ -563,19 +543,38 @@ fn create_bindgroups(
                 visibility: wgpu::ShaderStages::FRAGMENT,
                 ty: wgpu::BindingType::Texture {
                     multisampled: false,
-                    sample_type: wgpu::TextureSampleType::Float { filterable: true },
                     view_dimension: wgpu::TextureViewDimension::D2,
+                    sample_type: wgpu::TextureSampleType::Float { filterable: true },
                 },
                 count: None,
             },
             wgpu::BindGroupLayoutEntry {
                 binding: 1,
                 visibility: wgpu::ShaderStages::FRAGMENT,
+                // This should match the filterable field of the
+                // corresponding Texture entry above.
                 ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
                 count: None,
             },
         ],
     });
+
+    let texture = device.create_bind_group(
+        &wgpu::BindGroupDescriptor {
+            layout: &layout_texture,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: wgpu::BindingResource::TextureView(&diffuse_texture_view),
+                    // resource: wgpu::BindingResource::TextureView(&[]), // todo?
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::Sampler(&diffuse_sampler),
+                }
+            ],
+            label: Some("Texture bind group"),
+        });
 
     BindGroupData {
         layout_cam,
@@ -583,6 +582,6 @@ fn create_bindgroups(
         layout_lighting,
         lighting,
         layout_texture,
-        // texture
+        texture
     }
 }

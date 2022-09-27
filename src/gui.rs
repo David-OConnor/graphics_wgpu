@@ -495,3 +495,46 @@ fn ui_counter(ui: &mut egui::Ui, counter: &mut i32) {
         }
     });
 }
+
+pub(crate) fn build_paint_jobs(width: u32, height: u32) -> Vec<egui::ClippedPrimitive> {
+    let mut gui_ctx = egui::Context::default();
+
+    let raw_input = egui::RawInput {
+        screen_rect: Some(egui::Rect {
+            min: egui::Pos2 { x: 0., y: 0. },
+            max: egui::Pos2 {
+                x: width as f32,
+                y: height as f32,
+            },
+        }),
+        pixels_per_point: None,
+        max_texture_side: None,
+        time: Some(0.),
+        predicted_dt: 0.,
+        modifiers: egui::Modifiers {
+            alt: false,
+            ctrl: false,
+            shift: false,
+            mac_cmd: false,
+            command: false,
+        },
+        events: Vec::new(), // todo
+        hovered_files: Vec::new(),
+        dropped_files: Vec::new(),
+        has_focus: true,
+    };
+
+    let full_output = gui_ctx.run(raw_input, |ctx| {
+        egui::CentralPanel::default().show(&ctx, |ui| {
+            ui.label("Hello world!");
+            if ui.button("Click me").clicked() {
+                // take some action here
+            }
+        });
+    });
+    // handle_platform_output(full_output.platform_output);
+    let paint_jobs = gui_ctx.tessellate(full_output.shapes); // create triangles to paint
+                                                             // paint(full_output.textures_delta, clipped_primitives);
+
+    paint_jobs
+}
