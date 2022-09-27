@@ -460,7 +460,7 @@ fn create_render_pipeline(
     })
 }
 
-struct BindGroupData {
+pub(crate) struct BindGroupData {
     pub layout_cam: BindGroupLayout,
     pub cam: BindGroup,
     pub layout_lighting: BindGroupLayout,

@@ -118,7 +118,6 @@ fn fs_main(vertex: VertexOut) -> @location(0) vec4<f32> {
     var ambient = lighting.ambient_color * lighting.ambient_intensity;
 
     // These values include color and intensity
-    // todo: More concise constructor?
     var diffuse = vec4<f32>(0., 0., 0., 0.);
     var specular = vec4<f32>(0., 0., 0., 0.);
 
@@ -139,8 +138,6 @@ fn fs_main(vertex: VertexOut) -> @location(0) vec4<f32> {
         diffuse = light.diffuse_color * diffuse_on_face * light.diffuse_intensity * dist_intensity;
 
         // Specular lighting.
-
-        // Lambert's cosine law
         specular = vec4<f32>(0., 0., 0., 0.);
 
         if (diffuse_on_face > 0.0) {

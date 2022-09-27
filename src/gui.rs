@@ -26,12 +26,6 @@ pub enum BackendError {
     Internal(String),
 }
 
-#[derive(Debug)]
-struct SizedBuffer {
-    pub buffer: wgpu::Buffer,
-    pub size: usize,
-}
-
 impl std::fmt::Display for BackendError {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -378,80 +372,16 @@ impl GraphicsState {
         let physical_width = screen_descriptor.physical_width;
         let physical_height = screen_descriptor.physical_height;
 
-        // todo: Start DRY of vertex/index code to fit into this ex
 
-        let mut vertices = Vec::new();
-        let mut indices = Vec::new();
 
-        for (i, mesh) in self.scene.meshes.iter().enumerate() {
-            for vertex in &mesh.vertices {
-                vertices.push(vertex)
-            }
 
-            for index in &mesh.indices {
-                indices.push(index);
-            }
-        }
-        // Convert the vertex and index data to u8 buffers.
-        let mut vertex_data = Vec::new();
-        for vertex in vertices {
-            for byte in vertex.to_bytes() {
-                vertex_data.push(byte);
-            }
-        }
 
-        let vertex_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Vertex buffer"),
-            contents: &vertex_data,
-            usage: wgpu::BufferUsages::VERTEX,
-        });
-
-        let mut index_data = Vec::new();
-        for index in indices {
-            let bytes = index.to_ne_bytes();
-            index_data.push(bytes[0]);
-            index_data.push(bytes[1]);
-            index_data.push(bytes[2]);
-            index_data.push(bytes[3]);
-        }
-
-        let index_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Index buffer"),
-            contents: &index_data,
-            usage: wgpu::BufferUsages::INDEX,
-        });
-
-        // Convert out bufs to
-        let vertex_buf_egui = vec![SizedBuffer {
-            buffer: vertex_buf,
-            size: vertices.len(),
-        }];
-        let index_buf_egui = vec![SizedBuffer {
-            buffer: index_buf,
-            size: index_data.len(),
-        }];
-
-        // todo end of vertex/index DRY
-
-        for (
-            (
-                egui::ClippedPrimitive {
-                    clip_rect,
-                    primitive,
-                },
-                vertex_buffer,
-            ),
-            index_buffer,
-        ) in paint_jobs
-            .iter() // todo
-            .zip(vertex_buf_egui.iter())
-            .zip(index_buf_egui.iter())
-        {
+        for job in paint_jobs {
             // Transform clip rect to physical pixels.
-            let clip_min_x = scale_factor * clip_rect.min.x;
-            let clip_min_y = scale_factor * clip_rect.min.y;
-            let clip_max_x = scale_factor * clip_rect.max.x;
-            let clip_max_y = scale_factor * clip_rect.max.y;
+            let clip_min_x = scale_factor * job.clip_rect.min.x;
+            let clip_min_y = scale_factor * job.clip_rect.min.y;
+            let clip_max_x = scale_factor * job.clip_rect.max.x;
+            let clip_max_y = scale_factor * job.clip_rect.max.y;
 
             // Make sure clip rect can fit within an `u32`.
             let clip_min_x = clip_min_x.clamp(0.0, physical_width as f32);
@@ -482,13 +412,13 @@ impl GraphicsState {
                 rpass.set_scissor_rect(x, y, width, height);
             }
 
-            if let epaint::Primitive::Mesh(mesh) = primitive {
+            if let epaint::Primitive::Mesh(mesh) = &job.primitive {
                 let bind_group = self.get_texture_bind_group(mesh.texture_id)?;
-                rpass.set_bind_group(1, bind_group, &[]);
+                rpass.set_bind_group(2, bind_group, &[]);
 
-                rpass.set_index_buffer(index_buffer.buffer.slice(..), wgpu::IndexFormat::Uint32);
-                rpass.set_vertex_buffer(0, vertex_buffer.buffer.slice(..));
-                rpass.draw_indexed(0..mesh.indices.len() as u32, 0, 0..1);
+                // rpass.set_index_buffer(index_buffer.buffer.slice(..), wgpu::IndexFormat::Uint32);
+                // rpass.set_vertex_buffer(0, vertex_buffer.buffer.slice(..));
+                // rpass.draw_indexed(0..mesh.indices.len() as u32, 0, 0..1);
             }
         }
 
