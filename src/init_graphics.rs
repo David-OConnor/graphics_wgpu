@@ -459,7 +459,9 @@ pub(crate) struct BindGroupData {
     pub lighting: BindGroup,
     /// We use this for GUI.
     pub layout_texture: BindGroupLayout,
-    pub texture: BindGroup,
+    pub layout_gui_uniform: BindGroupLayout,
+    pub gui_uniform: BindGroup,
+    // pub texture: BindGroup,
 }
 
 fn create_bindgroups(
@@ -517,23 +519,23 @@ fn create_bindgroups(
     });
 
 
-    // todo: Don't create these (diffuse tex view, sampler0 every time. Pass as args.
+    // todo: Don't create these (diffuse tex view, sampler every time. Pass as args.
     // We don't need to configure the texture view much, so let's
     // let wgpu define it.
     // let diffuse_bytes = include_bytes!("happy-tree.png");
-    let diffuse_bytes = [];
-    let diffuse_texture = wgpu::texture::Texture::from_bytes(&device, &queue, diffuse_bytes, "happy-tree.png").unwrap();
-
-    let diffuse_texture_view = diffuse_texture.create_view(&wgpu::TextureViewDescriptor::default());
-    let diffuse_sampler = device.create_sampler(&wgpu::SamplerDescriptor {
-        address_mode_u: wgpu::AddressMode::ClampToEdge,
-        address_mode_v: wgpu::AddressMode::ClampToEdge,
-        address_mode_w: wgpu::AddressMode::ClampToEdge,
-        mag_filter: wgpu::FilterMode::Linear,
-        min_filter: wgpu::FilterMode::Nearest,
-        mipmap_filter: wgpu::FilterMode::Nearest,
-        ..Default::default()
-    });
+    // let diffuse_bytes = [];
+    // let diffuse_texture = wgpu::texture::Texture::from_bytes(&device, &queue, diffuse_bytes, "happy-tree.png").unwrap();
+    //
+    // let diffuse_texture_view = diffuse_texture.create_view(&wgpu::TextureViewDescriptor::default());
+    // let diffuse_sampler = device.create_sampler(&wgpu::SamplerDescriptor {
+    //     address_mode_u: wgpu::AddressMode::ClampToEdge,
+    //     address_mode_v: wgpu::AddressMode::ClampToEdge,
+    //     address_mode_w: wgpu::AddressMode::ClampToEdge,
+    //     mag_filter: wgpu::FilterMode::Linear,
+    //     min_filter: wgpu::FilterMode::Nearest,
+    //     mipmap_filter: wgpu::FilterMode::Nearest,
+    //     ..Default::default()
+    // });
 
     let layout_texture = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
         label: Some("egui_texture_bind_group_layout"),
@@ -559,22 +561,67 @@ fn create_bindgroups(
         ],
     });
 
-    let texture = device.create_bind_group(
-        &wgpu::BindGroupDescriptor {
-            layout: &layout_texture,
-            entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: wgpu::BindingResource::TextureView(&diffuse_texture_view),
-                    // resource: wgpu::BindingResource::TextureView(&[]), // todo?
+    // let texture = device.create_bind_group(
+    //     &wgpu::BindGroupDescriptor {
+    //         layout: &layout_texture,
+    //         entries: &[
+    //             wgpu::BindGroupEntry {
+    //                 binding: 0,
+    //                 resource: wgpu::BindingResource::TextureView(&diffuse_texture_view),
+    //                 // resource: wgpu::BindingResource::TextureView(&[]), // todo?
+    //             },
+    //             wgpu::BindGroupEntry {
+    //                 binding: 1,
+    //                 resource: wgpu::BindingResource::Sampler(&diffuse_sampler),
+    //             }
+    //         ],
+    //         label: Some("Texture bind group"),
+    //     });
+
+    // todo: Pass GUI uniform buff as arg like others?
+    let gui_uniform_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+        label: Some("egui_uniform_buffer"),
+        contents: bytemuck::cast_slice(&[gui::GuiUniformBuffer {
+            screen_size: [0.0, 0.0],
+            _padding: [0.0; 2],
+        }]),
+        usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+    });
+
+    let gui_uniform_buffer = gui::SizedBuffer {
+        buffer: gui_uniform_buffer,
+        size: std::mem::size_of::<gui::GuiUniformBuffer>(),
+    };
+
+    let layout_gui_uniform =
+        device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            label: Some("GUI uniform bind group layout"),
+            entries: &[wgpu::BindGroupLayoutEntry {
+                binding: 0,
+                visibility: wgpu::ShaderStages::VERTEX,
+                ty: wgpu::BindingType::Buffer {
+                    has_dynamic_offset: false,
+                    min_binding_size: std::num::NonZeroU64::new(
+                        std::mem::size_of::<gui::GuiUniformBuffer>() as u64,
+                    ),
+                    ty: wgpu::BufferBindingType::Uniform,
                 },
-                wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: wgpu::BindingResource::Sampler(&diffuse_sampler),
-                }
-            ],
-            label: Some("Texture bind group"),
+                count: None,
+            }],
         });
+
+    let gui_uniform = device.create_bind_group(&wgpu::BindGroupDescriptor {
+        label: Some("GUI uniform bind group"),
+        layout: &layout_gui_uniform,
+        entries: &[wgpu::BindGroupEntry {
+            binding: 0,
+            resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
+                buffer: &gui_uniform_buffer.buffer,
+                offset: 0,
+                size: std::num::NonZeroU64::new(std::mem::size_of::<gui::GuiUniformBuffer>() as u64),
+            }),
+        }],
+    });
 
     BindGroupData {
         layout_cam,
@@ -582,6 +629,8 @@ fn create_bindgroups(
         layout_lighting,
         lighting,
         layout_texture,
-        texture
+        layout_gui_uniform,
+        gui_uniform,
+        // texture
     }
 }

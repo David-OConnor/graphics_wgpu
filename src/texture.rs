@@ -11,6 +11,7 @@ pub struct Texture {
 impl Texture {
     pub const DEPTH_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Depth32Float;
 
+    /// Create a 2d texture for the depth stencil.
     pub fn create_depth_texture(
         device: &wgpu::Device,
         config: &wgpu::SurfaceConfiguration,
@@ -21,6 +22,7 @@ impl Texture {
             height: config.height,
             depth_or_array_layers: 1,
         };
+
         let desc = wgpu::TextureDescriptor {
             label: Some(label),
             size,
@@ -30,6 +32,7 @@ impl Texture {
             format: Self::DEPTH_FORMAT,
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
         };
+
         let texture = device.create_texture(&desc);
         let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
         let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
@@ -51,6 +54,40 @@ impl Texture {
             sampler,
         }
     }
+
+    // /// Create a 2d texture for the GUI.
+    // pub fn create_gui_texture(
+    //     device: &wgpu::Device,
+    //     config: &wgpu::SurfaceConfiguration,
+    //     label: &str,
+    // ) -> Self {
+    //     let size = wgpu::Extent3d {
+    //         width: config.width,
+    //         height: config.height,
+    //         depth_or_array_layers: 1,
+    //     };
+    //
+    //     let desc = wgpu::TextureDescriptor {
+    //         label: Some(label),
+    //         size: size,
+    //         mip_level_count: 1,
+    //         sample_count: 1,
+    //         dimension: wgpu::TextureDimension::D2,
+    //         format: wgpu::TextureFormat::Rgba8UnormSrgb,
+    //         usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
+    //     };
+    //
+    //     let texture = device.create_texture(&desc);
+    //
+    //     let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
+    //
+    //     let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
+    //         label: Some(format!("{}_sampler", label_base).as_str()),
+    //         mag_filter: wgpu::FilterMode::Linear,
+    //         min_filter: wgpu::FilterMode::Linear,
+    //         ..Default::default()
+    //     });
+    // }
 
     #[allow(dead_code)]
     pub fn from_bytes(

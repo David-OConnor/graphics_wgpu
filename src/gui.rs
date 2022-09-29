@@ -17,6 +17,13 @@ use wgpu::{self, util::DeviceExt};
 
 use egui_wgpu_backend::ScreenDescriptor;
 
+/// Wraps the buffers and includes additional information.
+#[derive(Debug)]
+pub struct SizedBuffer {
+    pub buffer: wgpu::Buffer,
+    pub size: usize,
+}
+
 /// Error that the backend can return.
 #[derive(Debug)]
 pub enum BackendError {
@@ -44,6 +51,20 @@ impl std::error::Error for BackendError {
         None
     }
 }
+
+/// Uniform buffer used when rendering.
+#[derive(Clone, Copy, Debug)]
+#[repr(C)]
+pub struct GuiUniformBuffer {
+    pub screen_size: [f32; 2],
+    // Without this padding, rendering would fail for the WebGL backend due to the minimum uniform buffer size of 16 bytes.
+    // See https://github.com/hasenbanck/egui_wgpu_backend/issues/58
+    pub _padding: [f32; 2],
+}
+
+unsafe impl Pod for GuiUniformBuffer {}
+
+unsafe impl Zeroable for GuiUniformBuffer {}
 
 impl GraphicsState {
     pub fn get_texture_bind_group(
@@ -363,10 +384,7 @@ impl GraphicsState {
     ) -> Result<(), BackendError> {
         rpass.set_pipeline(&self.pipeline);
 
-        // rpass.set_bind_group(0, &self.uniform_bind_group, &[]);
-
-        // todo: You should have a sep bind group for this?
-        rpass.set_bind_group(0, &self.bind_groups.cam, &[]);
+        rpass.set_bind_group(0, &self.bind_groups.gui_uniform, &[]);
 
         let scale_factor = screen_descriptor.scale_factor;
         let physical_width = screen_descriptor.physical_width;
@@ -497,6 +515,15 @@ fn ui_counter(ui: &mut egui::Ui, counter: &mut i32) {
 }
 
 pub(crate) fn build_paint_jobs(width: u32, height: u32) -> Vec<egui::ClippedPrimitive> {
+    // todo: Don't re-create this struct each time.
+    let screen_descriptor = egui_wgpu_backend::ScreenDescriptor {
+        // todo: Don't hard-code these. Pull from sys::size. maybe pass width and height
+        // todo as params to this fn.
+        physical_width: width,
+        physical_height: height,
+        scale_factor: 1.,
+    };
+
     let mut gui_ctx = egui::Context::default();
 
     let raw_input = egui::RawInput {
