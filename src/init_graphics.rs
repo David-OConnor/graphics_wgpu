@@ -21,12 +21,13 @@ use crate::{
     types::{Entity, InputSettings, Instance, Mesh, Scene, Vertex},
     gui,
 };
-
-use lin_alg2::f32::{Quaternion, Vec3};
+use lin_alg2::f32::Vec3;
 
 use winit::event::DeviceEvent;
 
 use egui::{self, epaint};
+
+use egui_wgpu_backend;
 
 // use egui::Window;
 // use egui_winit::{
@@ -145,10 +146,7 @@ impl GraphicsState {
             usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
         });
 
-
-
         let bind_groups = create_bindgroups(&device, &cam_buf, &lighting_buf);
-
 
         let depth_texture = Texture::create_depth_texture(device, surface_cfg, "Depth texture");
 
@@ -291,6 +289,7 @@ impl GraphicsState {
         dt: Duration,
         width: u32,
         height: u32,
+        preferred_swapchain_format: wgpu::TextureFormat,
     ) {
         if self.inputs_commanded.inputs_present() {
             let dt_secs = dt.as_secs() as f32 + dt.subsec_micros() as f32 / 1_000_000.;
@@ -327,6 +326,20 @@ impl GraphicsState {
         //     .copy_from_slice(&self.scene.camera.to_uniform().to_bytes());
         //
         // self.staging_belt.finish();
+
+        let mut gui_ctx = egui::Context::default();
+
+        let full_output = gui::build_paint_jobs(&gui_ctx, width, height);
+
+        // todo?
+        // handle_platform_output(full_output.platform_output);
+        // paint(full_output.textures_delta, clipped_primitives);
+
+        // do we need context.clipped_primitives?
+        self.add_textures(device, queue, &full_output.textures_delta);
+
+        let mut rpass_gui =
+            egui_wgpu_backend::RenderPass::new(&device, preferred_swapchain_format, 1);
 
         {
             let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
@@ -383,7 +396,8 @@ impl GraphicsState {
 
             // GUI code
             // https://github.com/hasenbanck/egui_wgpu_backend/blob/master/src/lib.rs
-            let paint_jobs = gui::build_paint_jobs(width, height);
+
+            let paint_jobs = gui_ctx.tessellate(full_output.shapes);
 
             // todo: Don't re-create this struct each time.
             let screen_descriptor = egui_wgpu_backend::ScreenDescriptor {
@@ -393,10 +407,14 @@ impl GraphicsState {
                 physical_height: height,
                 scale_factor: 1.,
             };
-            self.execute_with_renderpass(&mut rpass, &paint_jobs, &screen_descriptor, device)
+
+            // todo: 2022-10-03: Performance went down hill. DUe to UI?
+
+            self.gui_execute_with_renderpass(&mut rpass, &paint_jobs, &screen_descriptor, device)
                 .unwrap();
+
             // todo: Call remove_textures
-            // self.remove_textures(textures).unwrap();
+            self.remove_textures(full_output.textures_delta).unwrap();
 
             // end GUI code test
         }

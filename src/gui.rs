@@ -375,15 +375,14 @@ impl GraphicsState {
     }
 
     /// Executes the egui render pass onto an existing wgpu renderpass.
-    pub fn execute_with_renderpass<'rpass>(
+    pub fn gui_execute_with_renderpass<'rpass>(
         &'rpass self,
         rpass: &mut wgpu::RenderPass<'rpass>,
+        // rpass: &mut egui_wgpu_backend::RenderPass,
         paint_jobs: &[egui::epaint::ClippedPrimitive],
         screen_descriptor: &ScreenDescriptor,
         device: &wgpu::Device,
     ) -> Result<(), BackendError> {
-        rpass.set_pipeline(&self.pipeline);
-
         rpass.set_bind_group(0, &self.bind_groups.gui_uniform, &[]);
 
         let scale_factor = screen_descriptor.scale_factor;
@@ -514,7 +513,8 @@ fn ui_counter(ui: &mut egui::Ui, counter: &mut i32) {
     });
 }
 
-pub(crate) fn build_paint_jobs(width: u32, height: u32) -> Vec<egui::ClippedPrimitive> {
+// pub(crate) fn build_paint_jobs(gui_ctx: &egui::Context, width: u32, height: u32) -> Vec<egui::ClippedPrimitive> {
+pub(crate) fn build_paint_jobs(gui_ctx: &egui::Context, width: u32, height: u32) -> egui::FullOutput {
     // todo: Don't re-create this struct each time.
     let screen_descriptor = egui_wgpu_backend::ScreenDescriptor {
         // todo: Don't hard-code these. Pull from sys::size. maybe pass width and height
@@ -523,8 +523,6 @@ pub(crate) fn build_paint_jobs(width: u32, height: u32) -> Vec<egui::ClippedPrim
         physical_height: height,
         scale_factor: 1.,
     };
-
-    let mut gui_ctx = egui::Context::default();
 
     let raw_input = egui::RawInput {
         screen_rect: Some(egui::Rect {
@@ -559,9 +557,6 @@ pub(crate) fn build_paint_jobs(width: u32, height: u32) -> Vec<egui::ClippedPrim
             }
         });
     });
-    // handle_platform_output(full_output.platform_output);
-    let paint_jobs = gui_ctx.tessellate(full_output.shapes); // create triangles to paint
-                                                             // paint(full_output.textures_delta, clipped_primitives);
 
-    paint_jobs
+    full_output
 }

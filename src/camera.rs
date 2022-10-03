@@ -3,7 +3,6 @@
 use core::f32::consts::TAU;
 
 use crate::{
-    init_graphics::{FWD_VEC, RIGHT_VEC, UP_VEC},
     types::{MAT4_SIZE, VEC3_UNIFORM_SIZE},
 };
 

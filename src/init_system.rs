@@ -109,6 +109,15 @@ impl State {
             input_settings,
         );
 
+        // let mut egui_platform =
+        //     egui_winit_platform::Platform::new(egui_winit_platform::PlatformDescriptor {
+        //         physical_width: size.width,
+        //         physical_height: size.height,
+        //         scale_factor: scale_factor as f64,
+        //         font_definitions: egui::FontDefinitions::default(),
+        //         style: egui::Style::default(),
+        //     });
+
         Self { sys, graphics }
     }
 
@@ -260,6 +269,10 @@ pub fn run<'a>(
                     .texture
                     .create_view(&wgpu::TextureViewDescriptor::default());
 
+                // For EGUI
+                // todo: Don't create this each render.
+                let preferred_swapchain_format = state.sys.surface.get_supported_formats(&state.sys.adapter)[0];
+
                 state.graphics.render(
                     &view,
                     &state.sys.device,
@@ -267,6 +280,7 @@ pub fn run<'a>(
                     dt,
                     state.sys.surface_cfg.width,
                     state.sys.surface_cfg.height,
+                    preferred_swapchain_format
                 );
 
                 // Text draw code start
