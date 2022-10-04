@@ -105,7 +105,6 @@ impl State {
             &sys.surface_cfg,
             scene,
             input_settings,
-            &sys.surface,
             &window,
             &sys.adapter,
         );
@@ -243,24 +242,19 @@ pub fn run<'a>(
                 // state.graphics.update(&state.sys.queue, dt);
 
                 // todo: move this into `render`?
-                let output = state.sys.surface.get_current_texture().unwrap();
-                let view = output
+                let output_frame = state.sys.surface.get_current_texture().unwrap();
+                let output_view = output_frame
                     .texture
                     .create_view(&wgpu::TextureViewDescriptor::default());
 
-                // For EGUI
-                // todo: Don't create this each render.
-                let preferred_swapchain_format =
-                    state.sys.surface.get_supported_formats(&state.sys.adapter)[0];
-
                 state.graphics.render(
-                    &view,
+                    output_frame,
+                    &output_view,
                     &state.sys.device,
                     &state.sys.queue,
                     dt,
                     state.sys.surface_cfg.width,
                     state.sys.surface_cfg.height,
-                    preferred_swapchain_format,
                     &state.sys.surface,
                     &window,
                 );
@@ -274,7 +268,7 @@ pub fn run<'a>(
                 //     // We're ignoring timeouts
                 //     Err(wgpu::SurfaceError::Timeout) => log::warn!("Surface timeout"),
                 // }
-                output.present();
+                // output_frame.present();
             }
             _ => {}
         }

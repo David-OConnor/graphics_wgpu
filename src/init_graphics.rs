@@ -108,7 +108,6 @@ impl GraphicsState {
         mut scene: Scene,
         input_settings: InputSettings,
         // these 3 args are for EGUI
-        surface: &wgpu::Surface,
         window: &Window,
         adapter: &wgpu::Adapter,
     ) -> Self {
@@ -207,9 +206,7 @@ impl GraphicsState {
             style: Default::default(),
         });
 
-        let surface_format = surface.get_supported_formats(&adapter)[0];
-
-        let rpass_egui = RenderPass::new(&device, surface_format, 1);
+        let rpass_egui = RenderPass::new(&device, surface_cfg.format, 1);
 
         // Display the demo application that ships with egui.
         let mut egui_app = egui_demo_lib::DemoWindows::default();
@@ -326,13 +323,13 @@ impl GraphicsState {
 
     pub(crate) fn render(
         &mut self,
-        view: &wgpu::TextureView,
+        output_frame: wgpu::SurfaceTexture,
+        output_view: &wgpu::TextureView,
         device: &wgpu::Device,
         queue: &wgpu::Queue,
         dt: Duration,
         width: u32,
         height: u32,
-        preferred_swapchain_format: wgpu::TextureFormat,
         surface: &wgpu::Surface,
         window: &Window,
     ) {
@@ -378,23 +375,6 @@ impl GraphicsState {
         // self.egui_platform
         //     .update_time(start_time.elapsed().as_secs_f64());
 
-        let output_frame = match surface.get_current_texture() {
-            Ok(frame) => frame,
-            Err(wgpu::SurfaceError::Outdated) => {
-                // This error occurs when the app is minimized on Windows.
-                // Silently return here to prevent spamming the console with:
-                // "The underlying surface has changed, and therefore the swap chain must be updated"
-                return;
-            }
-            Err(e) => {
-                eprintln!("Dropped frame with error: {}", e);
-                return;
-            }
-        };
-        let output_view = output_frame
-            .texture
-            .create_view(&wgpu::TextureViewDescriptor::default());
-
         // Begin to draw the UI frame.
         self.egui_platform.begin_frame();
 
@@ -434,7 +414,7 @@ impl GraphicsState {
             let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("Render pass"),
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                    view,
+                    view: output_view,
                     resolve_target: None,
                     ops: wgpu::Operations {
                         load: wgpu::LoadOp::Clear(wgpu::Color {
