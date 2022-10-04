@@ -187,6 +187,10 @@ pub fn run<'a>(
         let _ = (&state.sys.instance, &state.sys.adapter); // force ownership by the closure
         *control_flow = ControlFlow::Poll;
 
+        // For the GUI
+        // Pass the winit events to the platform integration.
+        state.graphics.egui_platform.handle_event(&event);
+
         match event {
             Event::MainEventsCleared => window.request_redraw(),
             Event::DeviceEvent { event, .. } => {

@@ -95,7 +95,7 @@ pub(crate) struct GraphicsState {
     // /// For GUI
     // pub textures: HashMap<egui::TextureId, (Option<wgpu::Texture>, wgpu::BindGroup)>,
     /// for GUI
-    egui_platform: Platform,
+    pub egui_platform: Platform,
     rpass_egui: RenderPass,
     egui_app: egui_demo_lib::DemoWindows,
 }
@@ -295,32 +295,6 @@ impl GraphicsState {
         self.mesh_mappings = mesh_mappings;
     }
 
-    // #[allow(clippy::single_match)]
-    // pub(crate) fn update(&mut self, queue: &wgpu::Queue, dt: Duration) {
-    //     // todo: What does this fn do? Probably remove it.
-    //
-    //     // todo: ALternative approach that may be more performant:
-    //     // "We can create a separate buffer and copy its contents to our camera_buffer. The new buffer
-    //     // is known as a staging buffer. This method is usually how it's done
-    //     // as it allows the contents of the main buffer (in this case camera_buffer)
-    //     // to only be accessible by the gpu. The gpu can do some speed optimizations which
-    //     // it couldn't if we could access the buffer via the cpu."
-    //
-    //     let dt_secs = dt.as_secs() as f32 + dt.subsec_micros() as f32 / 1_000_000.;
-    //
-    //     // input::adjust_camera(
-    //     //     &mut self.scene.camera,
-    //     //     &self.inputs_commanded,
-    //     //     &self.input_settings,
-    //     //     dt_secs,
-    //     // );
-    //
-    //     // Reset inputs so they don't stick through the next frame.
-    //     self.inputs_commanded = Default::default();
-    //
-    //     queue.write_buffer(&self.camera_buf, 0, &self.camera.to_bytes());
-    // }
-
     pub(crate) fn render(
         &mut self,
         output_frame: wgpu::SurfaceTexture,
@@ -411,54 +385,52 @@ impl GraphicsState {
 
         // todo: End most of the UI code.
         {
-            let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                label: Some("Render pass"),
-                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                    view: output_view,
-                    resolve_target: None,
-                    ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(wgpu::Color {
-                            r: self.scene.background_color.0 as f64,
-                            g: self.scene.background_color.1 as f64,
-                            b: self.scene.background_color.2 as f64,
-                            a: 1.0,
-                        }),
-                        store: true,
-                    },
-                })],
-                depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
-                    view: &self.depth_texture.view,
-                    depth_ops: Some(wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(1.0),
-                        store: true,
-                    }),
-                    stencil_ops: None,
-                }),
-            });
+            // let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+            //     label: Some("Render pass"),
+            //     color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+            //         view: output_view,
+            //         resolve_target: None,
+            //         ops: wgpu::Operations {
+            //             load: wgpu::LoadOp::Clear(wgpu::Color {
+            //                 r: self.scene.background_color.0 as f64,
+            //                 g: self.scene.background_color.1 as f64,
+            //                 b: self.scene.background_color.2 as f64,
+            //                 a: 1.0,
+            //             }),
+            //             store: true,
+            //         },
+            //     })],
+            //     depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
+            //         view: &self.depth_texture.view,
+            //         depth_ops: Some(wgpu::Operations {
+            //             load: wgpu::LoadOp::Clear(1.0),
+            //             store: true,
+            //         }),
+            //         stencil_ops: None,
+            //     }),
+            // });
+            //
+            // rpass.set_pipeline(&self.pipeline);
+            //
+            // rpass.set_bind_group(0, &self.bind_groups.cam, &[]);
+            // rpass.set_bind_group(1, &self.bind_groups.lighting, &[]);
+            //
+            // rpass.set_vertex_buffer(0, self.vertex_buf.slice(..));
+            // rpass.set_vertex_buffer(1, self.instance_buf.slice(..));
+            // rpass.set_index_buffer(self.index_buf.slice(..), wgpu::IndexFormat::Uint32);
 
-            rpass.set_pipeline(&self.pipeline);
 
-            rpass.set_bind_group(0, &self.bind_groups.cam, &[]);
-            rpass.set_bind_group(1, &self.bind_groups.lighting, &[]);
-
-            rpass.set_vertex_buffer(0, self.vertex_buf.slice(..));
-            rpass.set_vertex_buffer(1, self.instance_buf.slice(..));
-            rpass.set_index_buffer(self.index_buf.slice(..), wgpu::IndexFormat::Uint32);
-
-            // rpass.set_bind_group(0, &material.bind_group, &[]);
-
-            // rpass.set_bind_group(2, light_bind_group, &[]);
             let mut start_ind = 0; // todo temp?
             for (i, mesh) in self.scene.meshes.iter().enumerate() {
                 let (vertex_start_this_mesh, instance_start_this_mesh, instance_count_this_mesh) =
                     self.mesh_mappings[i];
 
-                rpass.draw_indexed(
-                    // 0..mesh.indices.len() as u32,
-                    start_ind..start_ind + mesh.indices.len() as u32,
-                    vertex_start_this_mesh,
-                    instance_start_this_mesh..instance_start_this_mesh + instance_count_this_mesh,
-                );
+                // rpass.draw_indexed(
+                //     // 0..mesh.indices.len() as u32,
+                //     start_ind..start_ind + mesh.indices.len() as u32,
+                //     vertex_start_this_mesh,
+                //     instance_start_this_mesh..instance_start_this_mesh + instance_count_this_mesh,
+                // );
 
                 start_ind += mesh.indices.len() as u32; // todo temp?
             }
