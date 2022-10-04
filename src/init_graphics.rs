@@ -15,25 +15,41 @@ use wgpu::{self, util::DeviceExt, BindGroup, BindGroupLayout, SurfaceConfigurati
 
 use crate::{
     camera::Camera,
+    gui,
     input::{self, InputsCommanded},
     lighting::{Lighting, PointLight},
     texture::Texture,
     types::{Entity, InputSettings, Instance, Mesh, Scene, Vertex},
-    gui,
 };
 use lin_alg2::f32::Vec3;
 
-use winit::event::DeviceEvent;
+use winit::{event::DeviceEvent, window::Window};
 
+use ::egui::FontDefinitions;
 use egui::{self, epaint};
-
 use egui_wgpu_backend;
+use egui_wgpu_backend::{RenderPass, ScreenDescriptor};
+use egui_winit_platform::{Platform, PlatformDescriptor};
+use winit::event::Event::*;
+use winit::event_loop::ControlFlow;
 
 // use egui::Window;
 // use egui_winit::{
 //     gfx_backends::wgpu_backend::WgpuBackend, window_backends::winit_backend::WinitBackend,
 //     BackendSettings, GfxBackend, UserApp, WindowBackend,
 // };
+
+// todo: Move this to a gui module
+/// This is the repaint signal type that egui needs for requesting a repaint from another thread.
+/// It sends the custom RequestRedraw event to the winit event loop.
+// struct ExampleRepaintSignal(std::sync::Mutex<winit::event_loop::EventLoopProxy<Event>>);
+//
+// // todo: Move this to a gui module
+// impl epi::backend::RepaintSignal for ExampleRepaintSignal {
+//     fn request_repaint(&self) {
+//         self.0.lock().unwrap().send_event(Event::RequestRedraw).ok();
+//     }
+// }
 
 static MESH_I: AtomicUsize = AtomicUsize::new(0);
 
@@ -74,10 +90,14 @@ pub(crate) struct GraphicsState {
     pub scene: Scene,
     // todo: FIgure out if youw ant this.
     mesh_mappings: Vec<(i32, u32, u32)>,
-    /// For EGUI
-    pub next_user_texture_id: u64,
-    /// For GUI
-    pub textures: HashMap<egui::TextureId, (Option<wgpu::Texture>, wgpu::BindGroup)>,
+    // /// For EGUI
+    // pub next_user_texture_id: u64,
+    // /// For GUI
+    // pub textures: HashMap<egui::TextureId, (Option<wgpu::Texture>, wgpu::BindGroup)>,
+    /// for GUI
+    egui_platform: Platform,
+    rpass_egui: RenderPass,
+    egui_app: egui_demo_lib::DemoWindows,
 }
 
 impl GraphicsState {
@@ -87,6 +107,10 @@ impl GraphicsState {
         surface_cfg: &SurfaceConfiguration,
         mut scene: Scene,
         input_settings: InputSettings,
+        // these 3 args are for EGUI
+        surface: &wgpu::Surface,
+        window: &Window,
+        adapter: &wgpu::Adapter,
     ) -> Self {
         let mut vertices = Vec::new();
         let mut indices = Vec::new();
@@ -174,6 +198,22 @@ impl GraphicsState {
         // Placeholder value
         let mesh_mappings = Vec::new();
 
+        // todo: GUI module?
+        let egui_platform = Platform::new(PlatformDescriptor {
+            physical_width: surface_cfg.width as u32,
+            physical_height: surface_cfg.height as u32,
+            scale_factor: window.scale_factor(),
+            font_definitions: FontDefinitions::default(),
+            style: Default::default(),
+        });
+
+        let surface_format = surface.get_supported_formats(&adapter)[0];
+
+        let rpass_egui = RenderPass::new(&device, surface_format, 1);
+
+        // Display the demo application that ships with egui.
+        let mut egui_app = egui_demo_lib::DemoWindows::default();
+
         let mut result = Self {
             vertex_buf,
             index_buf,
@@ -189,8 +229,11 @@ impl GraphicsState {
             input_settings,
             inputs_commanded: Default::default(),
             mesh_mappings,
-            next_user_texture_id: 0,
-            textures: HashMap::new(),
+            // next_user_texture_id: 0,
+            // textures: HashMap::new(),
+            egui_platform,
+            rpass_egui,
+            egui_app,
         };
 
         result.setup_entities(&device);
@@ -290,6 +333,8 @@ impl GraphicsState {
         width: u32,
         height: u32,
         preferred_swapchain_format: wgpu::TextureFormat,
+        surface: &wgpu::Surface,
+        window: &Window,
     ) {
         if self.inputs_commanded.inputs_present() {
             let dt_secs = dt.as_secs() as f32 + dt.subsec_micros() as f32 / 1_000_000.;
@@ -327,20 +372,64 @@ impl GraphicsState {
         //
         // self.staging_belt.finish();
 
-        let mut gui_ctx = egui::Context::default();
+        // todo: GUI start. Put all this in fn?
 
-        let full_output = gui::build_paint_jobs(&gui_ctx, width, height);
+        // todo: Do I need this?
+        // self.egui_platform
+        //     .update_time(start_time.elapsed().as_secs_f64());
 
-        // todo?
-        // handle_platform_output(full_output.platform_output);
-        // paint(full_output.textures_delta, clipped_primitives);
+        let output_frame = match surface.get_current_texture() {
+            Ok(frame) => frame,
+            Err(wgpu::SurfaceError::Outdated) => {
+                // This error occurs when the app is minimized on Windows.
+                // Silently return here to prevent spamming the console with:
+                // "The underlying surface has changed, and therefore the swap chain must be updated"
+                return;
+            }
+            Err(e) => {
+                eprintln!("Dropped frame with error: {}", e);
+                return;
+            }
+        };
+        let output_view = output_frame
+            .texture
+            .create_view(&wgpu::TextureViewDescriptor::default());
 
-        // do we need context.clipped_primitives?
-        self.add_textures(device, queue, &full_output.textures_delta);
+        // Begin to draw the UI frame.
+        self.egui_platform.begin_frame();
 
-        let mut rpass_gui =
-            egui_wgpu_backend::RenderPass::new(&device, preferred_swapchain_format, 1);
+        // Draw the demo application.
+        self.egui_app.ui(&self.egui_platform.context());
 
+        // End the UI frame. We could now handle the output and draw the UI with the backend.
+        let full_output = self.egui_platform.end_frame(Some(window));
+        let paint_jobs = self.egui_platform.context().tessellate(full_output.shapes);
+
+        // Upload all resources for the GPU.
+        let screen_descriptor = ScreenDescriptor {
+            physical_width: width,
+            physical_height: height,
+            scale_factor: window.scale_factor() as f32,
+        };
+
+        let tdelta: egui::TexturesDelta = full_output.textures_delta;
+        self.rpass_egui
+            .add_textures(&device, &queue, &tdelta)
+            .expect("add texture ok");
+        self.rpass_egui
+            .update_buffers(&device, &queue, &paint_jobs, &screen_descriptor);
+
+        self.rpass_egui
+            .execute(
+                &mut encoder,
+                &output_view,
+                &paint_jobs,
+                &screen_descriptor,
+                Some(wgpu::Color::BLACK),
+            )
+            .unwrap();
+
+        // todo: End most of the UI code.
         {
             let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("Render pass"),
@@ -397,24 +486,24 @@ impl GraphicsState {
             // GUI code
             // https://github.com/hasenbanck/egui_wgpu_backend/blob/master/src/lib.rs
 
-            let paint_jobs = gui_ctx.tessellate(full_output.shapes);
+            // let paint_jobs = gui_ctx.tessellate(full_output.shapes);
 
             // todo: Don't re-create this struct each time.
-            let screen_descriptor = egui_wgpu_backend::ScreenDescriptor {
-                // todo: Don't hard-code these. Pull from sys::size. maybe pass width and height
-                // todo as params to this fn.
-                physical_width: width,
-                physical_height: height,
-                scale_factor: 1.,
-            };
+            // let screen_descriptor = egui_wgpu_backend::ScreenDescriptor {
+            //     // todo: Don't hard-code these. Pull from sys::size. maybe pass width and height
+            //     // todo as params to this fn.
+            //     physical_width: width,
+            //     physical_height: height,
+            //     scale_factor: 1.,
+            // };
 
             // todo: 2022-10-03: Performance went down hill. DUe to UI?
 
-            self.gui_execute_with_renderpass(&mut rpass, &paint_jobs, &screen_descriptor, device)
-                .unwrap();
+            // self.gui_execute_with_renderpass(&mut rpass, &paint_jobs, &screen_descriptor, device)
+            //     .unwrap();
 
             // todo: Call remove_textures
-            self.remove_textures(full_output.textures_delta).unwrap();
+            // self.remove_textures(full_output.textures_delta).unwrap();
 
             // end GUI code test
         }
@@ -424,6 +513,14 @@ impl GraphicsState {
 
         queue.submit(Some(encoder.finish()));
         // queue.submit(iter::once(encoder.finish()));
+
+        // todo: More UI code.
+        // Redraw egui
+        output_frame.present();
+
+        self.rpass_egui
+            .remove_textures(tdelta)
+            .expect("remove texture ok");
     }
 }
 
@@ -477,8 +574,8 @@ pub(crate) struct BindGroupData {
     pub lighting: BindGroup,
     /// We use this for GUI.
     pub layout_texture: BindGroupLayout,
-    pub layout_gui_uniform: BindGroupLayout,
-    pub gui_uniform: BindGroup,
+    // pub layout_gui_uniform: BindGroupLayout,
+    // pub gui_uniform: BindGroup,
     // pub texture: BindGroup,
 }
 
@@ -535,7 +632,6 @@ fn create_bindgroups(
         }],
         label: Some("Lighting bind group"),
     });
-
 
     // todo: Don't create these (diffuse tex view, sampler every time. Pass as args.
     // We don't need to configure the texture view much, so let's
@@ -597,49 +693,49 @@ fn create_bindgroups(
     //     });
 
     // todo: Pass GUI uniform buff as arg like others?
-    let gui_uniform_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-        label: Some("egui_uniform_buffer"),
-        contents: bytemuck::cast_slice(&[gui::GuiUniformBuffer {
-            screen_size: [0.0, 0.0],
-            _padding: [0.0; 2],
-        }]),
-        usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-    });
+    // let gui_uniform_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+    //     label: Some("egui_uniform_buffer"),
+    //     contents: bytemuck::cast_slice(&[gui::GuiUniformBuffer {
+    //         screen_size: [0.0, 0.0],
+    //         _padding: [0.0; 2],
+    //     }]),
+    //     usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+    // });
 
-    let gui_uniform_buffer = gui::SizedBuffer {
-        buffer: gui_uniform_buffer,
-        size: std::mem::size_of::<gui::GuiUniformBuffer>(),
-    };
+    // let gui_uniform_buffer = gui::SizedBuffer {
+    //     buffer: gui_uniform_buffer,
+    //     size: std::mem::size_of::<gui::GuiUniformBuffer>(),
+    // };
 
-    let layout_gui_uniform =
-        device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            label: Some("GUI uniform bind group layout"),
-            entries: &[wgpu::BindGroupLayoutEntry {
-                binding: 0,
-                visibility: wgpu::ShaderStages::VERTEX,
-                ty: wgpu::BindingType::Buffer {
-                    has_dynamic_offset: false,
-                    min_binding_size: std::num::NonZeroU64::new(
-                        std::mem::size_of::<gui::GuiUniformBuffer>() as u64,
-                    ),
-                    ty: wgpu::BufferBindingType::Uniform,
-                },
-                count: None,
-            }],
-        });
+    // let layout_gui_uniform =
+    //     device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+    //         label: Some("GUI uniform bind group layout"),
+    //         entries: &[wgpu::BindGroupLayoutEntry {
+    //             binding: 0,
+    //             visibility: wgpu::ShaderStages::VERTEX,
+    //             ty: wgpu::BindingType::Buffer {
+    //                 has_dynamic_offset: false,
+    //                 min_binding_size: std::num::NonZeroU64::new(
+    //                     std::mem::size_of::<gui::GuiUniformBuffer>() as u64,
+    //                 ),
+    //                 ty: wgpu::BufferBindingType::Uniform,
+    //             },
+    //             count: None,
+    //         }],
+    //     });
 
-    let gui_uniform = device.create_bind_group(&wgpu::BindGroupDescriptor {
-        label: Some("GUI uniform bind group"),
-        layout: &layout_gui_uniform,
-        entries: &[wgpu::BindGroupEntry {
-            binding: 0,
-            resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
-                buffer: &gui_uniform_buffer.buffer,
-                offset: 0,
-                size: std::num::NonZeroU64::new(std::mem::size_of::<gui::GuiUniformBuffer>() as u64),
-            }),
-        }],
-    });
+    // let gui_uniform = device.create_bind_group(&wgpu::BindGroupDescriptor {
+    //     label: Some("GUI uniform bind group"),
+    //     layout: &layout_gui_uniform,
+    //     entries: &[wgpu::BindGroupEntry {
+    //         binding: 0,
+    //         resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
+    //             buffer: &gui_uniform_buffer.buffer,
+    //             offset: 0,
+    //             size: std::num::NonZeroU64::new(std::mem::size_of::<gui::GuiUniformBuffer>() as u64),
+    //         }),
+    //     }],
+    // });
 
     BindGroupData {
         layout_cam,
@@ -647,8 +743,8 @@ fn create_bindgroups(
         layout_lighting,
         lighting,
         layout_texture,
-        layout_gui_uniform,
-        gui_uniform,
+        // layout_gui_uniform,
+        // gui_uniform,
         // texture
     }
 }

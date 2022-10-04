@@ -19,8 +19,6 @@ use crate::{
     types::{Entity, InputSettings, Scene},
 };
 
-use wgpu_text::section::{HorizontalAlign, Layout, Section, Text};
-
 const WINDOW_TITLE: &str = "Graphics";
 const WINDOW_SIZE_X: f32 = 900.0;
 const WINDOW_SIZE_Y: f32 = 600.0;
@@ -107,6 +105,9 @@ impl State {
             &sys.surface_cfg,
             scene,
             input_settings,
+            &sys.surface,
+            &window,
+            &sys.adapter,
         );
 
         // let mut egui_platform =
@@ -178,32 +179,10 @@ pub fn run<'a>(
         .build(&event_loop)
         .unwrap();
 
-    // // todo: Long-term, this may not make sense in this lib.
-    // let window_gui = WindowBuilder::new()
-    //     .with_title("GUI")
-    //     .with_inner_size(winit::dpi::LogicalSize::new(320, 480))
-    //     .build(&event_loop)
-    //     .unwrap();
-
     let mut state = State::new(&window, scene, input_settings);
 
     let mut last_render_time = Instant::now();
     let mut dt = Duration::new(0, 0);
-
-    // GUI code
-    let font: &[u8] = include_bytes!("../fonts/calibri.ttf");
-    let mut brush = wgpu_text::BrushBuilder::using_font_bytes(font)
-        .unwrap()
-        /* .initial_cache_size((1024, 1024))) */ // use this to avoid resizing cache texture
-        /* .with_depth_testing(true) */ // enable/disable depth testing
-        .build(&state.sys.device, &state.sys.surface_cfg);
-
-    // Directly implemented from glyph_brush.
-    let section = Section::default()
-        .add_text(Text::new("Hello World"))
-        .with_layout(Layout::default().h_align(HorizontalAlign::Center));
-
-    // End GUI code
 
     event_loop.run(move |event, _, control_flow| {
         let _ = (&state.sys.instance, &state.sys.adapter); // force ownership by the closure
@@ -271,7 +250,8 @@ pub fn run<'a>(
 
                 // For EGUI
                 // todo: Don't create this each render.
-                let preferred_swapchain_format = state.sys.surface.get_supported_formats(&state.sys.adapter)[0];
+                let preferred_swapchain_format =
+                    state.sys.surface.get_supported_formats(&state.sys.adapter)[0];
 
                 state.graphics.render(
                     &view,
@@ -280,22 +260,10 @@ pub fn run<'a>(
                     dt,
                     state.sys.surface_cfg.width,
                     state.sys.surface_cfg.height,
-                    preferred_swapchain_format
+                    preferred_swapchain_format,
+                    &state.sys.surface,
+                    &window,
                 );
-
-                // Text draw code start
-
-                // Has to be queued every frame.
-                brush.queue(&section);
-
-                // todo: Put this text draw back
-                // let text_buffer = brush.draw(&state.sys.device, &view, &state.sys.queue);
-
-                // Has to be submitted last so text won't be overlapped.
-                // todo: Figure out how to submit encoder.
-                // state.sys.queue.submit([some_other_encoder.finish(), text_buffer]);
-
-                // text draw code end
 
                 // match state.render() {
                 //     Ok(_) => {}
