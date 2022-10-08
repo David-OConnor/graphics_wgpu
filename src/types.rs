@@ -272,6 +272,8 @@ pub struct Scene {
     pub camera: Camera,
     pub lighting: Lighting,
     pub background_color: (f32, f32, f32),
+    pub window_title: String,
+    pub window_size: (f32, f32),
 }
 
 impl Default for Scene {
@@ -282,6 +284,8 @@ impl Default for Scene {
             camera: Default::default(),
             lighting: Default::default(),
             background_color: (0.7, 0.7, 0.7),
+            window_title: "(Window title here)".to_owned(),
+            window_size: (900., 600.),
         }
     }
 }
@@ -303,6 +307,31 @@ impl Default for InputSettings {
             rotate_sens: 0.45,
             rotate_key_sens: 1.0,
             run_factor: 5.,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
+pub enum UiPlacement {
+    Top,
+    Bottom,
+    Left,
+    Right,
+}
+
+#[derive(Clone, Debug)]
+/// GUI settings
+pub struct UiSettings {
+    // pub placement: UiPlacement,
+    // /// eg 20% of the width
+    // pub size_portion: f32,
+}
+
+impl Default for UiSettings {
+    fn default() -> Self {
+        Self {
+            // placement: UiPlacement::Left,
+            // size_portion: 0.3,
         }
     }
 }

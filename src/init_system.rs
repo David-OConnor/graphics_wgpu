@@ -16,12 +16,12 @@ use winit::{
 use crate::{
     init_graphics::GraphicsState,
     texture::Texture,
-    types::{Entity, InputSettings, Scene},
+    types::{Entity, InputSettings, Scene, UiSettings},
 };
 
-const WINDOW_TITLE: &str = "Graphics";
-const WINDOW_SIZE_X: f32 = 900.0;
-const WINDOW_SIZE_Y: f32 = 600.0;
+const WINDOW_TITLE_INIT: &str = "Graphics";
+const WINDOW_SIZE_X_INIT: f32 = 900.0;
+const WINDOW_SIZE_Y_INIT: f32 = 600.0;
 
 pub(crate) struct SystemState {
     pub instance: wgpu::Instance,
@@ -39,10 +39,15 @@ struct State {
 }
 
 impl State {
-    pub(crate) fn new(window: &Window, scene: Scene, input_settings: InputSettings) -> Self {
+    pub(crate) fn new(
+        window: &Window,
+        scene: Scene,
+        input_settings: InputSettings,
+        ui_settings: UiSettings,
+    ) -> Self {
         #[cfg(not(target_arch = "wasm32"))]
         {
-            env_logger::init();
+            // env_logger::init();
         };
 
         #[cfg(target_arch = "wasm32")]
@@ -85,6 +90,7 @@ impl State {
             height: size.height,
             // https://docs.rs/wgpu/latest/wgpu/enum.PresentMode.html
             present_mode: wgpu::PresentMode::Fifo,
+            alpha_mode: wgpu::CompositeAlphaMode::Auto, // todo?
         };
 
         surface.configure(&device, &surface_cfg);
@@ -105,18 +111,10 @@ impl State {
             &sys.surface_cfg,
             scene,
             input_settings,
+            ui_settings,
             &window,
             &sys.adapter,
         );
-
-        // let mut egui_platform =
-        //     egui_winit_platform::Platform::new(egui_winit_platform::PlatformDescriptor {
-        //         physical_width: size.width,
-        //         physical_height: size.height,
-        //         scale_factor: scale_factor as f64,
-        //         font_definitions: egui::FontDefinitions::default(),
-        //         style: egui::Style::default(),
-        //     });
 
         Self { sys, graphics }
     }
@@ -157,12 +155,14 @@ impl State {
 pub fn run<'a>(
     scene: Scene,
     input_settings: InputSettings,
+    ui_settings: UiSettings,
     // todo: Pass whole scene to render handler?
     render_handler: fn() -> Option<Vec<Entity>>,
     // Note: The below `Box<dyn Fn` code works as well, and may be a better approach for use with
     // a closure API. If so, try to keep the boxing code in this library, vice in the user/application code.
     event_handler: fn(DeviceEvent, &mut Scene, f32) -> bool,
     // event_handler: Box<dyn Fn(DeviceEvent, &mut Scene, f32) -> bool>,
+    ui_handler: fn(&egui::Context),
 ) {
     #[cfg(not(target_arch = "wasm32"))]
     let mut last_update_inst = Instant::now();
@@ -173,12 +173,15 @@ pub fn run<'a>(
 
     let event_loop = EventLoop::new();
     let window = WindowBuilder::new()
-        .with_title(WINDOW_TITLE)
-        .with_inner_size(winit::dpi::LogicalSize::new(WINDOW_SIZE_X, WINDOW_SIZE_Y))
+        .with_title(WINDOW_TITLE_INIT)
+        .with_inner_size(winit::dpi::LogicalSize::new(
+            WINDOW_SIZE_X_INIT,
+            WINDOW_SIZE_Y_INIT,
+        ))
         .build(&event_loop)
         .unwrap();
 
-    let mut state = State::new(&window, scene, input_settings);
+    let mut state = State::new(&window, scene, input_settings, ui_settings);
 
     let mut last_render_time = Instant::now();
     let mut dt = Duration::new(0, 0);
@@ -243,8 +246,6 @@ pub fn run<'a>(
                     state.graphics.setup_entities(&state.sys.device);
                 }
 
-                // state.graphics.update(&state.sys.queue, dt);
-
                 // todo: move this into `render`?
                 let output_frame = state.sys.surface.get_current_texture().unwrap();
                 let output_view = output_frame
@@ -261,18 +262,8 @@ pub fn run<'a>(
                     state.sys.surface_cfg.height,
                     &state.sys.surface,
                     &window,
+                    ui_handler,
                 );
-
-                // match state.render() {
-                //     Ok(_) => {}
-                //     // Reconfigure the surface if it's lost or outdated
-                //     Err(wgpu::SurfaceError::Lost | wgpu::SurfaceError::Outdated) => state.resize(state.size),
-                //     // The system is out of memory, we should probably quit
-                //     Err(wgpu::SurfaceError::OutOfMemory) => *control_flow = ControlFlow::Exit,
-                //     // We're ignoring timeouts
-                //     Err(wgpu::SurfaceError::Timeout) => log::warn!("Surface timeout"),
-                // }
-                // output_frame.present();
             }
             _ => {}
         }
@@ -361,7 +352,7 @@ async fn setup_async(
                 .map(std::path::Path::new),
         )
         .await
-        .expect("Unable to find a suitable GPU adapter!");
+        .expect("Unable to find a suitable GPU adapter. :(");
 
     (adapter, device, queue)
 }

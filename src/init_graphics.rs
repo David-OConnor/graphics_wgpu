@@ -19,37 +19,18 @@ use crate::{
     input::{self, InputsCommanded},
     lighting::{Lighting, PointLight},
     texture::Texture,
-    types::{Entity, InputSettings, Instance, Mesh, Scene, Vertex},
+    types::{Entity, InputSettings, Instance, Mesh, Scene, UiSettings, Vertex},
 };
 use lin_alg2::f32::Vec3;
 
 use winit::{event::DeviceEvent, window::Window};
 
-use ::egui::FontDefinitions;
 use egui::{self, epaint};
 use egui_wgpu_backend;
 use egui_wgpu_backend::{RenderPass, ScreenDescriptor};
 use egui_winit_platform::{Platform, PlatformDescriptor};
 use winit::event::Event::*;
 use winit::event_loop::ControlFlow;
-
-// use egui::Window;
-// use egui_winit::{
-//     gfx_backends::wgpu_backend::WgpuBackend, window_backends::winit_backend::WinitBackend,
-//     BackendSettings, GfxBackend, UserApp, WindowBackend,
-// };
-
-// todo: Move this to a gui module
-/// This is the repaint signal type that egui needs for requesting a repaint from another thread.
-/// It sends the custom RequestRedraw event to the winit event loop.
-// struct ExampleRepaintSignal(std::sync::Mutex<winit::event_loop::EventLoopProxy<Event>>);
-//
-// // todo: Move this to a gui module
-// impl epi::backend::RepaintSignal for ExampleRepaintSignal {
-//     fn request_repaint(&self) {
-//         self.0.lock().unwrap().send_event(Event::RequestRedraw).ok();
-//     }
-// }
 
 static MESH_I: AtomicUsize = AtomicUsize::new(0);
 
@@ -83,6 +64,7 @@ pub(crate) struct GraphicsState {
     pub pipeline: wgpu::RenderPipeline,
     pub depth_texture: Texture,
     pub input_settings: InputSettings,
+    pub ui_settings: UiSettings,
     inputs_commanded: InputsCommanded,
     // todo: Will this need to change for multiple models
     // obj_mesh: Mesh,
@@ -97,7 +79,7 @@ pub(crate) struct GraphicsState {
     /// for GUI
     pub egui_platform: Platform,
     rpass_egui: RenderPass,
-    egui_app: egui_demo_lib::DemoWindows,
+    // egui_app: egui_demo_lib::DemoWindows,
 }
 
 impl GraphicsState {
@@ -107,6 +89,7 @@ impl GraphicsState {
         surface_cfg: &SurfaceConfiguration,
         mut scene: Scene,
         input_settings: InputSettings,
+        ui_settings: UiSettings,
         // these 3 args are for EGUI
         window: &Window,
         adapter: &wgpu::Adapter,
@@ -197,26 +180,24 @@ impl GraphicsState {
         // Placeholder value
         let mesh_mappings = Vec::new();
 
-        // todo: GUI module?
-        let egui_platform = Platform::new(PlatformDescriptor {
-            physical_width: surface_cfg.width as u32,
-            physical_height: surface_cfg.height as u32,
-            scale_factor: window.scale_factor(),
-            font_definitions: FontDefinitions::default(),
-            style: Default::default(),
-        });
+        let egui_platform = gui::setup_platform(surface_cfg, window);
+
+        // todo: Logical (scaling by device?) vs physical pixels
+        let window_size = winit::dpi::LogicalSize::new(scene.window_size.0, scene.window_size.1);
+
+        window.set_inner_size(window_size);
+        window.set_title(&scene.window_title);
 
         let rpass_egui = RenderPass::new(&device, surface_cfg.format, 1);
 
         // Display the demo application that ships with egui.
-        let mut egui_app = egui_demo_lib::DemoWindows::default();
+        // let mut egui_app = egui_demo_lib::DemoWindows::default();
 
         let mut result = Self {
             vertex_buf,
             index_buf,
             instance_buf,
             bind_groups,
-            // camera,
             camera_buf: cam_buf,
             lighting_buf,
             pipeline,
@@ -224,13 +205,12 @@ impl GraphicsState {
             staging_belt: wgpu::util::StagingBelt::new(0x100),
             scene,
             input_settings,
+            ui_settings,
             inputs_commanded: Default::default(),
             mesh_mappings,
-            // next_user_texture_id: 0,
-            // textures: HashMap::new(),
             egui_platform,
             rpass_egui,
-            egui_app,
+            // egui_app,
         };
 
         result.setup_entities(&device);
@@ -244,7 +224,6 @@ impl GraphicsState {
 
     /// Currently, sets up entities, but doesn't change meshes, lights, or the camera.
     /// The vertex and index buffers aren't changed; only the instances.
-    /// todo: Consider what you want out of this.
     pub(crate) fn setup_entities(&mut self, device: &wgpu::Device) {
         let mut instances = Vec::new();
 
@@ -277,7 +256,7 @@ impl GraphicsState {
             instance_start_this_mesh += instance_count_this_mesh;
         }
 
-        // todo: Heper fn that takes a `ToBytes` trait we haven't made?
+        // todo: Helper fn that takes a `ToBytes` trait we haven't made?
         let mut instance_data = Vec::new();
         for instance in &instances {
             for byte in instance.to_bytes() {
@@ -306,6 +285,7 @@ impl GraphicsState {
         height: u32,
         surface: &wgpu::Surface,
         window: &Window,
+        ui_handler: fn(&egui::Context),
     ) {
         if self.inputs_commanded.inputs_present() {
             let dt_secs = dt.as_secs() as f32 + dt.subsec_micros() as f32 / 1_000_000.;
@@ -345,15 +325,13 @@ impl GraphicsState {
 
         // todo: GUI start. Put all this in fn?
 
-        // todo: Do I need this?
-        // self.egui_platform
-        //     .update_time(start_time.elapsed().as_secs_f64());
-
         // Begin to draw the UI frame.
         self.egui_platform.begin_frame();
 
-        // Draw the demo application.
-        self.egui_app.ui(&self.egui_platform.context());
+        ui_handler(&self.egui_platform.context());
+
+        // self.egui_app.ui(&self.egui_platform.context());
+        // Draw the UI.
 
         // End the UI frame. We could now handle the output and draw the UI with the backend.
         let full_output = self.egui_platform.end_frame(Some(window));
@@ -362,6 +340,7 @@ impl GraphicsState {
         // Upload all resources for the GPU.
         let screen_descriptor = ScreenDescriptor {
             physical_width: width,
+            // todo: Respect ui settings placement field.
             physical_height: height,
             scale_factor: window.scale_factor() as f32,
         };
@@ -373,92 +352,78 @@ impl GraphicsState {
         self.rpass_egui
             .update_buffers(&device, &queue, &paint_jobs, &screen_descriptor);
 
-        self.rpass_egui
-            .execute(
-                &mut encoder,
-                &output_view,
-                &paint_jobs,
-                &screen_descriptor,
-                Some(wgpu::Color::BLACK),
-            )
-            .unwrap();
-
-        // todo: End most of the UI code.
         {
-            // let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-            //     label: Some("Render pass"),
-            //     color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-            //         view: output_view,
-            //         resolve_target: None,
-            //         ops: wgpu::Operations {
-            //             load: wgpu::LoadOp::Clear(wgpu::Color {
-            //                 r: self.scene.background_color.0 as f64,
-            //                 g: self.scene.background_color.1 as f64,
-            //                 b: self.scene.background_color.2 as f64,
-            //                 a: 1.0,
-            //             }),
-            //             store: true,
-            //         },
-            //     })],
-            //     depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
-            //         view: &self.depth_texture.view,
-            //         depth_ops: Some(wgpu::Operations {
-            //             load: wgpu::LoadOp::Clear(1.0),
-            //             store: true,
-            //         }),
-            //         stencil_ops: None,
-            //     }),
-            // });
-            //
-            // rpass.set_pipeline(&self.pipeline);
-            //
-            // rpass.set_bind_group(0, &self.bind_groups.cam, &[]);
-            // rpass.set_bind_group(1, &self.bind_groups.lighting, &[]);
-            //
-            // rpass.set_vertex_buffer(0, self.vertex_buf.slice(..));
-            // rpass.set_vertex_buffer(1, self.instance_buf.slice(..));
-            // rpass.set_index_buffer(self.index_buf.slice(..), wgpu::IndexFormat::Uint32);
+            let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: Some("Render pass"),
+                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                    view: output_view,
+                    resolve_target: None,
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(wgpu::Color {
+                            r: self.scene.background_color.0 as f64,
+                            g: self.scene.background_color.1 as f64,
+                            b: self.scene.background_color.2 as f64,
+                            a: 1.0,
+                        }),
+                        store: true,
+                    },
+                })],
+                depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
+                    view: &self.depth_texture.view,
+                    depth_ops: Some(wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(1.0),
+                        store: true,
+                    }),
+                    stencil_ops: None,
+                }),
+            });
 
+            rpass.set_pipeline(&self.pipeline);
+
+            rpass.set_bind_group(0, &self.bind_groups.cam, &[]);
+            rpass.set_bind_group(1, &self.bind_groups.lighting, &[]);
+
+            rpass.set_vertex_buffer(0, self.vertex_buf.slice(..));
+            rpass.set_vertex_buffer(1, self.instance_buf.slice(..));
+            rpass.set_index_buffer(self.index_buf.slice(..), wgpu::IndexFormat::Uint32);
 
             let mut start_ind = 0; // todo temp?
             for (i, mesh) in self.scene.meshes.iter().enumerate() {
                 let (vertex_start_this_mesh, instance_start_this_mesh, instance_count_this_mesh) =
                     self.mesh_mappings[i];
 
-                // rpass.draw_indexed(
-                //     // 0..mesh.indices.len() as u32,
-                //     start_ind..start_ind + mesh.indices.len() as u32,
-                //     vertex_start_this_mesh,
-                //     instance_start_this_mesh..instance_start_this_mesh + instance_count_this_mesh,
-                // );
+                rpass.draw_indexed(
+                    start_ind..start_ind + mesh.indices.len() as u32,
+                    vertex_start_this_mesh,
+                    instance_start_this_mesh..instance_start_this_mesh + instance_count_this_mesh,
+                );
 
                 start_ind += mesh.indices.len() as u32; // todo temp?
             }
 
-            // GUI code
-            // https://github.com/hasenbanck/egui_wgpu_backend/blob/master/src/lib.rs
-
-            // let paint_jobs = gui_ctx.tessellate(full_output.shapes);
-
-            // todo: Don't re-create this struct each time.
-            // let screen_descriptor = egui_wgpu_backend::ScreenDescriptor {
-            //     // todo: Don't hard-code these. Pull from sys::size. maybe pass width and height
-            //     // todo as params to this fn.
-            //     physical_width: width,
-            //     physical_height: height,
-            //     scale_factor: 1.,
-            // };
-
-            // todo: 2022-10-03: Performance went down hill. DUe to UI?
-
-            // self.gui_execute_with_renderpass(&mut rpass, &paint_jobs, &screen_descriptor, device)
-            //     .unwrap();
-
-            // todo: Call remove_textures
-            // self.remove_textures(full_output.textures_delta).unwrap();
-
-            // end GUI code test
+            // todo: This call would let us use the wgpu renderpass for the UI,
+            // todo instead of 2 steps, but we're getting an error about the depth
+            // todo stencil.
+            // self.rpass_egui
+            //     .execute_with_renderpass(
+            //         &mut rpass,
+            //         &paint_jobs,
+            //         &screen_descriptor,
+            //     );
         }
+
+        self.rpass_egui
+            .execute(
+                &mut encoder,
+                &output_view,
+                &paint_jobs,
+                &screen_descriptor,
+                // None here
+                None,
+            )
+            .unwrap();
+
+        // todo: End most of the UI code.
 
         // todo: Make sure if you add new instances to the Vec, that you recreate the instance_buffer
         // todo and as well as camera_bind_group, otherwise your new instances won't show up correctly.

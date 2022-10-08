@@ -5,37 +5,16 @@ authors = ["David O'Connor <david.alan.oconnor@gmail.com>"]
 edition = "2021"
 
 [dependencies]
-wgpu = "^0.13.1"
+wgpu = "^0.14.0"
 lin-alg2 = { path = "../lin_alg", features = ["computer_graphics"] }
 
 winit = "^0.27.3"
 pollster = "^0.2.5"  # For 2 WGPU init fnsthat use async.
-env_logger = "^0.9.0"
-
+#env_logger = "^0.9.0" # todo: DO you want this?
 
 image = "^0.24.1" # For loading textures
-
-obj = "^0.10.2"  # We use this load OBJ meshes.
-
-# todo: Should this GUI lib be in the application or here?
-#egui = "^0.19.0"
-#eframe = "^0.19.0"
-# todo: Which of these egui integrations do you want?
-#egui-winit = "^0.19.0"
-#egui-wgpu = "^0.19.0"
-#egui_wgpu_backend = "0.18"
-# todo??
-#epi = "^0.17"
-#egui_winit_platform = "^0.16"
-#eframe = { version="^0.19.0", features=["wgpu"] }
+obj = "^0.10.2"  # For loading OBJ meshes.
 
 egui = "^0.19"
-epi = "^0.17"
 egui_winit_platform = "^0.16"
-egui_wgpu_backend = "^0.19"
-#winit = { version="^0.27.3", features = ["x11"]}
-egui_demo_lib = "^0.19" # todo: temp
-
-# todo temp: bytemuck is jus for use in integrating an EGUI example.
-# todo: Remove it.
-#bytemuck = "1.7"
+egui_wgpu_backend = "^0.20"
