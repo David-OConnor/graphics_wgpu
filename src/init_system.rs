@@ -141,13 +141,11 @@ impl State {
     }
 }
 
-// pub fn run(scene: Scene, input_settings: InputSettings, render_handler: &mut dyn FnMut() -> u8) {
 pub fn run(
     scene: Scene,
     input_settings: InputSettings,
     ui_settings: UiSettings,
-    // todo: Pass whole scene to render handler?
-    render_handler: Box<dyn Fn() -> Option<Vec<Entity>>>,
+    render_handler: Box<dyn Fn(&mut Scene) -> bool>,
     event_handler: Box<dyn Fn(DeviceEvent, &mut Scene, f32) -> bool>,
     gui_handler: Box<dyn Fn(&egui::Context)>,
 ) {
@@ -183,10 +181,11 @@ pub fn run(
             Event::MainEventsCleared => window.request_redraw(),
             Event::DeviceEvent { event, .. } => {
                 let dt_secs = dt.as_secs() as f32 + dt.subsec_micros() as f32 / 1_000_000.;
-                let changed = event_handler(event.clone(), &mut state.graphics.scene, dt_secs);
+                let entities_changed =
+                    event_handler(event.clone(), &mut state.graphics.scene, dt_secs);
 
                 // Entities have been updated in the scene; update the buffers
-                if changed {
+                if entities_changed {
                     state.graphics.setup_entities(&state.sys.device);
                 }
 
@@ -225,9 +224,10 @@ pub fn run(
                 dt = now - last_render_time;
                 last_render_time = now;
 
-                // todo: Pass whole scene to render handler?
-                if let Some(entities_updated) = render_handler() {
-                    state.graphics.scene.entities = entities_updated;
+                let entities_changed = render_handler(&mut state.graphics.scene);
+
+                // Entities have been updated in the scene; update the buffers
+                if entities_changed {
                     state.graphics.setup_entities(&state.sys.device);
                 }
 
