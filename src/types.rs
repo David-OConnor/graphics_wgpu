@@ -306,13 +306,13 @@ impl Default for InputSettings {
     }
 }
 
-#[derive(Clone, Copy, Debug)]
-pub enum UiPlacement {
-    Top,
-    Bottom,
-    Left,
-    Right,
-}
+// #[derive(Clone, Copy, Debug)]
+// pub enum UiPlacement {
+//     Top,
+//     Bottom,
+//     Left,
+//     Right,
+// }
 
 #[derive(Clone, Debug)]
 /// GUI settings

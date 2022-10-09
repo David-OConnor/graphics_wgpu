@@ -12,7 +12,7 @@ pub use camera::Camera;
 pub use init_system::run;
 pub use input::InputsCommanded;
 pub use lighting::{LightType, Lighting, PointLight};
-pub use types::{Entity, InputSettings, Mesh, Scene, UiPlacement, UiSettings};
+pub use types::{Entity, InputSettings, Mesh, Scene, UiSettings};
 
 // Re-export winit DeviceEvents for use in the API; this prevents the calling
 // lib from needing to use winit as a dependency directly.

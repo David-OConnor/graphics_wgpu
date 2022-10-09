@@ -98,7 +98,7 @@ impl State {
 
         let graphics = GraphicsState::new(
             &sys.device,
-            &sys.queue,
+            // &sys.queue,
             &sys.surface_cfg,
             scene,
             input_settings,
@@ -127,7 +127,6 @@ impl State {
                 &self.sys.surface_cfg,
                 "Depth texture",
             );
-            println!("aspect: {:?}", self.graphics.scene.camera.aspect);
 
             self.graphics.scene.camera.update_proj_mat();
 
@@ -143,17 +142,21 @@ impl State {
 }
 
 // pub fn run(scene: Scene, input_settings: InputSettings, render_handler: &mut dyn FnMut() -> u8) {
-pub fn run<'a>(
+pub fn run(
     scene: Scene,
     input_settings: InputSettings,
     ui_settings: UiSettings,
     // todo: Pass whole scene to render handler?
-    render_handler: fn() -> Option<Vec<Entity>>,
+    // render_handler: fn() -> Option<Vec<Entity>>,
+    render_handler: &'static dyn Fn() -> Option<Vec<Entity>>,
     // Note: The below `Box<dyn Fn` code works as well, and may be a better approach for use with
     // a closure API. If so, try to keep the boxing code in this library, vice in the user/application code.
-    event_handler: fn(DeviceEvent, &mut Scene, f32) -> bool,
+    // event_handler: fn(DeviceEvent, &mut Scene, f32) -> bool,
+    event_handler: &'static dyn Fn(DeviceEvent, &mut Scene, f32) -> bool,
     // event_handler: Box<dyn Fn(DeviceEvent, &mut Scene, f32) -> bool>,
-    ui_handler: fn(&egui::Context),
+    // gui_handler: fn(&egui::Context),
+    // gui_handler: &'Box<dyn Fn(&egui::Context)>,
+    gui_handler: &'static dyn Fn(&egui::Context),
 ) {
     #[cfg(not(target_arch = "wasm32"))]
     let mut _last_frame_inst = Instant::now();
@@ -251,7 +254,7 @@ pub fn run<'a>(
                     state.sys.surface_cfg.height,
                     // &state.sys.surface,
                     &window,
-                    ui_handler,
+                    gui_handler,
                 );
             }
             _ => {}

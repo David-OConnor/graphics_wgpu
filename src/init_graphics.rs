@@ -59,7 +59,7 @@ pub(crate) struct GraphicsState {
     inputs_commanded: InputsCommanded,
     // todo: Will this need to change for multiple models
     // obj_mesh: Mesh,
-    staging_belt: wgpu::util::StagingBelt, // todo: Do we want this? Probably in sys, not here.
+    // staging_belt: wgpu::util::StagingBelt, // todo: Do we want this? Probably in sys, not here.
     pub scene: Scene,
     // todo: FIgure out if youw ant this.
     mesh_mappings: Vec<(i32, u32, u32)>,
@@ -76,7 +76,7 @@ pub(crate) struct GraphicsState {
 impl GraphicsState {
     pub(crate) fn new(
         device: &wgpu::Device,
-        queue: &wgpu::Queue,
+        // queue: &wgpu::Queue,
         surface_cfg: &SurfaceConfiguration,
         mut scene: Scene,
         input_settings: InputSettings,
@@ -88,7 +88,7 @@ impl GraphicsState {
         let mut vertices = Vec::new();
         let mut indices = Vec::new();
 
-        for (i, mesh) in scene.meshes.iter().enumerate() {
+        for (_i, mesh) in scene.meshes.iter().enumerate() {
             for vertex in &mesh.vertices {
                 vertices.push(vertex)
             }
@@ -193,7 +193,7 @@ impl GraphicsState {
             lighting_buf,
             pipeline,
             depth_texture,
-            staging_belt: wgpu::util::StagingBelt::new(0x100),
+            // staging_belt: wgpu::util::StagingBelt::new(0x100),
             scene,
             input_settings,
             ui_settings,
@@ -276,7 +276,9 @@ impl GraphicsState {
         height: u32,
         // surface: &wgpu::Surface,
         window: &Window,
-        ui_handler: fn(&egui::Context),
+        // gui_handler: fn(&egui::Context),
+        // gui_handler: Box<dyn Fn(&egui::Context)>,
+        gui_handler: &'static dyn Fn(&egui::Context),
     ) {
         if self.inputs_commanded.inputs_present() {
             let dt_secs = dt.as_secs() as f32 + dt.subsec_micros() as f32 / 1_000_000.;
@@ -319,7 +321,7 @@ impl GraphicsState {
         // Begin to draw the UI frame.
         self.egui_platform.begin_frame();
 
-        ui_handler(&self.egui_platform.context());
+        gui_handler(&self.egui_platform.context());
 
         // self.egui_app.ui(&self.egui_platform.context());
         // Draw the UI.

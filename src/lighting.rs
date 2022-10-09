@@ -39,9 +39,9 @@ fn array4_to_bytes(a: [f32; 4]) -> [u8; VEC3_UNIFORM_SIZE] {
 /// We organize the fields in this order, and serialize them accordingly, to keep the buffer
 /// from being too long while adhering to alignment rules.
 pub struct Lighting {
-    ambient_color: [f32; 4],
-    ambient_intensity: f32,
-    point_lights: Vec<PointLight>,
+    pub ambient_color: [f32; 4],
+    pub ambient_intensity: f32,
+    pub point_lights: Vec<PointLight>,
 }
 
 impl Default for Lighting {
