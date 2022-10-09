@@ -147,16 +147,9 @@ pub fn run(
     input_settings: InputSettings,
     ui_settings: UiSettings,
     // todo: Pass whole scene to render handler?
-    // render_handler: fn() -> Option<Vec<Entity>>,
-    render_handler: &'static dyn Fn() -> Option<Vec<Entity>>,
-    // Note: The below `Box<dyn Fn` code works as well, and may be a better approach for use with
-    // a closure API. If so, try to keep the boxing code in this library, vice in the user/application code.
-    // event_handler: fn(DeviceEvent, &mut Scene, f32) -> bool,
-    event_handler: &'static dyn Fn(DeviceEvent, &mut Scene, f32) -> bool,
-    // event_handler: Box<dyn Fn(DeviceEvent, &mut Scene, f32) -> bool>,
-    // gui_handler: fn(&egui::Context),
-    // gui_handler: &'Box<dyn Fn(&egui::Context)>,
-    gui_handler: &'static dyn Fn(&egui::Context),
+    render_handler: Box<dyn Fn() -> Option<Vec<Entity>>>,
+    event_handler: Box<dyn Fn(DeviceEvent, &mut Scene, f32) -> bool>,
+    gui_handler: Box<dyn Fn(&egui::Context)>,
 ) {
     #[cfg(not(target_arch = "wasm32"))]
     let mut _last_frame_inst = Instant::now();
@@ -254,7 +247,7 @@ pub fn run(
                     state.sys.surface_cfg.height,
                     // &state.sys.surface,
                     &window,
-                    gui_handler,
+                    &gui_handler,
                 );
             }
             _ => {}

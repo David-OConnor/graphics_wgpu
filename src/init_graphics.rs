@@ -276,9 +276,7 @@ impl GraphicsState {
         height: u32,
         // surface: &wgpu::Surface,
         window: &Window,
-        // gui_handler: fn(&egui::Context),
-        // gui_handler: Box<dyn Fn(&egui::Context)>,
-        gui_handler: &'static dyn Fn(&egui::Context),
+        gui_handler: &Box<dyn Fn(&egui::Context)>,
     ) {
         if self.inputs_commanded.inputs_present() {
             let dt_secs = dt.as_secs() as f32 + dt.subsec_micros() as f32 / 1_000_000.;
