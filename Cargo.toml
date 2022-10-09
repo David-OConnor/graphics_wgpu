@@ -10,7 +10,6 @@ lin-alg2 = { path = "../lin_alg", features = ["computer_graphics"] }
 
 winit = "^0.27.3"
 pollster = "^0.2.5"  # For 2 WGPU init fnsthat use async.
-#env_logger = "^0.9.0" # todo: DO you want this?
 
 image = "^0.24.1" # For loading textures
 obj = "^0.10.2"  # For loading OBJ meshes.

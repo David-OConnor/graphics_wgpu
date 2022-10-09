@@ -3,7 +3,7 @@
 use std::{
     f32::consts::TAU,
     fs::File,
-    io::{self, BufReader, Read},
+    io::{BufReader, Read},
 };
 
 use crate::{
@@ -113,7 +113,7 @@ impl Mesh {
             }
         }
 
-        current_i += 1;
+        // current_i += 1;
 
         for f in faces {
             indices.append(&mut vec![f[0], f[1], f[2], f[0], f[2], f[3]]);
@@ -156,7 +156,7 @@ impl Mesh {
         let t = Vec3::new(0., 1., 0.);
         let b = Vec3::new(0., -1., 0.);
 
-        let mut vertices = vec![
+        let vertices = vec![
             // Aft
             Vertex::new(abl, aft),
             Vertex::new(abr, aft),
@@ -231,7 +231,7 @@ impl Mesh {
         let n_2 = Vec3::new(-1., 1., 1.).to_normalized();
         let n_3 = Vec3::new(-1., -1., -1.).to_normalized();
 
-        let mut vertices = vec![
+        let vertices = vec![
             // Face 0
             Vertex::new(v_0, n_0),
             Vertex::new(v_2, n_0),
@@ -384,7 +384,7 @@ impl Mesh {
         }
 
         // todo: Is this right?
-        let mut indices = (0..vertices.len()).collect();
+        let indices = (0..vertices.len()).collect();
 
         Self {
             vertices,

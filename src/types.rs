@@ -1,11 +1,6 @@
 //! https://sotrh.github.io/learn-wgpu/beginner/tutorial9-models/#rendering-a-mesh
 
-use std::ops::Range;
-
-use crate::{
-    camera::Camera,
-    lighting::{Lighting, PointLight},
-};
+use crate::{camera::Camera, lighting::Lighting};
 
 use lin_alg2::f32::{Mat4, Quaternion, Vec3};
 

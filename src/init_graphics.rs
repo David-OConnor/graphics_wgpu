@@ -9,33 +9,24 @@
 //!
 //! 2022-08-21: https://github.com/gfx-rs/wgpu/blob/master/wgpu/examples/cube/main.rs
 
-use std::{collections::HashMap, sync::atomic::AtomicUsize, time::Duration};
+use std::time::Duration;
 
 use wgpu::{self, util::DeviceExt, BindGroup, BindGroupLayout, SurfaceConfiguration};
 
 use crate::{
-    camera::Camera,
     gui,
     input::{self, InputsCommanded},
-    lighting::{Lighting, PointLight},
     texture::Texture,
-    types::{Entity, InputSettings, Instance, Mesh, Scene, UiSettings, Vertex},
+    types::{InputSettings, Instance, Scene, UiSettings, Vertex},
 };
 use lin_alg2::f32::Vec3;
 
 use winit::{event::DeviceEvent, window::Window};
 
-use egui::{self, epaint};
+use egui;
 use egui_wgpu_backend;
 use egui_wgpu_backend::{RenderPass, ScreenDescriptor};
-use egui_winit_platform::{Platform, PlatformDescriptor};
-use winit::event::Event::*;
-use winit::event_loop::ControlFlow;
-
-static MESH_I: AtomicUsize = AtomicUsize::new(0);
-
-const DEPTH_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Depth24Plus;
-// const IMAGE_SIZE: u32 = 128;
+use egui_winit_platform::Platform;
 
 pub(crate) const UP_VEC: Vec3 = Vec3 {
     x: 0.,
@@ -92,7 +83,7 @@ impl GraphicsState {
         ui_settings: UiSettings,
         // these 3 args are for EGUI
         window: &Window,
-        adapter: &wgpu::Adapter,
+        // adapter: &wgpu::Adapter,
     ) -> Self {
         let mut vertices = Vec::new();
         let mut indices = Vec::new();
@@ -283,7 +274,7 @@ impl GraphicsState {
         dt: Duration,
         width: u32,
         height: u32,
-        surface: &wgpu::Surface,
+        // surface: &wgpu::Surface,
         window: &Window,
         ui_handler: fn(&egui::Context),
     ) {

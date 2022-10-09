@@ -1,14 +1,10 @@
 //! This module initiates the window, and graphics hardware.
 
 #[cfg(not(target_arch = "wasm32"))]
-use std::{
-    boxed::Box,
-    include_bytes,
-    time::{Duration, Instant},
-};
+use std::time::{Duration, Instant};
 
 use winit::{
-    event::{DeviceEvent, Event, KeyboardInput, WindowEvent},
+    event::{DeviceEvent, Event, WindowEvent},
     event_loop::{ControlFlow, EventLoop},
     window::{Window, WindowBuilder},
 };
@@ -45,11 +41,6 @@ impl State {
         input_settings: InputSettings,
         ui_settings: UiSettings,
     ) -> Self {
-        #[cfg(not(target_arch = "wasm32"))]
-        {
-            // env_logger::init();
-        };
-
         #[cfg(target_arch = "wasm32")]
         {
             use winit::platform::web::WindowExtWebSys;
@@ -95,7 +86,7 @@ impl State {
 
         surface.configure(&device, &surface_cfg);
 
-        let mut sys = SystemState {
+        let sys = SystemState {
             instance,
             size,
             surface,
@@ -105,7 +96,7 @@ impl State {
             surface_cfg,
         };
 
-        let mut graphics = GraphicsState::new(
+        let graphics = GraphicsState::new(
             &sys.device,
             &sys.queue,
             &sys.surface_cfg,
@@ -113,7 +104,7 @@ impl State {
             input_settings,
             ui_settings,
             &window,
-            &sys.adapter,
+            // &sys.adapter,
         );
 
         Self { sys, graphics }
@@ -165,11 +156,9 @@ pub fn run<'a>(
     ui_handler: fn(&egui::Context),
 ) {
     #[cfg(not(target_arch = "wasm32"))]
-    let mut last_update_inst = Instant::now();
+    let mut _last_frame_inst = Instant::now();
     #[cfg(not(target_arch = "wasm32"))]
-    let mut last_frame_inst = Instant::now();
-    #[cfg(not(target_arch = "wasm32"))]
-    let (mut frame_count, mut accum_time) = (0, 0.0);
+    let (_frame_count, mut _accum_time) = (0, 0.0);
 
     let event_loop = EventLoop::new();
     let window = WindowBuilder::new()
@@ -260,7 +249,7 @@ pub fn run<'a>(
                     dt,
                     state.sys.surface_cfg.width,
                     state.sys.surface_cfg.height,
-                    &state.sys.surface,
+                    // &state.sys.surface,
                     &window,
                     ui_handler,
                 );
