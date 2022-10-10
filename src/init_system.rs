@@ -145,7 +145,7 @@ pub fn run(
     scene: Scene,
     input_settings: InputSettings,
     ui_settings: UiSettings,
-    render_handler: Box<dyn Fn(&mut Scene) -> bool>,
+    mut render_handler: Box<dyn FnMut(&mut Scene) -> bool>,
     event_handler: Box<dyn Fn(DeviceEvent, &mut Scene, f32) -> bool>,
     gui_handler: Box<dyn Fn(&egui::Context)>,
 ) {

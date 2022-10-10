@@ -17,7 +17,7 @@ use crate::{
     gui,
     input::{self, InputsCommanded},
     texture::Texture,
-    types::{InputSettings, Instance, Scene, UiSettings, Vertex},
+    types::{InputSettings, Instance, Scene, UiSettings, Vertex, ControlScheme},
 };
 use lin_alg2::f32::Vec3;
 
@@ -210,7 +210,10 @@ impl GraphicsState {
     }
 
     pub(crate) fn handle_input(&mut self, event: DeviceEvent) {
-        input::add_input_cmd(event, &mut self.inputs_commanded);
+        match self.input_settings.initial_controls {
+            ControlScheme::FreeCamera => input::add_input_cmd(event, &mut self.inputs_commanded),
+            _ => (),
+        }
     }
 
     /// Currently, sets up entities, but doesn't change meshes, lights, or the camera.
@@ -278,19 +281,25 @@ impl GraphicsState {
         window: &Window,
         gui_handler: &Box<dyn Fn(&egui::Context)>,
     ) {
-        if self.inputs_commanded.inputs_present() {
-            let dt_secs = dt.as_secs() as f32 + dt.subsec_micros() as f32 / 1_000_000.;
-            input::adjust_camera(
-                &mut self.scene.camera,
-                &self.inputs_commanded,
-                &self.input_settings,
-                dt_secs,
-            );
-            queue.write_buffer(&self.camera_buf, 0, &self.scene.camera.to_bytes());
+        match self.input_settings.initial_controls {
+            ControlScheme::FreeCamera => {
+                if self.inputs_commanded.inputs_present() {
+                    let dt_secs = dt.as_secs() as f32 + dt.subsec_micros() as f32 / 1_000_000.;
+                    input::adjust_camera(
+                        &mut self.scene.camera,
+                        &self.inputs_commanded,
+                        &self.input_settings,
+                        dt_secs,
+                    );
 
-            // Reset the mouse inputs; keyboard inputs are reset by their release event.
-            self.inputs_commanded.mouse_delta_x = 0.;
-            self.inputs_commanded.mouse_delta_y = 0.;
+                    queue.write_buffer(&self.camera_buf, 0, &self.scene.camera.to_bytes());
+
+                    // Reset the mouse inputs; keyboard inputs are reset by their release event.
+                    self.inputs_commanded.mouse_delta_x = 0.;
+                    self.inputs_commanded.mouse_delta_y = 0.;
+                }
+            }
+            _ => ()
         }
 
         // We create a CommandEncoder to create the actual commands to send to the

@@ -260,6 +260,31 @@ impl Entity {
     }
 }
 
+#[derive(Clone, Copy, Debug)]
+/// Default controls. Provides easy defaults. For maximum flexibility, choose `None`,
+/// and implement controls in the `event_handler` function.
+pub enum ControlScheme {
+    /// No controls; provide all controls in application code.
+    None,
+    /// Keyboard controls for movement along 3 axis, and rotation around the Z axis. Mouse
+    /// for rotation around the X and Y axes. Shift to multiply speed of keyboard controls.
+    FreeCamera,
+    /// FPS-style camera. Ie, no Z-axis roll, no up/down movement, and can't look up past TAU/4.
+    /// todo: Unimplemented
+    Fps,
+    /// The mouse rotates the camera around a fixed point.
+    /// todo: inner Vec of the point?
+    /// todo: Unimplemented
+    Arc,
+
+}
+
+impl Default for ControlScheme {
+    fn default() -> Self {
+        Self::None
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct Scene {
     pub meshes: Vec<Mesh>,
@@ -293,40 +318,31 @@ pub struct InputSettings {
     pub rotate_key_sens: f32,
     /// How much the move speed is multiplied when holding the run key.
     pub run_factor: f32,
+    pub initial_controls: ControlScheme,
 }
 
 impl Default for InputSettings {
     fn default() -> Self {
         Self {
+            initial_controls: Default::default(),
             move_sens: 1.5,
             rotate_sens: 0.45,
             rotate_key_sens: 1.0,
             run_factor: 5.,
+
         }
     }
 }
 
-// #[derive(Clone, Copy, Debug)]
-// pub enum UiPlacement {
-//     Top,
-//     Bottom,
-//     Left,
-//     Right,
-// }
 
 #[derive(Clone, Debug)]
 /// GUI settings
 pub struct UiSettings {
-    // pub placement: UiPlacement,
-    // /// eg 20% of the width
-    // pub size_portion: f32,
 }
 
 impl Default for UiSettings {
     fn default() -> Self {
         Self {
-            // placement: UiPlacement::Left,
-            // size_portion: 0.3,
         }
     }
 }
