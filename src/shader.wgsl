@@ -38,16 +38,16 @@ struct VertexIn {
     @location(4) bitangent: vec3<f32>,
 }
 
-// These are matrix columns; can't pass matrices directly for vertex attributes.
+// These are matrix columns; we can't pass matrices directly for vertex attributes.
 struct InstanceIn {
     @location(5) model_matrix_0: vec4<f32>,
     @location(6) model_matrix_1: vec4<f32>,
     @location(7) model_matrix_2: vec4<f32>,
     @location(8) model_matrix_3: vec4<f32>,
-    @location(9) normal_matrix_0: vec4<f32>,
-    @location(10) normal_matrix_1: vec4<f32>,
-    @location(11) normal_matrix_2: vec4<f32>,
-    @location(12) color: vec4<f32>,
+    @location(9) normal_matrix_0: vec3<f32>,
+    @location(10) normal_matrix_1: vec3<f32>,
+    @location(11) normal_matrix_2: vec3<f32>,
+    @location(12) color: vec3<f32>, // Len 3: No alpha.
     @location(13) shinyness: f32,
 }
 
@@ -75,23 +75,24 @@ fn vs_main(
     );
 
     var normal_mat = mat3x3<f32>(
-        instance.normal_matrix_0.xyz,
-        instance.normal_matrix_1.xyz,
-        instance.normal_matrix_2.xyz,
+        instance.normal_matrix_0,
+        instance.normal_matrix_1,
+        instance.normal_matrix_2,
     );
 
+    // todo: Is this right?
+    // We use the tangent matrix, and tangent out values for normal mapping.
+    // This is currently unimplemented.
     var world_normal = normalize(normal_mat * model.normal);
-//    var world_tangent = normalize(normal_mat * model.tangent);
-//    var world_bitangent = normalize(normal_mat * model.bitangent);
+    var world_tangent = normalize(normal_mat * model.tangent);
+    var world_bitangent = normalize(normal_mat * model.bitangent);
 
-// We use the tangent matrix, and tangent out values for normal mapping.
-// This is currently unimplemented.
 // Construct the tangent matrix
-//    var tangent_mat = transpose(mat3x3<f32>(
-//        world_tangent,
-//        world_bitangent,
-//        world_normal,
-//    ));
+    var tangent_mat = transpose(mat3x3<f32>(
+        world_tangent,
+        world_bitangent,
+        world_normal,
+    ));
 
     // Pad the model position with 1., for use with the 4x4 transform mats.
     var world_posit = model_mat * vec4<f32>(model.position, 1.0);
@@ -102,9 +103,10 @@ fn vs_main(
 
 //    result.tangent_position = tangent_mat * world_posit.xyz;
 //    result.tangent_view_position = tangent_mat * camera.position.xyz;
+//    result.tangent_light_position = tangent_matrix * light.position;
     result.normal = world_normal;
 
-    result.color = instance.color;
+    result.color = vec4<f32>(instance.color, 1.);
     result.shinyness = instance.shinyness;
 
     return result;
@@ -117,6 +119,10 @@ fn fs_main(vertex: VertexOut) -> @location(0) vec4<f32> {
     // todo: Don't multiply ambient for every fragment; do it on the CPU.
     var ambient = lighting.ambient_color * lighting.ambient_intensity;
 
+    // todo: Emmissive term?
+
+//    let tangent_normal = object_normal.xyz * 2.0 - 1.0;
+
     // These values include color and intensity
     var diffuse = vec4<f32>(0., 0., 0., 0.);
     var specular = vec4<f32>(0., 0., 0., 0.);
@@ -127,19 +133,25 @@ fn fs_main(vertex: VertexOut) -> @location(0) vec4<f32> {
     for (var i=0; i < lighting.lights_len; i++) {
         var light = lighting.point_lights[i];
 
-        var diff =  light.position.xyz - vertex.position.xyz;
+        // Diction from light to the vertex.
 
-        var light_dir = normalize(diff);
+        var to_light = light.position.xyz - vertex.position.xyz;
+//        var diff =  vertex.position.xyz - light.position.xyz;
+
+        // Called `L` by some sources.
+        var light_dir = normalize(to_light);
 
         // This expr applies the inverse square to find falloff with distance.
-        var attentuation = 1. / (pow(diff.x, 2.) + pow(diff.y, 2.) + pow(diff.z, 2.));
+        var attentuation = 1. / (pow(to_light.x, 2.) + pow(to_light.y, 2.) + pow(to_light.z, 2.));
 
         // Diffuse lighting
         var diffuse_on_face = max(dot(vertex.normal, light_dir), 0.);
-        diffuse = light.diffuse_color * diffuse_on_face * light.diffuse_intensity * attentuation;
+        diffuse += light.diffuse_color * diffuse_on_face * light.diffuse_intensity * attentuation;
+//        diffuse = diffuse_on_face * light.diffuse_intensity;
+//        * attentuation;
 
         // Specular lighting.
-        specular = vec4<f32>(0., 0., 0., 0.);
+        var specular_this_light = vec4<f32>(0., 0., 0., 0.);
 
         if (diffuse_on_face > 0.0) {
             var view_dir = normalize(camera.position.xyz - vertex.position.xyz);
@@ -149,7 +161,8 @@ fn fs_main(vertex: VertexOut) -> @location(0) vec4<f32> {
 
             var specular_coeff = pow(max(dot(vertex.normal, half_dir), 0.), vertex.shinyness);
 
-            specular = light.specular_color * specular_coeff * light.specular_intensity * attentuation;
+            specular_this_light = light.specular_color * specular_coeff * light.specular_intensity * attentuation;
+            specular += specular_this_light;
         }
     }
 

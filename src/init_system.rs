@@ -9,6 +9,8 @@ use winit::{
     window::{Window, WindowBuilder},
 };
 
+use env_logger;
+
 use crate::{
     init_graphics::GraphicsState,
     texture::Texture,
@@ -135,10 +137,6 @@ impl State {
             //                   self.sys.surface_cfg.height as f32, &self.sys.queue);
         }
     }
-
-    fn input(&mut self, event: &WindowEvent) -> bool {
-        false
-    }
 }
 
 pub fn run(
@@ -149,6 +147,17 @@ pub fn run(
     event_handler: Box<dyn Fn(DeviceEvent, &mut Scene, f32) -> bool>,
     gui_handler: Box<dyn Fn(&egui::Context)>,
 ) {
+    // cfg_if::cfg_if! {
+    //     if #[cfg(target_arch = "wasm32")] {
+    //         std::panic::set_hook(Box::new(console_error_panic_hook::hook));
+    //         console_log::init_with_level(log::Level::Warn).expect("Couldn't initialize logger");
+    //     } else {
+    // `env_logger` is required to print shader errors to the console.
+    // todo??
+    env_logger::init();
+        // }
+    // }
+
     #[cfg(not(target_arch = "wasm32"))]
     let mut _last_frame_inst = Instant::now();
     #[cfg(not(target_arch = "wasm32"))]

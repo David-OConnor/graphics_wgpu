@@ -9,11 +9,13 @@ pub const F32_SIZE: usize = 4;
 
 pub const VEC3_SIZE: usize = 3 * F32_SIZE;
 pub const VEC3_UNIFORM_SIZE: usize = 4 * F32_SIZE;
-pub const VERTEX_SIZE: usize = 14 * F32_SIZE;
 pub const MAT4_SIZE: usize = 16 * F32_SIZE;
 pub const MAT3_SIZE: usize = 9 * F32_SIZE;
 
-pub const INSTANCE_SIZE: usize = MAT4_SIZE + MAT3_SIZE + VEC3_UNIFORM_SIZE + F32_SIZE;
+pub const VERTEX_SIZE: usize = 14 * F32_SIZE;
+// Note that position, orientation, and scale are combined into a single 4x4 transformation
+// matrix. Note that unlike uniforms, we don't need alignment padding, and can use Vec3 directly.
+pub const INSTANCE_SIZE: usize = MAT4_SIZE + MAT3_SIZE + VEC3_SIZE + F32_SIZE;
 
 #[derive(Clone, Copy, Debug)]
 /// Example attributes: https://github.com/bevyengine/bevy/blob/main/crates/bevy_render/src/mesh/mesh/mod.rs#L56
@@ -71,37 +73,39 @@ impl Vertex {
         result
     }
 
-    // todo: This probably shouldn't be in this module, which is backend-agnostic-ish.
+    /// Create the vertex buffer memory layout, for our vertexes passed from CPU
+    /// to the vertex shader. Corresponds to `VertexIn` in the shader. Each
+    /// item here is for a single vertex.
     pub fn desc<'a>() -> wgpu::VertexBufferLayout<'a> {
         wgpu::VertexBufferLayout {
             array_stride: VERTEX_SIZE as wgpu::BufferAddress,
             step_mode: wgpu::VertexStepMode::Vertex,
             attributes: &[
-                // position
+                // Vertex position
                 wgpu::VertexAttribute {
                     offset: 0,
                     shader_location: 0,
                     format: wgpu::VertexFormat::Float32x3,
                 },
-                // tex_coords
+                // Texture coordinates
                 wgpu::VertexAttribute {
                     offset: VEC3_SIZE as wgpu::BufferAddress,
                     shader_location: 1,
                     format: wgpu::VertexFormat::Float32x2,
                 },
-                // normal
+                // Normal vector
                 wgpu::VertexAttribute {
                     offset: (2 * F32_SIZE + VEC3_SIZE) as wgpu::BufferAddress,
                     shader_location: 2,
                     format: wgpu::VertexFormat::Float32x3,
                 },
-                // tangent
+                // Tangent (Used to align textures)
                 wgpu::VertexAttribute {
                     offset: (2 * F32_SIZE + 2 * VEC3_SIZE) as wgpu::BufferAddress,
                     shader_location: 3,
                     format: wgpu::VertexFormat::Float32x3,
                 },
-                // bitangent
+                // Bitangent (Used to align textures)
                 wgpu::VertexAttribute {
                     offset: (2 * F32_SIZE + 3 * VEC3_SIZE) as wgpu::BufferAddress,
                     shader_location: 4,
@@ -125,6 +129,10 @@ pub struct Instance {
 }
 
 impl Instance {
+    /// Create the vertex buffer memory layout, for our vertexes passed from the
+    /// vertex to the fragment shader. Corresponds to `VertexOut` in the shader. Each
+    /// item here is for a single vertex. Cannot share locations with `VertexIn`, so
+    /// we start locations after `VertexIn`'s last one.
     pub fn desc<'a>() -> wgpu::VertexBufferLayout<'a> {
         wgpu::VertexBufferLayout {
             array_stride: INSTANCE_SIZE as wgpu::BufferAddress,
@@ -137,52 +145,57 @@ impl Instance {
                 // for each vec4. We'll have to reassemble the mat4 in
                 // the shader.
 
-                // Model matrix
+                // Model matrix, col 0
                 wgpu::VertexAttribute {
                     offset: 0,
                     shader_location: 5,
                     format: wgpu::VertexFormat::Float32x4,
                 },
+                // Model matrix, col 1
                 wgpu::VertexAttribute {
                     offset: (F32_SIZE * 4) as wgpu::BufferAddress,
                     shader_location: 6,
                     format: wgpu::VertexFormat::Float32x4,
                 },
+                // Model matrix, col 2
                 wgpu::VertexAttribute {
                     offset: (F32_SIZE * 8) as wgpu::BufferAddress,
                     shader_location: 7,
                     format: wgpu::VertexFormat::Float32x4,
                 },
+                // Model matrix, col 3
                 wgpu::VertexAttribute {
                     offset: (F32_SIZE * 12) as wgpu::BufferAddress,
                     shader_location: 8,
                     format: wgpu::VertexFormat::Float32x4,
                 },
-                // Normal matrix.
+                // Normal matrix, col 0
                 wgpu::VertexAttribute {
-                    offset: (F32_SIZE * 16) as wgpu::BufferAddress,
+                    offset: (MAT4_SIZE) as wgpu::BufferAddress,
                     shader_location: 9,
                     format: wgpu::VertexFormat::Float32x3,
                 },
+                // Normal matrix, col 1
                 wgpu::VertexAttribute {
-                    offset: (F32_SIZE * 19) as wgpu::BufferAddress,
+                    offset: (MAT4_SIZE + VEC3_SIZE) as wgpu::BufferAddress,
                     shader_location: 10,
                     format: wgpu::VertexFormat::Float32x3,
                 },
+                // Normal matrix, col 2
                 wgpu::VertexAttribute {
-                    offset: (F32_SIZE * 22) as wgpu::BufferAddress,
+                    offset: (MAT4_SIZE + VEC3_SIZE * 2) as wgpu::BufferAddress,
                     shader_location: 11,
                     format: wgpu::VertexFormat::Float32x3,
                 },
                 // model (and vertex) color
                 wgpu::VertexAttribute {
-                    offset: (F32_SIZE * 25) as wgpu::BufferAddress,
+                    offset: (MAT4_SIZE + MAT3_SIZE) as wgpu::BufferAddress,
                     shader_location: 12,
-                    format: wgpu::VertexFormat::Float32x4,
+                    format: wgpu::VertexFormat::Float32x3,
                 },
                 // Shinyness
                 wgpu::VertexAttribute {
-                    offset: (F32_SIZE * 26) as wgpu::BufferAddress,
+                    offset: (MAT4_SIZE + MAT3_SIZE + VEC3_SIZE) as wgpu::BufferAddress,
                     shader_location: 13,
                     format: wgpu::VertexFormat::Float32,
                 },
@@ -201,9 +214,21 @@ impl Instance {
         let normal_mat = self.orientation.to_matrix3();
 
         result[0..MAT4_SIZE].clone_from_slice(&model_mat.to_bytes());
+
         result[MAT4_SIZE..MAT4_SIZE + MAT3_SIZE].clone_from_slice(&normal_mat.to_bytes());
-        result[MAT4_SIZE + MAT3_SIZE..INSTANCE_SIZE - F32_SIZE]
-            .clone_from_slice(&self.color.to_bytes_uniform());
+
+        // todo: fn to convert Vec3 to byte array?
+        let mut color_buf = [0; VEC3_SIZE];
+        color_buf[0..F32_SIZE].clone_from_slice(&self.color.x.to_ne_bytes());
+        color_buf[F32_SIZE..2 * F32_SIZE].clone_from_slice(&self.color.y.to_ne_bytes());
+        color_buf[2 * F32_SIZE..3 * F32_SIZE].clone_from_slice(&self.color.z.to_ne_bytes());
+
+        result[MAT4_SIZE + MAT3_SIZE..INSTANCE_SIZE - F32_SIZE].clone_from_slice(&color_buf);
+        // todo
+        // result[MAT4_SIZE + MAT3_SIZE..INSTANCE_SIZE - F32_SIZE]
+        //     // .clone_from_slice(&self.color.to_bytes_uniform());
+        //     .clone_from_slice(&self.color.to_bytes());
+
         result[INSTANCE_SIZE - F32_SIZE..INSTANCE_SIZE]
             .clone_from_slice(&self.shinyness.to_ne_bytes());
 
@@ -303,6 +328,7 @@ impl Default for Scene {
             entities: Vec::new(),
             camera: Default::default(),
             lighting: Default::default(),
+            // todo: Consider a separate window struct.
             background_color: (0.7, 0.7, 0.7),
             window_title: "(Window title here)".to_owned(),
             window_size: (900., 600.),

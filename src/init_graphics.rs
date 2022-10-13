@@ -470,6 +470,7 @@ fn create_render_pipeline(
             polygon_mode: wgpu::PolygonMode::Fill,
             conservative: false,
         },
+
         depth_stencil: Some(wgpu::DepthStencilState {
             format: Texture::DEPTH_FORMAT,
             depth_write_enabled: true,
@@ -491,8 +492,6 @@ pub(crate) struct BindGroupData {
     pub lighting: BindGroup,
     /// We use this for GUI.
     pub layout_texture: BindGroupLayout,
-    // pub layout_gui_uniform: BindGroupLayout,
-    // pub gui_uniform: BindGroup,
     // pub texture: BindGroup,
 }
 

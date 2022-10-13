@@ -2,27 +2,15 @@ use crate::types::{F32_SIZE, VEC3_UNIFORM_SIZE};
 
 use lin_alg2::f32::Vec3;
 
-// The extra 4 is due to uniform buffers needing ton be a multiple of 16 in size.
+// The extra 4 is due to uniform (and storage) buffers needing ton be a multiple of 16 in size.
 // This is for the non-array portion of the lighting uniform.
 // The extra 12 is for padding.
-pub const LIGHTING_SIZE_FIXED: usize = VEC3_UNIFORM_SIZE + F32_SIZE + 12;
+pub const LIGHTING_SIZE_FIXED: usize = VEC3_UNIFORM_SIZE + F32_SIZE + 4 + 8;
 
 // The extra 8 here for the same reason.
 pub const POINT_LIGHT_SIZE: usize = 3 * VEC3_UNIFORM_SIZE + 2 * F32_SIZE + 8;
 
 // Note: These array-to-bytes functions may have broader use than in this lighting module.
-
-// /// Pads to an array4.
-// fn array3_to_bytes(a: [f32; 3]) -> [u8; VEC3_UNIFORM_SIZE] {
-//     let mut result = [0; VEC3_UNIFORM_SIZE];
-//
-//     result[0..F32_SIZE].clone_from_slice(&a[0].to_ne_bytes());
-//     result[F32_SIZE..2 * F32_SIZE].clone_from_slice(&a[1].to_ne_bytes());
-//     result[2 * F32_SIZE..3 * F32_SIZE].clone_from_slice(&a[2].to_ne_bytes());
-//     result[3 * F32_SIZE..VEC3_UNIFORM_SIZE].clone_from_slice(&[0; F32_SIZE]);
-//
-//     result
-// }
 
 fn array4_to_bytes(a: [f32; 4]) -> [u8; VEC3_UNIFORM_SIZE] {
     let mut result = [0; VEC3_UNIFORM_SIZE];
@@ -77,6 +65,7 @@ impl Lighting {
         buf_fixed_size[VEC3_UNIFORM_SIZE + F32_SIZE..VEC3_UNIFORM_SIZE + F32_SIZE + 4]
             .clone_from_slice(&(self.point_lights.len() as i32).to_le_bytes());
 
+        // Pad to a multiple of 16.
         buf_fixed_size[VEC3_UNIFORM_SIZE + F32_SIZE + 4..LIGHTING_SIZE_FIXED]
             .clone_from_slice(&[0; 8]);
 
@@ -124,15 +113,19 @@ impl PointLight {
 
         // 16 is vec3 size in bytes, including padding.
         result[0..VEC3_UNIFORM_SIZE].clone_from_slice(&self.position.to_bytes_uniform());
+
         result[VEC3_UNIFORM_SIZE..2 * VEC3_UNIFORM_SIZE]
             .clone_from_slice(&array4_to_bytes(self.diffuse_color));
+
         result[2 * VEC3_UNIFORM_SIZE..3 * VEC3_UNIFORM_SIZE]
             .clone_from_slice(&array4_to_bytes(self.specular_color));
 
         result[3 * VEC3_UNIFORM_SIZE..3 * VEC3_UNIFORM_SIZE + F32_SIZE]
             .clone_from_slice(&self.diffuse_intensity.to_ne_bytes());
+
         result[3 * VEC3_UNIFORM_SIZE + F32_SIZE..3 * VEC3_UNIFORM_SIZE + 2 * F32_SIZE]
             .clone_from_slice(&self.specular_intensity.to_ne_bytes());
+
         result[3 * VEC3_UNIFORM_SIZE + 2 * F32_SIZE..POINT_LIGHT_SIZE].clone_from_slice(&[0; 8]);
 
         result

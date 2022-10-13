@@ -29,6 +29,7 @@ pub struct InputsCommanded {
     pub free_look: bool,
 }
 
+
 impl InputsCommanded {
     /// Return true if there are any inputs.
     pub fn inputs_present(&self) -> bool {
