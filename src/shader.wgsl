@@ -142,13 +142,11 @@ fn fs_main(vertex: VertexOut) -> @location(0) vec4<f32> {
         var light_dir = normalize(to_light);
 
         // This expr applies the inverse square to find falloff with distance.
-        var attentuation = 1. / (pow(to_light.x, 2.) + pow(to_light.y, 2.) + pow(to_light.z, 2.));
+        var attenuation = 1. / (pow(to_light.x, 2.) + pow(to_light.y, 2.) + pow(to_light.z, 2.));
 
         // Diffuse lighting
         var diffuse_on_face = max(dot(vertex.normal, light_dir), 0.);
-        diffuse += light.diffuse_color * diffuse_on_face * light.diffuse_intensity * attentuation;
-//        diffuse = diffuse_on_face * light.diffuse_intensity;
-//        * attentuation;
+        diffuse += light.diffuse_color * diffuse_on_face * light.diffuse_intensity * attenuation;
 
         // Specular lighting.
         var specular_this_light = vec4<f32>(0., 0., 0., 0.);
@@ -161,7 +159,7 @@ fn fs_main(vertex: VertexOut) -> @location(0) vec4<f32> {
 
             var specular_coeff = pow(max(dot(vertex.normal, half_dir), 0.), vertex.shinyness);
 
-            specular_this_light = light.specular_color * specular_coeff * light.specular_intensity * attentuation;
+            specular_this_light = light.specular_color * specular_coeff * light.specular_intensity * attenuation;
             specular += specular_this_light;
         }
     }

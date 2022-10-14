@@ -279,7 +279,7 @@ impl GraphicsState {
         height: u32,
         // surface: &wgpu::Surface,
         window: &Window,
-        gui_handler: &Box<dyn Fn(&egui::Context)>,
+        gui_handler: &mut Box<dyn FnMut(&egui::Context)>,
     ) {
         match self.input_settings.initial_controls {
             ControlScheme::FreeCamera => {
@@ -328,7 +328,7 @@ impl GraphicsState {
         // Begin to draw the UI frame.
         self.egui_platform.begin_frame();
 
-        gui_handler(&self.egui_platform.context());
+        gui_handler(&mut self.egui_platform.context());
 
         // self.egui_app.ui(&self.egui_platform.context());
         // Draw the UI.

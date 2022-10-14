@@ -144,8 +144,8 @@ pub fn run(
     input_settings: InputSettings,
     ui_settings: UiSettings,
     mut render_handler: Box<dyn FnMut(&mut Scene) -> bool>,
-    event_handler: Box<dyn Fn(DeviceEvent, &mut Scene, f32) -> bool>,
-    gui_handler: Box<dyn Fn(&egui::Context)>,
+    mut event_handler: Box<dyn FnMut(DeviceEvent, &mut Scene, f32) -> bool>,
+    mut gui_handler: Box<dyn FnMut(&egui::Context)>,
 ) {
     // cfg_if::cfg_if! {
     //     if #[cfg(target_arch = "wasm32")] {
@@ -256,7 +256,7 @@ pub fn run(
                     state.sys.surface_cfg.height,
                     // &state.sys.surface,
                     &window,
-                    &gui_handler,
+                    &mut gui_handler,
                 );
             }
             _ => {}

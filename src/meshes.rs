@@ -147,8 +147,7 @@ impl Mesh {
         let ftr = [x, y, z];
         let ftl = [-x, y, z];
 
-        // Note: For tetrahedrons, the normals are the corners of the cube we
-        // didn't use for vertices.
+        // Normal vectors
         let aft = Vec3::new(0., 0., -1.);
         let fwd = Vec3::new(0., 0., 1.);
         let l = Vec3::new(-1., 0., 0.);
@@ -208,9 +207,6 @@ impl Mesh {
         Self {
             vertices,
             indices,
-            // vertex_buffer: Vec<usize>,
-            // index_buffer: Vec<usize>,
-            // num_elements: u32,
             material: 0,
         }
     }
