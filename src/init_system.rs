@@ -9,8 +9,6 @@ use winit::{
     window::{Window, WindowBuilder},
 };
 
-use env_logger;
-
 use crate::{
     init_graphics::GraphicsState,
     texture::Texture,
@@ -141,17 +139,16 @@ pub fn run<'a, T: 'static>(
     input_settings: InputSettings,
     ui_settings: UiSettings,
     mut render_handler: impl FnMut(&mut T, &mut Scene) -> bool + 'static,
-    mut event_handler: impl FnMut(&mut T, DeviceEvent, &mut Scene, f32) -> bool + 'static,
-    mut gui_handler: impl FnMut(&mut T, &egui::Context) + 'static,
+    mut event_handler: impl FnMut(&mut T, DeviceEvent, &mut Scene, f32) -> (bool, bool) + 'static,
+    mut gui_handler: impl FnMut(&mut T, &egui::Context, &mut Scene) -> bool + 'static,
 ) {
     // cfg_if::cfg_if! {
     //     if #[cfg(target_arch = "wasm32")] {
     //         std::panic::set_hook(Box::new(console_error_panic_hook::hook));
     //         console_log::init_with_level(log::Level::Warn).expect("Couldn't initialize logger");
     //     } else {
-    // `env_logger` is required to print shader errors to the console.
     // todo??
-    env_logger::init();
+    // env_logger::init();
     // }
     // }
 
@@ -187,16 +184,21 @@ pub fn run<'a, T: 'static>(
             Event::MainEventsCleared => window.request_redraw(),
             Event::DeviceEvent { event, .. } => {
                 let dt_secs = dt.as_secs() as f32 + dt.subsec_micros() as f32 / 1_000_000.;
-                let entities_changed = event_handler(
+                let (entities_changed, lighting_changed) = event_handler(
                     &mut user_state,
                     event.clone(),
                     &mut state.graphics.scene,
                     dt_secs,
                 );
 
-                // Entities have been updated in the scene; update the buffers
+                // Entities have been updated in the scene; update the buffers.
                 if entities_changed {
                     state.graphics.setup_entities(&state.sys.device);
+                }
+
+                if lighting_changed {
+                    // Entities have been updated in the scene; update the buffer.
+                    state.graphics.update_lighting(&state.sys.queue);
                 }
 
                 state.graphics.handle_input(event);
@@ -240,6 +242,8 @@ pub fn run<'a, T: 'static>(
                 if entities_changed {
                     state.graphics.setup_entities(&state.sys.device);
                 }
+                // Note that the GUI handler can also modify entities, but
+                // we do that in the `init_graphics` module.
 
                 // todo: move this into `render`?
                 let output_frame = state.sys.surface.get_current_texture().unwrap();

@@ -8,11 +8,8 @@ edition = "2021"
 wgpu = "^0.14.0"
 lin-alg2 = { path = "../lin_alg", features = ["computer_graphics"] }
 
-#// todo??
-env_logger = "0.9"  # Allows printing shader errors to the console
-
 winit = "^0.27.3"
-pollster = "^0.2.5"  # For 2 WGPU init fnsthat use async.
+pollster = "^0.2.5"  # For 2 WGPU init fns that use async.
 
 image = "^0.24.1" # For loading textures
 obj = "^0.10.2"  # For loading OBJ meshes.

@@ -185,8 +185,8 @@ fn fs_main(vertex: VertexOut) -> @location(0) vec4<f32> {
         }
     }
 
-//    return (ambient + diffuse + specular) * vertex.color;
-    var result = (ambient + diffuse) * vertex.color;
+    var result = (ambient + diffuse + specular) * vertex.color;
 
-    return vec4<f32>(result.rgb, 1.); // TS by removing alpha channel.
+    // todo: Temporarily removing alpha channel
+    return vec4<f32>(result.rgb, 1.);
 }

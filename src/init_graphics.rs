@@ -51,7 +51,7 @@ pub(crate) struct GraphicsState {
     pub bind_groups: BindGroupData,
     // pub camera: Camera,
     camera_buf: wgpu::Buffer,
-    // lighting_buf: wgpu::Buffer,
+    lighting_buf: wgpu::Buffer,
     pub pipeline: wgpu::RenderPipeline,
     pub depth_texture: Texture,
     pub input_settings: InputSettings,
@@ -190,7 +190,7 @@ impl GraphicsState {
             instance_buf,
             bind_groups,
             camera_buf: cam_buf,
-            // lighting_buf,
+            lighting_buf,
             pipeline,
             depth_texture,
             // staging_belt: wgpu::util::StagingBelt::new(0x100),
@@ -268,6 +268,10 @@ impl GraphicsState {
         self.mesh_mappings = mesh_mappings;
     }
 
+    pub(crate) fn update_lighting(&mut self, queue: &wgpu::Queue) {
+        queue.write_buffer(&self.lighting_buf, 0, &self.scene.lighting.to_bytes());
+    }
+
     pub(crate) fn render<T>(
         &mut self,
         output_frame: wgpu::SurfaceTexture,
@@ -279,7 +283,7 @@ impl GraphicsState {
         height: u32,
         // surface: &wgpu::Surface,
         window: &Window,
-        mut gui_handler: impl FnMut(&mut T, &egui::Context),
+        mut gui_handler: impl FnMut(&mut T, &egui::Context, &mut Scene) -> bool,
         user_state: &mut T,
     ) {
         match self.input_settings.initial_controls {
@@ -324,21 +328,26 @@ impl GraphicsState {
         //
         // self.staging_belt.finish();
 
-        // todo: GUI start. Put all this in fn?
+        // todo: GUI start. Put all this in a fn to organize?
 
         // Begin to draw the UI frame.
         self.egui_platform.begin_frame();
 
-        gui_handler(user_state, &mut self.egui_platform.context());
+        let entities_changed = gui_handler(
+            user_state,
+            &mut self.egui_platform.context(),
+            &mut self.scene,
+        );
 
-        // self.egui_app.ui(&self.egui_platform.context());
-        // Draw the UI.
+        if entities_changed {
+            self.setup_entities(device);
+        }
 
         // End the UI frame. We could now handle the output and draw the UI with the backend.
         let full_output = self.egui_platform.end_frame(Some(window));
         let paint_jobs = self.egui_platform.context().tessellate(full_output.shapes);
 
-        // Upload all resources for the GPU.
+        // Screep descriptor for the GUI.
         let screen_descriptor = ScreenDescriptor {
             physical_width: width,
             // todo: Respect ui settings placement field.
