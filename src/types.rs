@@ -301,7 +301,6 @@ pub enum ControlScheme {
     /// todo: inner Vec of the point?
     /// todo: Unimplemented
     Arc,
-
 }
 
 impl Default for ControlScheme {
@@ -355,20 +354,16 @@ impl Default for InputSettings {
             rotate_sens: 0.45,
             rotate_key_sens: 1.0,
             run_factor: 5.,
-
         }
     }
 }
 
-
 #[derive(Clone, Debug)]
 /// GUI settings
-pub struct UiSettings {
-}
+pub struct UiSettings {}
 
 impl Default for UiSettings {
     fn default() -> Self {
-        Self {
-        }
+        Self {}
     }
 }

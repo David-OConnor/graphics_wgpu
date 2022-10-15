@@ -17,7 +17,7 @@ use crate::{
     gui,
     input::{self, InputsCommanded},
     texture::Texture,
-    types::{InputSettings, Instance, Scene, UiSettings, Vertex, ControlScheme},
+    types::{ControlScheme, InputSettings, Instance, Scene, UiSettings, Vertex},
 };
 use lin_alg2::f32::Vec3;
 
@@ -300,7 +300,7 @@ impl GraphicsState {
                     self.inputs_commanded.mouse_delta_y = 0.;
                 }
             }
-            _ => ()
+            _ => (),
         }
 
         // We create a CommandEncoder to create the actual commands to send to the

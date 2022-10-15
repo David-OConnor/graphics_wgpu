@@ -52,14 +52,15 @@ struct InstanceIn {
 }
 
 struct VertexOut {
-    @builtin(position) position: vec4<f32>,
+    @builtin(position) clip_posit: vec4<f32>,
     @location(0) tex_coords: vec2<f32>,
     @location(1) normal: vec3<f32>,
     @location(2) color: vec4<f32>,
     @location(3) shinyness: f32,
-    //    @location(1) tangent_position: vec3<f32>,
-    //    @location(2) tangent_light_position: vec3<f32>,
-    //    @location(3) tangent_view_position: vec3<f32>,
+    @location(4) world_posit: vec3<f32>, // todo: Experimenting
+//        @location(1) tangent_position: vec3<f32>,
+//        @location(2) tangent_light_position: vec3<f32>,
+//        @location(3) tangent_view_position: vec3<f32>,
 }
 
 @vertex
@@ -76,21 +77,21 @@ fn vs_main(
     );
 
     // The normal matrix includes rotation only.
-//    var normal_mat = mat3x3<f32>(
-//        instance.normal_matrix_0,
-//        instance.normal_matrix_1,
-//        instance.normal_matrix_2,
-//    );
-
-    // "the transpose of the inverse of the upper-left 3x3 part of the model matrix"
-    var model_mat_3 = mat3x3<f32>(
-        instance.model_matrix_0.xyz,
-        instance.model_matrix_1.xyz,
-        instance.model_matrix_2.xyz,
+    var normal_mat = mat3x3<f32>(
+        instance.normal_matrix_0,
+        instance.normal_matrix_1,
+        instance.normal_matrix_2,
     );
 
+    // "the transpose of the inverse of the upper-left 3x3 part of the model matrix"
+//    var model_mat_3 = mat3x3<f32>(
+//        instance.model_matrix_0.xyz,
+//        instance.model_matrix_1.xyz,
+//        instance.model_matrix_2.xyz,
+//    );
+
     // todo: Constructing normal mat here to troubleshoot
-    var normal_mat = model_mat_3;
+//    var normal_mat = model_mat_3;
 
     // Note that the normal matrix is just the 3x3 rotation matrix, unless
     // non-uniform scaling is used; that's when we need the inverse transpose.
@@ -117,7 +118,7 @@ fn vs_main(
 
     var result: VertexOut;
 
-    result.position = camera.proj_view * world_posit;
+    result.clip_posit = camera.proj_view * world_posit;
 
 //    result.tangent_position = tangent_mat * world_posit.xyz;
 //    result.tangent_view_position = tangent_mat * camera.position.xyz;
@@ -126,11 +127,12 @@ fn vs_main(
 
     result.color = vec4<f32>(instance.color, 1.);
     result.shinyness = instance.shinyness;
+    result.world_posit = world_posit.xyz;
 
     return result;
 }
 
-/// Blinn-Phong shader.
+/// Fragment shader, which is mostly lighting calculations.
 @fragment
 fn fs_main(vertex: VertexOut) -> @location(0) vec4<f32> {
     // Ambient lighting
@@ -151,37 +153,40 @@ fn fs_main(vertex: VertexOut) -> @location(0) vec4<f32> {
     for (var i=0; i < lighting.lights_len; i++) {
         var light = lighting.point_lights[i];
 
-        // Diction from light to the vertex.
+        // Direction from light to the vertex; we use this to calculate attentiation,
+        // and diffuse-lighting cosine loss.
 
-        var to_light = light.position.xyz - vertex.position.xyz;
-//        var diff =  vertex.position.xyz - light.position.xyz;
+        var light_to_vert_diff =  vertex.world_posit.xyz - light.position.xyz;
 
-        // Called `L` by some sources.
-        var light_dir = normalize(to_light);
+        var light_to_vert_dir = normalize(light_to_vert_diff);
 
         // This expr applies the inverse square to find falloff with distance.
-        var attenuation = 1. / (pow(to_light.x, 2.) + pow(to_light.y, 2.) + pow(to_light.z, 2.));
+        // Note that we use the word "attenuation" in perhaps the inverse of how we usually use it; 1.0
+        // is full intensity here.
+        var dist_attenuation = 1. / (pow(light_to_vert_diff.x, 2.) + pow(light_to_vert_diff.y, 2.) + pow(light_to_vert_diff.z, 2.));
 
-        // Diffuse lighting
-        var diffuse_on_face = max(dot(vertex.normal, light_dir), 0.);
-        diffuse += light.diffuse_color * diffuse_on_face * light.diffuse_intensity * attenuation;
+        // Diffuse lighting. This is essentially cosine los.
+        var diffuse_attenuation = max(dot(vertex.normal, -light_to_vert_dir), 0.);
+        diffuse += light.diffuse_color * diffuse_attenuation * light.diffuse_intensity * dist_attenuation;
 
         // Specular lighting.
         var specular_this_light = vec4<f32>(0., 0., 0., 0.);
 
-        if (diffuse_on_face > 0.0) {
-            var view_dir = normalize(camera.position.xyz - vertex.position.xyz);
+        if (diffuse_attenuation > 0.0) {
+            var view_dir = normalize(camera.position.xyz - vertex.world_posit.xyz);
 
-            // Blinn half vector
-            var half_dir = normalize(view_dir + light_dir);
+//          // Blinn half vector
+            var half_dir = normalize(view_dir + light_to_vert_dir);
 
             var specular_coeff = pow(max(dot(vertex.normal, half_dir), 0.), vertex.shinyness);
 
-            specular_this_light = light.specular_color * specular_coeff * light.specular_intensity * attenuation;
+            specular_this_light = light.specular_color * specular_coeff * light.specular_intensity * dist_attenuation;
             specular += specular_this_light;
         }
     }
 
 //    return (ambient + diffuse + specular) * vertex.color;
-    return (ambient + diffuse) * vertex.color;
+    var result = (ambient + diffuse) * vertex.color;
+
+    return vec4<f32>(result.rgb, 1.); // TS by removing alpha channel.
 }

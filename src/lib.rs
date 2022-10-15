@@ -1,4 +1,4 @@
-#![allow(mixed_script_confusables)]  // Theta in meshes
+#![allow(mixed_script_confusables)] // Theta in meshes
 
 mod camera;
 mod gui;

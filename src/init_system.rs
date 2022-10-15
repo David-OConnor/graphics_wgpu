@@ -152,7 +152,7 @@ pub fn run<'a, T: 'static>(
     // `env_logger` is required to print shader errors to the console.
     // todo??
     env_logger::init();
-        // }
+    // }
     // }
 
     #[cfg(not(target_arch = "wasm32"))]
@@ -187,8 +187,12 @@ pub fn run<'a, T: 'static>(
             Event::MainEventsCleared => window.request_redraw(),
             Event::DeviceEvent { event, .. } => {
                 let dt_secs = dt.as_secs() as f32 + dt.subsec_micros() as f32 / 1_000_000.;
-                let entities_changed =
-                    event_handler(&mut user_state, event.clone(), &mut state.graphics.scene, dt_secs);
+                let entities_changed = event_handler(
+                    &mut user_state,
+                    event.clone(),
+                    &mut state.graphics.scene,
+                    dt_secs,
+                );
 
                 // Entities have been updated in the scene; update the buffers
                 if entities_changed {

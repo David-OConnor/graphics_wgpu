@@ -40,10 +40,12 @@ impl Default for Lighting {
             point_lights: vec![PointLight {
                 type_: LightType::Omnidirectional,
                 position: Vec3::new_zero(),
+                // todo: What does the alpha on these colors do?
+                // todo: Should we remove it?
                 diffuse_color: [1., 1., 1., 0.5],
                 specular_color: [1., 1., 1., 0.5],
-                diffuse_intensity: 1_000_000.,
-                specular_intensity: 1_000_000.,
+                diffuse_intensity: 100.,
+                specular_intensity: 100.,
             }],
         }
     }
