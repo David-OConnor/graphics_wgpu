@@ -51,7 +51,7 @@ pub(crate) struct GraphicsState {
     pub bind_groups: BindGroupData,
     // pub camera: Camera,
     camera_buf: wgpu::Buffer,
-    lighting_buf: wgpu::Buffer,
+    // lighting_buf: wgpu::Buffer,
     pub pipeline: wgpu::RenderPipeline,
     pub depth_texture: Texture,
     pub input_settings: InputSettings,
@@ -190,7 +190,7 @@ impl GraphicsState {
             instance_buf,
             bind_groups,
             camera_buf: cam_buf,
-            lighting_buf,
+            // lighting_buf,
             pipeline,
             depth_texture,
             // staging_belt: wgpu::util::StagingBelt::new(0x100),
@@ -268,7 +268,7 @@ impl GraphicsState {
         self.mesh_mappings = mesh_mappings;
     }
 
-    pub(crate) fn render(
+    pub(crate) fn render<T>(
         &mut self,
         output_frame: wgpu::SurfaceTexture,
         output_view: &wgpu::TextureView,
@@ -279,7 +279,9 @@ impl GraphicsState {
         height: u32,
         // surface: &wgpu::Surface,
         window: &Window,
-        gui_handler: &mut Box<dyn FnMut(&egui::Context)>,
+        // gui_handler: &mut Box<dyn FnMut(&egui::Context)>,
+        mut gui_handler: impl FnMut(&mut T, &egui::Context),
+        user_state: &mut T,
     ) {
         match self.input_settings.initial_controls {
             ControlScheme::FreeCamera => {
@@ -328,7 +330,7 @@ impl GraphicsState {
         // Begin to draw the UI frame.
         self.egui_platform.begin_frame();
 
-        gui_handler(&mut self.egui_platform.context());
+        gui_handler(user_state, &mut self.egui_platform.context());
 
         // self.egui_app.ui(&self.egui_platform.context());
         // Draw the UI.

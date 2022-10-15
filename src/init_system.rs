@@ -14,7 +14,7 @@ use env_logger;
 use crate::{
     init_graphics::GraphicsState,
     texture::Texture,
-    types::{Entity, InputSettings, Scene, UiSettings},
+    types::{InputSettings, Scene, UiSettings},
 };
 
 const WINDOW_TITLE_INIT: &str = "Graphics";
@@ -131,21 +131,21 @@ impl State {
             );
 
             self.graphics.scene.camera.update_proj_mat();
-
-            // todo: Temp(?) for drawing text
-            // self.brush.resize_view(self.sys.surface_cfg.width as f32,
-            //                   self.sys.surface_cfg.height as f32, &self.sys.queue);
         }
     }
 }
 
-pub fn run(
+pub fn run<'a, T: 'static>(
+    mut user_state: T,
     scene: Scene,
     input_settings: InputSettings,
     ui_settings: UiSettings,
-    mut render_handler: Box<dyn FnMut(&mut Scene) -> bool>,
-    mut event_handler: Box<dyn FnMut(DeviceEvent, &mut Scene, f32) -> bool>,
-    mut gui_handler: Box<dyn FnMut(&egui::Context)>,
+    // mut render_handler: Box<dyn FnMut(&mut Scene) -> bool>,
+    // mut event_handler: Box<dyn FnMut(DeviceEvent, &mut Scene, f32) -> bool>,
+    // mut gui_handler: Box<dyn FnMut(&egui::Context)>,
+    mut render_handler: impl FnMut(&mut T, &mut Scene) -> bool + 'static,
+    mut event_handler: impl FnMut(&mut T, DeviceEvent, &mut Scene, f32) -> bool + 'static,
+    mut gui_handler: impl FnMut(&mut T, &egui::Context) + 'static,
 ) {
     // cfg_if::cfg_if! {
     //     if #[cfg(target_arch = "wasm32")] {
@@ -191,7 +191,7 @@ pub fn run(
             Event::DeviceEvent { event, .. } => {
                 let dt_secs = dt.as_secs() as f32 + dt.subsec_micros() as f32 / 1_000_000.;
                 let entities_changed =
-                    event_handler(event.clone(), &mut state.graphics.scene, dt_secs);
+                    event_handler(&mut user_state, event.clone(), &mut state.graphics.scene, dt_secs);
 
                 // Entities have been updated in the scene; update the buffers
                 if entities_changed {
@@ -233,7 +233,7 @@ pub fn run(
                 dt = now - last_render_time;
                 last_render_time = now;
 
-                let entities_changed = render_handler(&mut state.graphics.scene);
+                let entities_changed = render_handler(&mut user_state, &mut state.graphics.scene);
 
                 // Entities have been updated in the scene; update the buffers
                 if entities_changed {
@@ -257,6 +257,7 @@ pub fn run(
                     // &state.sys.surface,
                     &window,
                     &mut gui_handler,
+                    &mut user_state,
                 );
             }
             _ => {}

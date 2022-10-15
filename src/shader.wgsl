@@ -64,9 +64,10 @@ struct VertexOut {
 
 @vertex
 fn vs_main(
-    model: VertexIn,
+    vertex_in: VertexIn,
     instance: InstanceIn,
 ) -> VertexOut {
+    // The model matrix includes translation, rotation, and scale.
     var model_mat = mat4x4<f32>(
         instance.model_matrix_0,
         instance.model_matrix_1,
@@ -74,18 +75,35 @@ fn vs_main(
         instance.model_matrix_3,
     );
 
-    var normal_mat = mat3x3<f32>(
-        instance.normal_matrix_0,
-        instance.normal_matrix_1,
-        instance.normal_matrix_2,
+    // The normal matrix includes rotation only.
+//    var normal_mat = mat3x3<f32>(
+//        instance.normal_matrix_0,
+//        instance.normal_matrix_1,
+//        instance.normal_matrix_2,
+//    );
+
+    // "the transpose of the inverse of the upper-left 3x3 part of the model matrix"
+    var model_mat_3 = mat3x3<f32>(
+        instance.model_matrix_0.xyz,
+        instance.model_matrix_1.xyz,
+        instance.model_matrix_2.xyz,
     );
+
+    // todo: Constructing normal mat here to troubleshoot
+    var normal_mat = model_mat_3;
+
+    // Note that the normal matrix is just the 3x3 rotation matrix, unless
+    // non-uniform scaling is used; that's when we need the inverse transpose.
+    // In either case, you should probably do that on the CPU.
+//    var normal_mat = inverse(transpose(model_mat_3));
+
 
     // todo: Is this right?
     // We use the tangent matrix, and tangent out values for normal mapping.
     // This is currently unimplemented.
-    var world_normal = normalize(normal_mat * model.normal);
-    var world_tangent = normalize(normal_mat * model.tangent);
-    var world_bitangent = normalize(normal_mat * model.bitangent);
+    var world_normal = normalize(normal_mat * vertex_in.normal);
+    var world_tangent = normalize(normal_mat * vertex_in.tangent);
+    var world_bitangent = normalize(normal_mat * vertex_in.bitangent);
 
 // Construct the tangent matrix
     var tangent_mat = transpose(mat3x3<f32>(
@@ -95,7 +113,7 @@ fn vs_main(
     ));
 
     // Pad the model position with 1., for use with the 4x4 transform mats.
-    var world_posit = model_mat * vec4<f32>(model.position, 1.0);
+    var world_posit = model_mat * vec4<f32>(vertex_in.position, 1.0);
 
     var result: VertexOut;
 
