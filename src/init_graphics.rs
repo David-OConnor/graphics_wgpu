@@ -279,7 +279,6 @@ impl GraphicsState {
         height: u32,
         // surface: &wgpu::Surface,
         window: &Window,
-        // gui_handler: &mut Box<dyn FnMut(&egui::Context)>,
         mut gui_handler: impl FnMut(&mut T, &egui::Context),
         user_state: &mut T,
     ) {
