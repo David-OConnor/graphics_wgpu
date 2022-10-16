@@ -27,6 +27,8 @@ pub(crate) struct SystemState {
     pub device: wgpu::Device,
     pub queue: wgpu::Queue,
     pub surface_cfg: wgpu::SurfaceConfiguration,
+    /// Used to disable inputs while the mouse is in the GUI section.
+    pub mouse_in_gui: bool, // todo: Is this how you want to handle this?
 }
 
 struct State {
@@ -42,25 +44,25 @@ impl State {
         ui_settings: UiSettings,
     ) -> Self {
         #[cfg(target_arch = "wasm32")]
-        {
-            use winit::platform::web::WindowExtWebSys;
-            let query_string = web_sys::window().unwrap().location().search().unwrap();
-            let level: log::Level = parse_url_query_string(&query_string, "RUST_LOG")
-                .map(|x| x.parse().ok())
-                .flatten()
-                .unwrap_or(log::Level::Error);
-            console_log::init_with_level(level).expect("could not initialize logger");
-            std::panic::set_hook(Box::new(console_error_panic_hook::hook));
-            // On wasm, append the canvas to the document body
-            web_sys::window()
-                .and_then(|win| win.document())
-                .and_then(|doc| doc.body())
-                .and_then(|body| {
-                    body.append_child(&web_sys::Element::from(window.canvas()))
-                        .ok()
-                })
-                .expect("couldn't append canvas to document body");
-        }
+            {
+                use winit::platform::web::WindowExtWebSys;
+                let query_string = web_sys::window().unwrap().location().search().unwrap();
+                let level: log::Level = parse_url_query_string(&query_string, "RUST_LOG")
+                    .map(|x| x.parse().ok())
+                    .flatten()
+                    .unwrap_or(log::Level::Error);
+                console_log::init_with_level(level).expect("could not initialize logger");
+                std::panic::set_hook(Box::new(console_error_panic_hook::hook));
+                // On wasm, append the canvas to the document body
+                web_sys::window()
+                    .and_then(|win| win.document())
+                    .and_then(|doc| doc.body())
+                    .and_then(|body| {
+                        body.append_child(&web_sys::Element::from(window.canvas()))
+                            .ok()
+                    })
+                    .expect("couldn't append canvas to document body");
+            }
 
         let size = window.inner_size();
 
@@ -94,6 +96,7 @@ impl State {
             device,
             queue,
             surface_cfg,
+            mouse_in_gui: false,
         };
 
         let graphics = GraphicsState::new(
@@ -140,7 +143,7 @@ pub fn run<'a, T: 'static>(
     ui_settings: UiSettings,
     mut render_handler: impl FnMut(&mut T, &mut Scene) -> bool + 'static,
     mut event_handler: impl FnMut(&mut T, DeviceEvent, &mut Scene, f32) -> (bool, bool) + 'static,
-    mut gui_handler: impl FnMut(&mut T, &egui::Context, &mut Scene) -> bool + 'static,
+    mut gui_handler: impl FnMut(&mut T, &egui::Context, &mut Scene) -> (bool, bool) + 'static,
 ) {
     // cfg_if::cfg_if! {
     //     if #[cfg(target_arch = "wasm32")] {
@@ -153,9 +156,9 @@ pub fn run<'a, T: 'static>(
     // }
 
     #[cfg(not(target_arch = "wasm32"))]
-    let mut _last_frame_inst = Instant::now();
+        let mut _last_frame_inst = Instant::now();
     #[cfg(not(target_arch = "wasm32"))]
-    let (_frame_count, mut _accum_time) = (0, 0.0);
+        let (_frame_count, mut _accum_time) = (0, 0.0);
 
     let event_loop = EventLoop::new();
     let window = WindowBuilder::new()
@@ -183,25 +186,28 @@ pub fn run<'a, T: 'static>(
         match event {
             Event::MainEventsCleared => window.request_redraw(),
             Event::DeviceEvent { event, .. } => {
-                let dt_secs = dt.as_secs() as f32 + dt.subsec_micros() as f32 / 1_000_000.;
-                let (entities_changed, lighting_changed) = event_handler(
-                    &mut user_state,
-                    event.clone(),
-                    &mut state.graphics.scene,
-                    dt_secs,
-                );
+                if !state.sys.mouse_in_gui {
+                    let dt_secs = dt.as_secs() as f32 + dt.subsec_micros() as f32 / 1_000_000.;
+                    let (entities_changed, lighting_changed) = event_handler(
+                        &mut user_state,
+                        event.clone(),
+                        &mut state.graphics.scene,
+                        dt_secs,
+                    );
 
-                // Entities have been updated in the scene; update the buffers.
-                if entities_changed {
-                    state.graphics.setup_entities(&state.sys.device);
+                    // Entities have been updated in the scene; update the buffers.
+                    if entities_changed {
+                        state.graphics.setup_entities(&state.sys.device);
+                    }
+
+                    if lighting_changed {
+                        // Entities have been updated in the scene; update the buffer.
+                        state.graphics.update_lighting(&state.sys.queue);
+                    }
+
+                    state.graphics.handle_input(event);
+
                 }
-
-                if lighting_changed {
-                    // Entities have been updated in the scene; update the buffer.
-                    state.graphics.update_lighting(&state.sys.queue);
-                }
-
-                state.graphics.handle_input(event);
             }
             Event::WindowEvent {
                 ref event,
@@ -209,18 +215,21 @@ pub fn run<'a, T: 'static>(
                 // } if window_id == window.id() && !state.input(event) => {
             } if window_id == window.id() => {
                 match event {
-                    // todo: Put back for window-closing.
-                    // #[cfg(not(target_arch="wasm32"))]
-                    WindowEvent::CloseRequested
-                    // | WindowEvent::KeyboardInput {
-                    //     input:
-                    //     KeyboardInput {
-                    //         state: ElementState::Pressed,
-                    //         virtual_keycode: Some(VirtualKeyCode::Escape),
-                    //         ..
-                    //     },
-                    //     ..
-                    => *control_flow = ControlFlow::Exit,
+                    WindowEvent::CursorMoved {
+                        position,
+                        ..
+                    } => {
+                        if position.x < state.graphics.ui_settings.width {
+                            state.sys.mouse_in_gui = true;
+
+                            // We reset the inputs, since otherwise a held key that
+                            // doesn't get the reset command will continue to execute.
+                            state.graphics.inputs_commanded = Default::default();
+                        } else {
+                            state.sys.mouse_in_gui = false;
+                        }
+                    }
+                    WindowEvent::CloseRequested => *control_flow = ControlFlow::Exit,
                     WindowEvent::Resized(physical_size) => {
                         state.resize(*physical_size);
                     }

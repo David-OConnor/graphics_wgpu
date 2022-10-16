@@ -360,10 +360,13 @@ impl Default for InputSettings {
 
 #[derive(Clone, Debug)]
 /// GUI settings
-pub struct UiSettings {}
+pub struct UiSettings {
+    /// Used, as a quick+dirty approach, to disable events when the mouse is in the GUI section.
+    pub width: f64,
+}
 
 impl Default for UiSettings {
     fn default() -> Self {
-        Self {}
+        Self { width: 0. }
     }
 }

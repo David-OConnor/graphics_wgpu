@@ -24,7 +24,6 @@ use lin_alg2::f32::Vec3;
 use winit::{event::DeviceEvent, window::Window};
 
 use egui;
-use egui_wgpu_backend;
 use egui_wgpu_backend::{RenderPass, ScreenDescriptor};
 use egui_winit_platform::Platform;
 
@@ -56,7 +55,7 @@ pub(crate) struct GraphicsState {
     pub depth_texture: Texture,
     pub input_settings: InputSettings,
     pub ui_settings: UiSettings,
-    inputs_commanded: InputsCommanded,
+    pub inputs_commanded: InputsCommanded,
     // todo: Will this need to change for multiple models
     // obj_mesh: Mesh,
     // staging_belt: wgpu::util::StagingBelt, // todo: Do we want this? Probably in sys, not here.
@@ -283,7 +282,7 @@ impl GraphicsState {
         height: u32,
         // surface: &wgpu::Surface,
         window: &Window,
-        mut gui_handler: impl FnMut(&mut T, &egui::Context, &mut Scene) -> bool,
+        mut gui_handler: impl FnMut(&mut T, &egui::Context, &mut Scene) -> (bool, bool),
         user_state: &mut T,
     ) {
         match self.input_settings.initial_controls {
@@ -333,7 +332,7 @@ impl GraphicsState {
         // Begin to draw the UI frame.
         self.egui_platform.begin_frame();
 
-        let entities_changed = gui_handler(
+        let (entities_changed, lighting_changed) = gui_handler(
             user_state,
             &mut self.egui_platform.context(),
             &mut self.scene,
@@ -341,6 +340,11 @@ impl GraphicsState {
 
         if entities_changed {
             self.setup_entities(device);
+        }
+
+        if lighting_changed {
+            // Entities have been updated in the scene; update the buffer.
+            self.update_lighting(queue);
         }
 
         // End the UI frame. We could now handle the output and draw the UI with the backend.
