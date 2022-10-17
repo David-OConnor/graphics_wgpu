@@ -370,3 +370,12 @@ impl Default for UiSettings {
         Self { width: 0. }
     }
 }
+
+/// This struct is exposed in the API, and passed by callers to indicate in the render,
+/// event, GUI etc update functions, if the engine should update various things.
+#[derive(Default)]
+pub struct EngineUpdates {
+    pub entities: bool,
+    pub camera: bool,
+    pub lighting: bool,
+}

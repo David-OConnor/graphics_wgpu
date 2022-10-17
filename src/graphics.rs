@@ -17,13 +17,12 @@ use crate::{
     gui,
     input::{self, InputsCommanded},
     texture::Texture,
-    types::{ControlScheme, InputSettings, Instance, Scene, UiSettings, Vertex},
+    types::{ControlScheme, InputSettings, Instance, Scene, UiSettings, Vertex, EngineUpdates},
 };
 use lin_alg2::f32::Vec3;
 
 use winit::{event::DeviceEvent, window::Window};
 
-use egui;
 use egui_wgpu_backend::{RenderPass, ScreenDescriptor};
 use egui_winit_platform::Platform;
 
@@ -48,7 +47,6 @@ pub(crate) struct GraphicsState {
     pub index_buf: wgpu::Buffer,
     instance_buf: wgpu::Buffer,
     pub bind_groups: BindGroupData,
-    // pub camera: Camera,
     camera_buf: wgpu::Buffer,
     lighting_buf: wgpu::Buffer,
     pub pipeline: wgpu::RenderPipeline,
@@ -56,20 +54,13 @@ pub(crate) struct GraphicsState {
     pub input_settings: InputSettings,
     pub ui_settings: UiSettings,
     pub inputs_commanded: InputsCommanded,
-    // todo: Will this need to change for multiple models
-    // obj_mesh: Mesh,
     // staging_belt: wgpu::util::StagingBelt, // todo: Do we want this? Probably in sys, not here.
     pub scene: Scene,
     // todo: FIgure out if youw ant this.
     mesh_mappings: Vec<(i32, u32, u32)>,
-    // /// For EGUI
-    // pub next_user_texture_id: u64,
-    // /// For GUI
-    // pub textures: HashMap<egui::TextureId, (Option<wgpu::Texture>, wgpu::BindGroup)>,
     /// for GUI
     pub egui_platform: Platform,
     rpass_egui: RenderPass,
-    // egui_app: egui_demo_lib::DemoWindows,
 }
 
 impl GraphicsState {
@@ -125,7 +116,6 @@ impl GraphicsState {
             usage: wgpu::BufferUsages::INDEX,
         });
 
-        // let mut camera = Camera::default();
         scene.camera.update_proj_mat();
 
         let cam_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
@@ -142,7 +132,7 @@ impl GraphicsState {
             usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
         });
 
-        let bind_groups = create_bindgroups(&device, &cam_buf, &lighting_buf);
+        let bind_groups = create_bindgroups(device, &cam_buf, &lighting_buf);
 
         let depth_texture = Texture::create_depth_texture(device, surface_cfg, "Depth texture");
 
@@ -178,7 +168,7 @@ impl GraphicsState {
         window.set_inner_size(window_size);
         window.set_title(&scene.window_title);
 
-        let rpass_egui = RenderPass::new(&device, surface_cfg.format, 1);
+        let rpass_egui = RenderPass::new(device, surface_cfg.format, 1);
 
         // Display the demo application that ships with egui.
         // let mut egui_app = egui_demo_lib::DemoWindows::default();
@@ -203,7 +193,7 @@ impl GraphicsState {
             // egui_app,
         };
 
-        result.setup_entities(&device);
+        result.setup_entities(device);
 
         result
     }
@@ -267,6 +257,10 @@ impl GraphicsState {
         self.mesh_mappings = mesh_mappings;
     }
 
+    pub(crate) fn update_camera(&mut self, queue: &wgpu::Queue) {
+        queue.write_buffer(&self.camera_buf, 0, &self.scene.camera.to_bytes());
+    }
+
     pub(crate) fn update_lighting(&mut self, queue: &wgpu::Queue) {
         queue.write_buffer(&self.lighting_buf, 0, &self.scene.lighting.to_bytes());
     }
@@ -282,9 +276,12 @@ impl GraphicsState {
         height: u32,
         // surface: &wgpu::Surface,
         window: &Window,
-        mut gui_handler: impl FnMut(&mut T, &egui::Context, &mut Scene) -> (bool, bool),
+        mut gui_handler: impl FnMut(&mut T, &egui::Context, &mut Scene) -> EngineUpdates,
         user_state: &mut T,
     ) {
+        // Adjust camera inputs using the in-engine control scheme.
+        // Note that camera settings adjusted by the application code are handled in
+        // `update_camera`.
         match self.input_settings.initial_controls {
             ControlScheme::FreeCamera => {
                 if self.inputs_commanded.inputs_present() {
@@ -332,17 +329,22 @@ impl GraphicsState {
         // Begin to draw the UI frame.
         self.egui_platform.begin_frame();
 
-        let (entities_changed, lighting_changed) = gui_handler(
+        let engine_updates = gui_handler(
             user_state,
             &mut self.egui_platform.context(),
             &mut self.scene,
         );
 
-        if entities_changed {
+        if engine_updates.entities {
             self.setup_entities(device);
         }
 
-        if lighting_changed {
+        if engine_updates.camera {
+            // Entities have been updated in the scene; update the buffer.
+            self.update_camera(queue);
+        }
+
+        if engine_updates.lighting {
             // Entities have been updated in the scene; update the buffer.
             self.update_lighting(queue);
         }
@@ -361,10 +363,10 @@ impl GraphicsState {
 
         let tdelta: egui::TexturesDelta = full_output.textures_delta;
         self.rpass_egui
-            .add_textures(&device, &queue, &tdelta)
+            .add_textures(device, queue, &tdelta)
             .expect("add texture ok");
         self.rpass_egui
-            .update_buffers(&device, &queue, &paint_jobs, &screen_descriptor);
+            .update_buffers(device, queue, &paint_jobs, &screen_descriptor);
 
         {
             let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
@@ -429,7 +431,7 @@ impl GraphicsState {
         self.rpass_egui
             .execute(
                 &mut encoder,
-                &output_view,
+                output_view,
                 &paint_jobs,
                 &screen_descriptor,
                 // None here

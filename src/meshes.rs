@@ -7,13 +7,11 @@ use std::{
 };
 
 use crate::{
-    init_graphics::UP_VEC,
+    graphics::UP_VEC,
     types::{Mesh, Vertex},
 };
 
 use lin_alg2::f32::Vec3;
-
-use obj;
 
 /// Rotate a 2d vector counter-clockwise a given angle.
 fn rotate_vec_2d(vec: [f32; 2], θ: f32) -> [f32; 2] {

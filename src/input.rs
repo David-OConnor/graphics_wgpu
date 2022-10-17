@@ -2,7 +2,7 @@
 
 use crate::{
     camera::Camera,
-    init_graphics::{FWD_VEC, RIGHT_VEC, UP_VEC},
+    graphics::{FWD_VEC, RIGHT_VEC, UP_VEC},
     types::InputSettings,
 };
 
@@ -127,12 +127,11 @@ pub(crate) fn add_input_cmd(event: DeviceEvent, inputs: &mut InputsCommanded) {
                 }
             }
         }
-        DeviceEvent::Button { button, state } => match button {
-            MOUSE_1_ID => match state {
-                ElementState::Pressed => inputs.free_look = true,
-                ElementState::Released => inputs.free_look = false,
-            },
-            _ => (),
+        DeviceEvent::Button { button, state } => if button == MOUSE_1_ID {
+            inputs.free_look = match state {
+                ElementState::Pressed => true,
+                ElementState::Released => false,
+            }
         },
         DeviceEvent::MouseMotion { delta } => {
             inputs.mouse_delta_x += delta.0 as f32;
@@ -208,19 +207,17 @@ pub fn adjust_camera(
 
     let eps = 0.00001;
 
-    if inputs.free_look {
-        if inputs.mouse_delta_x.abs() > eps || inputs.mouse_delta_y.abs() > eps {
-            // todo: Why do we have the negative signs here?
-            rotation = Quaternion::from_axis_angle(up, -inputs.mouse_delta_x * rotate_amt)
-                * Quaternion::from_axis_angle(right, -inputs.mouse_delta_y * rotate_amt)
-                * rotation;
+    if inputs.free_look && (inputs.mouse_delta_x.abs() > eps || inputs.mouse_delta_y.abs() > eps) {
+        // todo: Why do we have the negative signs here?
+        rotation = Quaternion::from_axis_angle(up, -inputs.mouse_delta_x * rotate_amt)
+            * Quaternion::from_axis_angle(right, -inputs.mouse_delta_y * rotate_amt)
+            * rotation;
 
-            cam_rotated = true;
-        }
+        cam_rotated = true;
     }
 
     if cam_moved {
-        cam.position = cam.position + cam.orientation.rotate_vec(movement_vec);
+        cam.position += cam.orientation.rotate_vec(movement_vec);
     }
 
     if cam_rotated {

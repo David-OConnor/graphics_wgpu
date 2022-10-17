@@ -10,9 +10,9 @@ use winit::{
 };
 
 use crate::{
-    init_graphics::GraphicsState,
+    graphics::GraphicsState,
     texture::Texture,
-    types::{InputSettings, Scene, UiSettings},
+    types::{InputSettings, Scene, UiSettings, EngineUpdates},
 };
 
 const WINDOW_TITLE_INIT: &str = "Graphics";
@@ -106,7 +106,7 @@ impl State {
             scene,
             input_settings,
             ui_settings,
-            &window,
+            window,
             // &sys.adapter,
         );
 
@@ -136,22 +136,20 @@ impl State {
     }
 }
 
-pub fn run<'a, T: 'static>(
+pub fn run<T: 'static>(
     mut user_state: T,
     scene: Scene,
     input_settings: InputSettings,
     ui_settings: UiSettings,
-    mut render_handler: impl FnMut(&mut T, &mut Scene) -> bool + 'static,
-    mut event_handler: impl FnMut(&mut T, DeviceEvent, &mut Scene, f32) -> (bool, bool) + 'static,
-    mut gui_handler: impl FnMut(&mut T, &egui::Context, &mut Scene) -> (bool, bool) + 'static,
+    mut render_handler: impl FnMut(&mut T, &mut Scene, f32) -> EngineUpdates + 'static,
+    mut event_handler: impl FnMut(&mut T, DeviceEvent, &mut Scene, f32) -> EngineUpdates + 'static,
+    mut gui_handler: impl FnMut(&mut T, &egui::Context, &mut Scene) -> EngineUpdates + 'static,
 ) {
     // cfg_if::cfg_if! {
     //     if #[cfg(target_arch = "wasm32")] {
     //         std::panic::set_hook(Box::new(console_error_panic_hook::hook));
     //         console_log::init_with_level(log::Level::Warn).expect("Couldn't initialize logger");
     //     } else {
-    // todo??
-    // env_logger::init();
     // }
     // }
 
@@ -188,7 +186,7 @@ pub fn run<'a, T: 'static>(
             Event::DeviceEvent { event, .. } => {
                 if !state.sys.mouse_in_gui {
                     let dt_secs = dt.as_secs() as f32 + dt.subsec_micros() as f32 / 1_000_000.;
-                    let (entities_changed, lighting_changed) = event_handler(
+                    let engine_updates = event_handler(
                         &mut user_state,
                         event.clone(),
                         &mut state.graphics.scene,
@@ -196,17 +194,20 @@ pub fn run<'a, T: 'static>(
                     );
 
                     // Entities have been updated in the scene; update the buffers.
-                    if entities_changed {
+                    if engine_updates.entities {
                         state.graphics.setup_entities(&state.sys.device);
                     }
 
-                    if lighting_changed {
+                    if engine_updates.camera {
                         // Entities have been updated in the scene; update the buffer.
+                        state.graphics.update_camera(&state.sys.queue);
+                    }
+
+                    if engine_updates.lighting {
                         state.graphics.update_lighting(&state.sys.queue);
                     }
 
                     state.graphics.handle_input(event);
-
                 }
             }
             Event::WindowEvent {
@@ -245,12 +246,24 @@ pub fn run<'a, T: 'static>(
                 dt = now - last_render_time;
                 last_render_time = now;
 
-                let entities_changed = render_handler(&mut user_state, &mut state.graphics.scene);
+                let dt_secs = dt.as_secs() as f32 + dt.subsec_micros() as f32 / 1_000_000.;
+                let engine_updates = render_handler(&mut user_state, &mut state.graphics.scene, dt_secs);
 
                 // Entities have been updated in the scene; update the buffers
-                if entities_changed {
+                if engine_updates.entities {
                     state.graphics.setup_entities(&state.sys.device);
                 }
+
+                if engine_updates.camera {
+                    // Entities have been updated in the scene; update the buffer.
+                    state.graphics.update_camera(&state.sys.queue);
+                }
+
+                if engine_updates.lighting {
+                    // Entities have been updated in the scene; update the buffer.
+                    state.graphics.update_lighting(&state.sys.queue);
+                }
+
                 // Note that the GUI handler can also modify entities, but
                 // we do that in the `init_graphics` module.
 
@@ -340,7 +353,7 @@ async fn setup_async(
         .request_adapter(&wgpu::RequestAdapterOptions {
             // `Default` prefers low power when on battery, high performance when on mains.
             power_preference: wgpu::PowerPreference::default(),
-            compatible_surface: Some(&surface),
+            compatible_surface: Some(surface),
             force_fallback_adapter: false,
         })
         .await
