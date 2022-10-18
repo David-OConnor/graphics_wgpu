@@ -36,6 +36,8 @@ impl Camera {
         result
     }
 
+    /// Updates the projection matrix based on the projection parameters.
+    /// Run this after updating the parameters.
     pub fn update_proj_mat(&mut self) {
         self.proj_mat = Mat4::new_perspective_lh(self.fov_y, self.aspect, self.near, self.far);
     }

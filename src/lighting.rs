@@ -25,7 +25,7 @@ fn array4_to_bytes(a: [f32; 4]) -> [u8; VEC3_UNIFORM_SIZE] {
 
 #[derive(Debug, Clone)]
 /// We organize the fields in this order, and serialize them accordingly, to keep the buffer
-/// from being too long while adhering to alignment rules.
+/// from being longer than needed, while adhering to alignment rules.
 pub struct Lighting {
     pub ambient_color: [f32; 4],
     pub ambient_intensity: f32,
@@ -70,9 +70,6 @@ impl Lighting {
         // Pad to a multiple of 16.
         buf_fixed_size[VEC3_UNIFORM_SIZE + F32_SIZE + 4..LIGHTING_SIZE_FIXED]
             .clone_from_slice(&[0; 8]);
-
-        // buf_fixed_size[VEC3_UNIFORM_SIZE + F32_SIZE..LIGHTING_SIZE_FIXED]
-        //     .clone_from_slice(&[0; 12]);
 
         for byte in buf_fixed_size.into_iter() {
             result.push(byte);
