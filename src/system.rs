@@ -12,7 +12,7 @@ use winit::{
 use crate::{
     graphics::GraphicsState,
     texture::Texture,
-    types::{InputSettings, Scene, UiSettings, EngineUpdates},
+    types::{EngineUpdates, InputSettings, Scene, UiSettings},
 };
 
 const WINDOW_TITLE_INIT: &str = "Graphics";
@@ -44,25 +44,25 @@ impl State {
         ui_settings: UiSettings,
     ) -> Self {
         #[cfg(target_arch = "wasm32")]
-            {
-                use winit::platform::web::WindowExtWebSys;
-                let query_string = web_sys::window().unwrap().location().search().unwrap();
-                let level: log::Level = parse_url_query_string(&query_string, "RUST_LOG")
-                    .map(|x| x.parse().ok())
-                    .flatten()
-                    .unwrap_or(log::Level::Error);
-                console_log::init_with_level(level).expect("could not initialize logger");
-                std::panic::set_hook(Box::new(console_error_panic_hook::hook));
-                // On wasm, append the canvas to the document body
-                web_sys::window()
-                    .and_then(|win| win.document())
-                    .and_then(|doc| doc.body())
-                    .and_then(|body| {
-                        body.append_child(&web_sys::Element::from(window.canvas()))
-                            .ok()
-                    })
-                    .expect("couldn't append canvas to document body");
-            }
+        {
+            use winit::platform::web::WindowExtWebSys;
+            let query_string = web_sys::window().unwrap().location().search().unwrap();
+            let level: log::Level = parse_url_query_string(&query_string, "RUST_LOG")
+                .map(|x| x.parse().ok())
+                .flatten()
+                .unwrap_or(log::Level::Error);
+            console_log::init_with_level(level).expect("could not initialize logger");
+            std::panic::set_hook(Box::new(console_error_panic_hook::hook));
+            // On wasm, append the canvas to the document body
+            web_sys::window()
+                .and_then(|win| win.document())
+                .and_then(|doc| doc.body())
+                .and_then(|body| {
+                    body.append_child(&web_sys::Element::from(window.canvas()))
+                        .ok()
+                })
+                .expect("couldn't append canvas to document body");
+        }
 
         let size = window.inner_size();
 
@@ -154,9 +154,9 @@ pub fn run<T: 'static>(
     // }
 
     #[cfg(not(target_arch = "wasm32"))]
-        let mut _last_frame_inst = Instant::now();
+    let mut _last_frame_inst = Instant::now();
     #[cfg(not(target_arch = "wasm32"))]
-        let (_frame_count, mut _accum_time) = (0, 0.0);
+    let (_frame_count, mut _accum_time) = (0, 0.0);
 
     let event_loop = EventLoop::new();
     let window = WindowBuilder::new()
@@ -184,6 +184,7 @@ pub fn run<T: 'static>(
         match event {
             Event::MainEventsCleared => window.request_redraw(),
             Event::DeviceEvent { event, .. } => {
+                // println!("EV: {:?}", event);
                 if !state.sys.mouse_in_gui {
                     let dt_secs = dt.as_secs() as f32 + dt.subsec_micros() as f32 / 1_000_000.;
                     let engine_updates = event_handler(
@@ -216,10 +217,7 @@ pub fn run<T: 'static>(
                 // } if window_id == window.id() && !state.input(event) => {
             } if window_id == window.id() => {
                 match event {
-                    WindowEvent::CursorMoved {
-                        position,
-                        ..
-                    } => {
+                    WindowEvent::CursorMoved { position, .. } => {
                         if position.x < state.graphics.ui_settings.width {
                             state.sys.mouse_in_gui = true;
 
@@ -233,9 +231,23 @@ pub fn run<T: 'static>(
                     WindowEvent::CloseRequested => *control_flow = ControlFlow::Exit,
                     WindowEvent::Resized(physical_size) => {
                         state.resize(*physical_size);
+                        // Prevents inadvertent mouse-click-activated free-look.
+                        state.graphics.inputs_commanded.free_look = false;
                     }
+                    // If the window scale changes, update the renderer size, and camera aspect ratio.
                     WindowEvent::ScaleFactorChanged { new_inner_size, .. } => {
                         state.resize(**new_inner_size);
+                    }
+                    // If the window is being moved, disable mouse inputs, eg so click+drag
+                    // doesn't cause a drag when moving the window using the mouse.
+                    WindowEvent::Moved(_) => {
+                        // state.sys.mouse_in_gui = true;
+                        // Prevents inadvertent mouse-click-activated free-look after moving the window.
+                        state.graphics.inputs_commanded.free_look = false;
+                    }
+                    WindowEvent::Occluded(_) => {
+                        // Prevents inadvertent mouse-click-activated free-look after minimizing.
+                        state.graphics.inputs_commanded.free_look = false;
                     }
                     _ => {}
                 }
@@ -247,7 +259,8 @@ pub fn run<T: 'static>(
                 last_render_time = now;
 
                 let dt_secs = dt.as_secs() as f32 + dt.subsec_micros() as f32 / 1_000_000.;
-                let engine_updates = render_handler(&mut user_state, &mut state.graphics.scene, dt_secs);
+                let engine_updates =
+                    render_handler(&mut user_state, &mut state.graphics.scene, dt_secs);
 
                 // Entities have been updated in the scene; update the buffers
                 if engine_updates.entities {
@@ -268,24 +281,29 @@ pub fn run<T: 'static>(
                 // we do that in the `init_graphics` module.
 
                 // todo: move this into `render`?
-                let output_frame = state.sys.surface.get_current_texture().unwrap();
-                let output_view = output_frame
-                    .texture
-                    .create_view(&wgpu::TextureViewDescriptor::default());
+                match state.sys.surface.get_current_texture() {
+                    Ok(output_frame) => {
+                        let output_view = output_frame
+                            .texture
+                            .create_view(&wgpu::TextureViewDescriptor::default());
 
-                state.graphics.render(
-                    output_frame,
-                    &output_view,
-                    &state.sys.device,
-                    &state.sys.queue,
-                    dt,
-                    state.sys.surface_cfg.width,
-                    state.sys.surface_cfg.height,
-                    // &state.sys.surface,
-                    &window,
-                    &mut gui_handler,
-                    &mut user_state,
-                );
+                        state.graphics.render(
+                            output_frame,
+                            &output_view,
+                            &state.sys.device,
+                            &state.sys.queue,
+                            dt,
+                            state.sys.surface_cfg.width,
+                            state.sys.surface_cfg.height,
+                            // &state.sys.surface,
+                            &window,
+                            &mut gui_handler,
+                            &mut user_state,
+                        );
+                    }
+                    // todo: Does this happen when minimized?
+                    Err(e) => {}
+                }
             }
             _ => {}
         }

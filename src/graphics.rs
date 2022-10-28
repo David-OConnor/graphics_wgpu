@@ -17,7 +17,7 @@ use crate::{
     gui,
     input::{self, InputsCommanded},
     texture::Texture,
-    types::{ControlScheme, InputSettings, Instance, Scene, UiSettings, Vertex, EngineUpdates},
+    types::{ControlScheme, EngineUpdates, InputSettings, Instance, Scene, UiSettings, Vertex},
 };
 use lin_alg2::f32::Vec3;
 

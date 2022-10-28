@@ -127,12 +127,14 @@ pub(crate) fn add_input_cmd(event: DeviceEvent, inputs: &mut InputsCommanded) {
                 }
             }
         }
-        DeviceEvent::Button { button, state } => if button == MOUSE_1_ID {
-            inputs.free_look = match state {
-                ElementState::Pressed => true,
-                ElementState::Released => false,
+        DeviceEvent::Button { button, state } => {
+            if button == MOUSE_1_ID {
+                inputs.free_look = match state {
+                    ElementState::Pressed => true,
+                    ElementState::Released => false,
+                }
             }
-        },
+        }
         DeviceEvent::MouseMotion { delta } => {
             inputs.mouse_delta_x += delta.0 as f32;
             inputs.mouse_delta_y += delta.1 as f32;
