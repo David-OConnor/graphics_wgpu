@@ -363,11 +363,15 @@ impl Default for InputSettings {
 pub struct UiSettings {
     /// Used, as a quick+dirty approach, to disable events when the mouse is in the GUI section.
     pub width: f64,
+    pub icon_path: Option<String>,
 }
 
 impl Default for UiSettings {
     fn default() -> Self {
-        Self { width: 0. }
+        Self {
+            width: 0.,
+            icon_path: None,
+        }
     }
 }
 

@@ -1,13 +1,18 @@
 //! This module initiates the window, and graphics hardware.
 
 #[cfg(not(target_arch = "wasm32"))]
-use std::time::{Duration, Instant};
+use std::{
+    path::Path,
+    time::{Duration, Instant},
+};
 
 use winit::{
     event::{DeviceEvent, Event, WindowEvent},
     event_loop::{ControlFlow, EventLoop},
-    window::{Window, WindowBuilder},
+    window::{Icon, Window, WindowBuilder},
 };
+
+use image::ImageError;
 
 use crate::{
     graphics::GraphicsState,
@@ -136,6 +141,17 @@ impl State {
     }
 }
 
+fn load_icon(path: &Path) -> Result<Icon, ImageError> {
+    let (icon_rgba, icon_width, icon_height) = {
+        let image = image::open(path)?
+            .into_rgba8();
+        let (width, height) = image.dimensions();
+        let rgba = image.into_raw();
+        (rgba, width, height)
+    };
+    Ok(Icon::from_rgba(icon_rgba, icon_width, icon_height).expect("Failed to open icon"))
+}
+
 pub fn run<T: 'static>(
     mut user_state: T,
     scene: Scene,
@@ -158,6 +174,18 @@ pub fn run<T: 'static>(
     #[cfg(not(target_arch = "wasm32"))]
     let (_frame_count, mut _accum_time) = (0, 0.0);
 
+    let icon = match ui_settings.icon_path {
+        Some(ref p) => {
+            match load_icon(Path::new(&p)) {
+                Ok(p_) => Some(p_),
+                // eg can't find the path
+                Err(_) => None,
+            }
+        },
+        // No path specified
+        None => None,
+    };
+
     let event_loop = EventLoop::new();
     let window = WindowBuilder::new()
         .with_title(WINDOW_TITLE_INIT)
@@ -165,6 +193,7 @@ pub fn run<T: 'static>(
             WINDOW_SIZE_X_INIT,
             WINDOW_SIZE_Y_INIT,
         ))
+        .with_window_icon(icon)
         .build(&event_loop)
         .unwrap();
 
@@ -248,6 +277,14 @@ pub fn run<T: 'static>(
                     WindowEvent::Occluded(_) => {
                         // Prevents inadvertent mouse-click-activated free-look after minimizing.
                         state.graphics.inputs_commanded.free_look = false;
+                    }
+                    WindowEvent::Focused(_) => {
+                        // Eg clicking the tile bar icon.
+                        state.graphics.inputs_commanded.free_look = false;
+                    }
+                    WindowEvent::CursorLeft { device_id } => {
+                        // todo: Not working
+                        // state.graphics.inputs_commanded.free_look = false;
                     }
                     _ => {}
                 }
