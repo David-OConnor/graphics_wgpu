@@ -46,10 +46,12 @@ pub(crate) struct GraphicsState {
     pub vertex_buf: wgpu::Buffer,
     pub index_buf: wgpu::Buffer,
     instance_buf: wgpu::Buffer,
+    compute_buf: wgpu::Buffer,
     pub bind_groups: BindGroupData,
     camera_buf: wgpu::Buffer,
     lighting_buf: wgpu::Buffer,
     pub pipeline: wgpu::RenderPipeline,
+    pipeline_compute: wgpu::ComputePipeline,
     pub depth_texture: Texture,
     pub input_settings: InputSettings,
     pub ui_settings: UiSettings,
@@ -132,13 +134,28 @@ impl GraphicsState {
             usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
         });
 
-        let bind_groups = create_bindgroups(device, &cam_buf, &lighting_buf);
+        // For our WIP compute functionality.
+        let compute_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Compute storage Buffer"),
+            contents: &[0_u8],
+            usage: wgpu::BufferUsages::STORAGE
+                | wgpu::BufferUsages::COPY_DST
+                | wgpu::BufferUsages::COPY_SRC,
+        });
+
+        let bind_groups = create_bindgroups(device, &cam_buf, &lighting_buf, &compute_buf);
 
         let depth_texture = Texture::create_depth_texture(device, surface_cfg, "Depth texture");
 
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("Shader"),
             source: wgpu::ShaderSource::Wgsl(include_str!("shader.wgsl").into()),
+        });
+
+        // todo: Pass the shader file as a parameter.
+        let shader_compute = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+            label: None,
+            source: wgpu::ShaderSource::Wgsl(include_str!("shader_compute.wgsl").into()),
         });
 
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
@@ -148,6 +165,13 @@ impl GraphicsState {
         });
 
         let pipeline = create_render_pipeline(device, &pipeline_layout, shader, surface_cfg);
+
+        let pipeline_compute = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+            label: None,
+            layout: None,
+            module: &shader_compute,
+            entry_point: "main",
+        });
 
         // We initialize instances, the instance buffer and mesh mappings in `setup_entities`.
         // let instances = Vec::new();
@@ -177,10 +201,12 @@ impl GraphicsState {
             vertex_buf,
             index_buf,
             instance_buf,
+            compute_buf,
             bind_groups,
             camera_buf: cam_buf,
             lighting_buf,
             pipeline,
+            pipeline_compute,
             depth_texture,
             // staging_belt: wgpu::util::StagingBelt::new(0x100),
             scene,
@@ -416,16 +442,6 @@ impl GraphicsState {
 
                 start_ind += mesh.indices.len() as u32; // todo temp?
             }
-
-            // todo: This call would let us use the wgpu renderpass for the UI,
-            // todo instead of 2 steps, but we're getting an error about the depth
-            // todo stencil.
-            // self.rpass_egui
-            //     .execute_with_renderpass(
-            //         &mut rpass,
-            //         &paint_jobs,
-            //         &screen_descriptor,
-            //     );
         }
 
         self.rpass_egui
@@ -443,6 +459,22 @@ impl GraphicsState {
 
         // todo: Make sure if you add new instances to the Vec, that you recreate the instance_buffer
         // todo and as well as camera_bind_group, otherwise your new instances won't show up correctly.
+
+        {
+            let mut cpass = encoder.begin_compute_pass(
+                &wgpu::ComputePassDescriptor { label: Some("Compute pass") }
+            );
+            cpass.set_pipeline(&self.pipeline_compute);
+            cpass.set_bind_group(0, &self.bind_groups.compute, &[]);
+            cpass.insert_debug_marker("compute collatz iterations");
+
+            // todo: How does this work?
+            cpass.dispatch_workgroups(1, 1, 1);
+
+            // Sets adds copy operation to command encoder.
+            // Will copy data from storage buffer on GPU to staging buffer on CPU.
+            // encoder.copy_buffer_to_buffer(self.compute_buf, 0, &staging_buffer, 0, size);
+        }
 
         queue.submit(Some(encoder.finish()));
         // queue.submit(iter::once(encoder.finish()));
@@ -508,6 +540,8 @@ pub(crate) struct BindGroupData {
     pub lighting: BindGroup,
     /// We use this for GUI.
     pub layout_texture: BindGroupLayout,
+    pub compute: BindGroup,
+    pub layout_compute: BindGroupLayout,
     // pub texture: BindGroup,
 }
 
@@ -515,6 +549,7 @@ fn create_bindgroups(
     device: &wgpu::Device,
     cam_buf: &wgpu::Buffer,
     lighting_buf: &wgpu::Buffer,
+    compute_buf: &wgpu::Buffer,
 ) -> BindGroupData {
     // We only need vertex, not fragment info in the camera uniform.
     let layout_cam = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
@@ -669,6 +704,32 @@ fn create_bindgroups(
     //     }],
     // });
 
+    // todo: Experimenting with compute
+    let layout_compute = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+        entries: &[wgpu::BindGroupLayoutEntry {
+            binding: 0,
+            visibility: wgpu::ShaderStages::COMPUTE,
+            ty: wgpu::BindingType::Buffer {
+                ty: wgpu::BufferBindingType::Storage { read_only: true },
+                // The dynamic field indicates whether this buffer will change size or
+                // not. This is useful if we want to store an array of things in our uniforms.
+                has_dynamic_offset: false,
+                min_binding_size: None,
+            },
+            count: None,
+        }],
+        label: Some("Compute bind group layout"),
+    });
+
+    let compute = device.create_bind_group(&wgpu::BindGroupDescriptor {
+        layout: &layout_compute,
+        entries: &[wgpu::BindGroupEntry {
+            binding: 0,
+            resource: compute_buf.as_entire_binding(),
+        }],
+        label: Some("Compute bind group"),
+    });
+
     BindGroupData {
         layout_cam,
         cam,
@@ -678,5 +739,7 @@ fn create_bindgroups(
         // layout_gui_uniform,
         // gui_uniform,
         // texture
+        compute,
+        layout_compute,
     }
 }
