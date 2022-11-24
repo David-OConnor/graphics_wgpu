@@ -87,7 +87,11 @@ impl State {
             width: size.width,
             height: size.height,
             // https://docs.rs/wgpu/latest/wgpu/enum.PresentMode.html
+            // Note that `Fifo` locks FPS to the speed of the monitor.
             present_mode: wgpu::PresentMode::Fifo,
+            // todo: Allow config from user.
+            // present_mode: wgpu::PresentMode::Immediate,
+            // present_mode: wgpu::PresentMode::Mailbox,
             alpha_mode: wgpu::CompositeAlphaMode::Auto, // todo?
         };
 
