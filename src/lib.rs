@@ -19,4 +19,4 @@ pub use types::{ControlScheme, EngineUpdates, Entity, InputSettings, Mesh, Scene
 // Re-export winit DeviceEvents for use in the API; this prevents the calling
 // lib from needing to use winit as a dependency directly.
 // todo: the equiv for mouse events too. And in the future, Gamepad events.
-pub use winit::event::{self, DeviceEvent, ElementState};
+pub use winit::{self, event::{self, DeviceEvent, ElementState}};

@@ -26,6 +26,73 @@ fn rotate_vec_2d(vec: [f32; 2], θ: f32) -> [f32; 2] {
 }
 
 impl Mesh {
+    // /// Create a triangular face, with no volume. Only visible from one side.
+    // /// Useful for building a grid surface like terrain, or a surface plot.
+    // pub fn new_tri_face(a: [f32; 3], b: [f32; 3], c: [f32; 3]) -> Self {
+    //     let norm = Vec3::new(0., 0., -1.);
+
+    //     let vertices = vec![
+    //         Vertex::new(a, norm),
+    //         Vertex::new(b, norm),
+    //         Vertex::new(c, norm),
+    //     ];
+
+    //     let indices = vec![0, 1, 2];
+
+    //     Self {
+    //         vertices,
+    //         indices,
+    //         material: 0,
+    //     }
+    // }
+
+    /// Create a grid surface of triangles.
+    /// Useful for building a grid surface like terrain, or a surface plot.
+    /// `grid`'s outer vec is rows; inner vec is col-associated values within that 
+    /// row. The grid is evenly-spaced.
+    pub fn new_surface(grid: &Vec<Vec<f32>>, start: f32, step: f32) -> Self {
+        let mut vertices = Vec::new();
+        let mut indices = Vec::new();
+
+        let mut x = start;
+        let mut y = start;
+        let mut this_vert_i = 0;
+
+        for (i, row) in grid.iter().enumerate() {
+            y = 0.;
+            for (j, z) in row.into_iter().enumerate() {
+                let norm = Vec3::new(0., 0., -1.);
+                vertices.push(Vertex::new([x, y, *z], norm));
+
+                // To understand how we set up the triangles (index buffer),
+                // it's best to draw it out.
+
+                // Upper triangle: This exists for every vertex except
+                // the bottom and right edges.
+                // (grid.length is num_rows)
+                if i != grid.len() - 1 && j != row.len() - 1 {
+                    indices.append(&mut vec![this_vert_i, this_vert_i + grid.len(), this_vert_i + 1]);
+                }
+
+                // Lower triangle: This exists for every vertex except
+                // the top and left edges.
+                if i != 0 && j != 0 {
+                    indices.append(&mut vec![this_vert_i, this_vert_i - grid.len(), this_vert_i - 1]);
+                }
+
+                y += step;
+                this_vert_i += 1;
+            }
+            x += step;
+        }
+
+        Self {
+            vertices,
+            indices,
+            material: 0,
+        }
+    }
+
     /// Create a (normalized cube) sphere mesh. A higher div count results in a smoother sphere.
     /// https://medium.com/@oscarsc/four-ways-to-create-a-mesh-for-a-sphere-d7956b825db4
     /// todo: Temporarily, a uv_sphere while we figure out how to make better ones.
