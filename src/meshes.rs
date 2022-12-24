@@ -50,19 +50,24 @@ impl Mesh {
     /// Useful for building a grid surface like terrain, or a surface plot.
     /// `grid`'s outer vec is rows; inner vec is col-associated values within that 
     /// row. The grid is evenly-spaced.
-    pub fn new_surface(grid: &Vec<Vec<f32>>, start: f32, step: f32) -> Self {
+    /// todo:  You should draw both sides.
+
+
+    /// Create a sided surface. Useful as terrain, or as a 2-sided plot.
+    /// Note that the grid is viewed here as x, z, with values in y direction, to be compatible
+    /// with the convention of Z-up used elsewhere.
+    pub fn new_surface(grid: &Vec<Vec<f32>>, start: f32, step: f32, two_sided: bool) -> Self {
         let mut vertices = Vec::new();
         let mut indices = Vec::new();
 
         let mut x = start;
-        let mut y = start;
+        let mut z = start;
         let mut this_vert_i = 0;
 
         for (i, row) in grid.iter().enumerate() {
-            y = 0.;
-            for (j, z) in row.into_iter().enumerate() {
-                let norm = Vec3::new(0., 0., -1.);
-                vertices.push(Vertex::new([x, y, *z], norm));
+            z = start;
+            for (j, y) in row.into_iter().enumerate() {
+                vertices.push(Vertex::new([x, *y, z], Vec3::new_zero()));
 
                 // To understand how we set up the triangles (index buffer),
                 // it's best to draw it out.
@@ -80,10 +85,56 @@ impl Mesh {
                     indices.append(&mut vec![this_vert_i, this_vert_i - grid.len(), this_vert_i - 1]);
                 }
 
-                y += step;
+                z += step;
                 this_vert_i += 1;
             }
             x += step;
+        }
+
+        // Now that we've populated our vertices, update their normals.
+        for i in 0..indices.len() / 3 {
+            let tri_start_i = i * 3;
+            // Find the vertices that make up each triangle.
+            let vert0 = vertices[indices[tri_start_i]];
+            let vert1 = vertices[indices[tri_start_i + 1]];
+            let vert2 = vertices[indices[tri_start_i + 2]];
+
+            // Convert from arrays to Vec3.
+            let v0 = Vec3::new(vert0.position[0], vert0.position[1], vert0.position[2]);
+            let v1 = Vec3::new(vert1.position[0], vert1.position[1], vert1.position[2]);
+            let v2 = Vec3::new(vert2.position[0], vert2.position[1], vert2.position[2]);
+
+            let norm = (v2 - v0).to_normalized().cross((v1 - v0).to_normalized());
+
+            // todo: DRY on this indexing.
+            vertices[indices[tri_start_i]].normal = norm;
+            vertices[indices[tri_start_i + 1]].normal = norm;
+            vertices[indices[tri_start_i + 1]].normal = norm;
+
+        }
+
+        // If dual-sided, We need to replicate vertices, since the normal will be opposite.
+        // Then, update the index buffer with these new vertices, using the opposite triangle order.
+        if two_sided {
+            let orig_vert_len = vertices.len();
+            let mut vertices_other_side = Vec::new();
+            for vertex in &vertices {
+                let mut new_vertex = vertex.clone();
+                new_vertex.normal *= -1.;
+                vertices_other_side.push(new_vertex);
+            }
+            vertices.append(&mut vertices_other_side);
+
+            let mut new_indices = Vec::new();
+            for i in 0..indices.len() / 3 {
+                let tri_start_i = i * 3;
+                // Opposite direction of first-side indices.
+                new_indices.push(indices[tri_start_i] + orig_vert_len);
+                new_indices.push(indices[tri_start_i + 2] + orig_vert_len);
+                new_indices.push(indices[tri_start_i + 1] + orig_vert_len);
+
+            }
+            indices.append(&mut new_indices);
         }
 
         Self {
