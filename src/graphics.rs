@@ -58,7 +58,6 @@ pub(crate) struct GraphicsState {
     pub inputs_commanded: InputsCommanded,
     // staging_belt: wgpu::util::StagingBelt, // todo: Do we want this? Probably in sys, not here.
     pub scene: Scene,
-    // todo: FIgure out if youw ant this.
     mesh_mappings: Vec<(i32, u32, u32)>,
     /// for GUI
     pub egui_platform: Platform,
@@ -77,44 +76,15 @@ impl GraphicsState {
         window: &Window,
         // adapter: &wgpu::Adapter,
     ) -> Self {
-        let mut vertices = Vec::new();
-        let mut indices = Vec::new();
-
-        for (_i, mesh) in scene.meshes.iter().enumerate() {
-            for vertex in &mesh.vertices {
-                vertices.push(vertex)
-            }
-
-            for index in &mesh.indices {
-                indices.push(index);
-            }
-        }
-        // Convert the vertex and index data to u8 buffers.
-        let mut vertex_data = Vec::new();
-        for vertex in vertices {
-            for byte in vertex.to_bytes() {
-                vertex_data.push(byte);
-            }
-        }
-
         let vertex_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Vertex buffer"),
-            contents: &vertex_data,
+            contents: &[], // Populated later.
             usage: wgpu::BufferUsages::VERTEX,
         });
 
-        let mut index_data = Vec::new();
-        for index in indices {
-            let bytes = index.to_ne_bytes();
-            index_data.push(bytes[0]);
-            index_data.push(bytes[1]);
-            index_data.push(bytes[2]);
-            index_data.push(bytes[3]);
-        }
-
         let index_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Index buffer"),
-            contents: &index_data,
+            contents: &[], // Populated later.
             usage: wgpu::BufferUsages::INDEX,
         });
 
@@ -219,6 +189,7 @@ impl GraphicsState {
             // egui_app,
         };
 
+        result.setup_vertices_indices(device);
         result.setup_entities(device);
 
         result
@@ -231,8 +202,56 @@ impl GraphicsState {
         }
     }
 
-    /// Currently, sets up entities, but doesn't change meshes, lights, or the camera.
-    /// The vertex and index buffers aren't changed; only the instances.
+    /// todo: WIP to update meshes.
+    pub(crate) fn setup_vertices_indices(&mut self, device: &wgpu::Device) {
+        let mut vertices = Vec::new();
+        let mut indices = Vec::new();
+
+        for mesh in &self.scene.meshes {
+            for vertex in &mesh.vertices {
+                vertices.push(vertex)
+            }
+
+            for index in &mesh.indices {
+                indices.push(index);
+            }
+        }
+        // Convert the vertex and index data to u8 buffers.
+        let mut vertex_data = Vec::new();
+        for vertex in vertices {
+            for byte in vertex.to_bytes() {
+                vertex_data.push(byte);
+            }
+        }
+
+        let mut index_data = Vec::new();
+        for index in indices {
+            let bytes = index.to_ne_bytes();
+            index_data.push(bytes[0]);
+            index_data.push(bytes[1]);
+            index_data.push(bytes[2]);
+            index_data.push(bytes[3]);
+        }
+
+        // We can't update using a queue due to buffer size mismatches.
+        let vertex_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Vertex buffer"),
+            contents: &vertex_data,
+            usage: wgpu::BufferUsages::VERTEX,
+        });
+
+        let index_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Index buffer"),
+            contents: &index_data,
+            usage: wgpu::BufferUsages::INDEX,
+        });
+
+        self.vertex_buf = vertex_buf;
+        self.index_buf = index_buf;
+    }
+
+    /// Currently, sets up entities (And the associated instance buf), but doesn't change 
+    /// meshes, lights, or the camera. The vertex and index buffers aren't changed; only the instances.
     pub(crate) fn setup_entities(&mut self, device: &wgpu::Device) {
         let mut instances = Vec::new();
 
@@ -273,6 +292,7 @@ impl GraphicsState {
             }
         }
 
+        // We can't update using a queue due to buffer size mismatches.
         let instance_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Instance buffer"),
             contents: &instance_data,
@@ -361,6 +381,11 @@ impl GraphicsState {
             &mut self.scene,
         );
 
+        if engine_updates.meshes {
+            self.setup_vertices_indices(device);
+            self.setup_entities(device);
+        }
+
         if engine_updates.entities {
             self.setup_entities(device);
         }
@@ -429,7 +454,7 @@ impl GraphicsState {
             rpass.set_vertex_buffer(1, self.instance_buf.slice(..));
             rpass.set_index_buffer(self.index_buf.slice(..), wgpu::IndexFormat::Uint32);
 
-            let mut start_ind = 0; // todo temp?
+            let mut start_ind = 0;
             for (i, mesh) in self.scene.meshes.iter().enumerate() {
                 let (vertex_start_this_mesh, instance_start_this_mesh, instance_count_this_mesh) =
                     self.mesh_mappings[i];
@@ -440,7 +465,7 @@ impl GraphicsState {
                     instance_start_this_mesh..instance_start_this_mesh + instance_count_this_mesh,
                 );
 
-                start_ind += mesh.indices.len() as u32; // todo temp?
+                start_ind += mesh.indices.len() as u32;
             }
         }
 

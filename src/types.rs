@@ -379,6 +379,7 @@ impl Default for UiSettings {
 /// event, GUI etc update functions, if the engine should update various things.
 #[derive(Default)]
 pub struct EngineUpdates {
+    pub meshes: bool,
     pub entities: bool,
     pub camera: bool,
     pub lighting: bool,

@@ -227,6 +227,11 @@ pub fn run<T: 'static>(
                         dt_secs,
                     );
 
+                    if engine_updates.meshes {
+                        state.graphics.setup_vertices_indices(&state.sys.device);
+                        state.graphics.setup_entities(&state.sys.device);
+                    }
+
                     // Entities have been updated in the scene; update the buffers.
                     if engine_updates.entities {
                         state.graphics.setup_entities(&state.sys.device);
@@ -302,6 +307,11 @@ pub fn run<T: 'static>(
                 let dt_secs = dt.as_secs() as f32 + dt.subsec_micros() as f32 / 1_000_000.;
                 let engine_updates =
                     render_handler(&mut user_state, &mut state.graphics.scene, dt_secs);
+
+                if engine_updates.meshes {
+                    state.graphics.setup_vertices_indices(&state.sys.device);
+                    state.graphics.setup_entities(&state.sys.device);
+                }
 
                 // Entities have been updated in the scene; update the buffers
                 if engine_updates.entities {
