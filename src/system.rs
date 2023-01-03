@@ -291,7 +291,7 @@ pub fn run<T: 'static>(
                         // Eg clicking the tile bar icon.
                         state.graphics.inputs_commanded.free_look = false;
                     }
-                    WindowEvent::CursorLeft { device_id } => {
+                    WindowEvent::CursorLeft { device_id: _ } => {
                         // todo: Not working
                         // state.graphics.inputs_commanded.free_look = false;
                     }
@@ -353,7 +353,7 @@ pub fn run<T: 'static>(
                         );
                     }
                     // todo: Does this happen when minimized?
-                    Err(e) => {}
+                    Err(_e) => {}
                 }
             }
             _ => {}

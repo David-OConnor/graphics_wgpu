@@ -61,11 +61,10 @@ impl Mesh {
         let mut indices = Vec::new();
 
         let mut x = start;
-        let mut z = start;
         let mut this_vert_i = 0;
 
         for (i, row) in grid.iter().enumerate() {
-            z = start;
+            let mut z = start;
             for (j, y) in row.into_iter().enumerate() {
                 vertices.push(Vertex::new([x, *y, z], Vec3::new_zero()));
 
