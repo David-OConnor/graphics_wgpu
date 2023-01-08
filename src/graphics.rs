@@ -46,7 +46,8 @@ pub(crate) struct GraphicsState {
     pub vertex_buf: wgpu::Buffer,
     pub index_buf: wgpu::Buffer,
     instance_buf: wgpu::Buffer,
-    compute_buf: wgpu::Buffer,
+    compute_storage_buf: wgpu::Buffer,
+    compute_staging_buf: wgpu::Buffer,
     pub bind_groups: BindGroupData,
     camera_buf: wgpu::Buffer,
     lighting_buf: wgpu::Buffer,
@@ -105,15 +106,30 @@ impl GraphicsState {
         });
 
         // For our WIP compute functionality.
-        let compute_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Compute storage Buffer"),
+        let compute_storage_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Compute storage buffer"),
             contents: &[0_u8],
             usage: wgpu::BufferUsages::STORAGE
                 | wgpu::BufferUsages::COPY_DST
                 | wgpu::BufferUsages::COPY_SRC,
         });
 
-        let bind_groups = create_bindgroups(device, &cam_buf, &lighting_buf, &compute_buf);
+        let numbers = [0; 32]; // todo: For cmopute.
+        // Gets the size in bytes of the buffer.
+        let slice_size = numbers.len() * std::mem::size_of::<u32>();
+        let size = slice_size as wgpu::BufferAddress;
+        // Instantiates buffer without data.
+        // `usage` of buffer specifies how it can be used:
+        //   `BufferUsages::MAP_READ` allows it to be read (outside the shader).
+        //   `BufferUsages::COPY_DST` allows it to be the destination of the copy.
+        let compute_staging_buf = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("Compute staging buffer"),
+            size,
+            usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+
+        let bind_groups = create_bindgroups(device, &cam_buf, &lighting_buf, &compute_storage_buf);
 
         let depth_texture = Texture::create_depth_texture(device, surface_cfg, "Depth texture");
 
@@ -171,7 +187,8 @@ impl GraphicsState {
             vertex_buf,
             index_buf,
             instance_buf,
-            compute_buf,
+            compute_storage_buf,
+            compute_staging_buf,
             bind_groups,
             camera_buf: cam_buf,
             lighting_buf,
@@ -491,16 +508,29 @@ impl GraphicsState {
             );
             cpass.set_pipeline(&self.pipeline_compute);
             cpass.set_bind_group(0, &self.bind_groups.compute, &[]);
-            cpass.insert_debug_marker("compute collatz iterations");
+            cpass.insert_debug_marker("Compute test 1.");
 
             // todo: How does this work?
+            // Number of cells to run, the (x,y,z) size of item being processed
             cpass.dispatch_workgroups(1, 1, 1);
 
-            // Sets adds copy operation to command encoder.
-            // Will copy data from storage buffer on GPU to staging buffer on CPU.
-            // encoder.copy_buffer_to_buffer(self.compute_buf, 0, &staging_buffer, 0, size);
+
+
         }
 
+        // Sets adds copy operation to command encoder.
+        // Will copy data from storage buffer on GPU to staging buffer on CPU.
+        let compute_size = 4;
+        encoder.copy_buffer_to_buffer(&self.compute_storage_buf, 0, &self.compute_staging_buf, 0, compute_size);
+
+        // todo: HOw do we read the computed data?
+
+
+        // println!(
+        //     "Sto: {:?}; STa: {:?}",
+        //     self.compute_storage_buf.slice(..)[0],
+        //          self.compute_staging_buf.slice(..)[0],
+        // );
         queue.submit(Some(encoder.finish()));
         // queue.submit(iter::once(encoder.finish()));
 
@@ -574,7 +604,7 @@ fn create_bindgroups(
     device: &wgpu::Device,
     cam_buf: &wgpu::Buffer,
     lighting_buf: &wgpu::Buffer,
-    compute_buf: &wgpu::Buffer,
+    compute_storage_buf: &wgpu::Buffer,
 ) -> BindGroupData {
     // We only need vertex, not fragment info in the camera uniform.
     let layout_cam = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
@@ -750,7 +780,7 @@ fn create_bindgroups(
         layout: &layout_compute,
         entries: &[wgpu::BindGroupEntry {
             binding: 0,
-            resource: compute_buf.as_entire_binding(),
+            resource: compute_storage_buf.as_entire_binding(),
         }],
         label: Some("Compute bind group"),
     });
