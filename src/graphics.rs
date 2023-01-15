@@ -17,7 +17,9 @@ use crate::{
     gui,
     input::{self, InputsCommanded},
     texture::Texture,
-    types::{ControlScheme, EngineUpdates, InputSettings, Instance, Scene, UiSettings, Vertex},
+    types::{
+        ControlScheme, EngineUpdates, InputSettings, Instance, Scene, UiLayout, UiSettings, Vertex,
+    },
 };
 use lin_alg2::f32::Vec3;
 
@@ -115,7 +117,7 @@ impl GraphicsState {
         });
 
         let numbers = [0; 32]; // todo: For cmopute.
-        // Gets the size in bytes of the buffer.
+                               // Gets the size in bytes of the buffer.
         let slice_size = numbers.len() * std::mem::size_of::<u32>();
         let size = slice_size as wgpu::BufferAddress;
         // Instantiates buffer without data.
@@ -267,7 +269,7 @@ impl GraphicsState {
         self.index_buf = index_buf;
     }
 
-    /// Currently, sets up entities (And the associated instance buf), but doesn't change 
+    /// Currently, sets up entities (And the associated instance buf), but doesn't change
     /// meshes, lights, or the camera. The vertex and index buffers aren't changed; only the instances.
     pub(crate) fn setup_entities(&mut self, device: &wgpu::Device) {
         let mut instances = Vec::new();
@@ -462,6 +464,18 @@ impl GraphicsState {
                 }),
             });
 
+            let ui_size = self.ui_settings.size as f32;
+
+            let (x, y, eff_width, eff_height) = match self.ui_settings.layout {
+                UiLayout::Left => (ui_size, 0., width as f32 - ui_size, height as f32),
+                UiLayout::Right => (0., 0., width as f32 - ui_size, height as f32),
+                UiLayout::Top => (0., ui_size, width as f32, height as f32 - ui_size),
+                UiLayout::Bottom => (0., 0., width as f32, height as f32 - ui_size),
+            };
+
+            // Adjust the portion of the 3D rendering to take up the space not taken up by the UI.
+            rpass.set_viewport(x, y, eff_width, eff_height, 0., 1.);
+
             rpass.set_pipeline(&self.pipeline);
 
             rpass.set_bind_group(0, &self.bind_groups.cam, &[]);
@@ -497,15 +511,15 @@ impl GraphicsState {
             )
             .unwrap();
 
-        // todo: End most of the UI code.
+        // End most of the UI code.
 
         // todo: Make sure if you add new instances to the Vec, that you recreate the instance_buffer
         // todo and as well as camera_bind_group, otherwise your new instances won't show up correctly.
 
         {
-            let mut cpass = encoder.begin_compute_pass(
-                &wgpu::ComputePassDescriptor { label: Some("Compute pass") }
-            );
+            let mut cpass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
+                label: Some("Compute pass"),
+            });
             cpass.set_pipeline(&self.pipeline_compute);
             cpass.set_bind_group(0, &self.bind_groups.compute, &[]);
             cpass.insert_debug_marker("Compute test 1.");
@@ -513,18 +527,20 @@ impl GraphicsState {
             // todo: How does this work?
             // Number of cells to run, the (x,y,z) size of item being processed
             cpass.dispatch_workgroups(1, 1, 1);
-
-
-
         }
 
         // Sets adds copy operation to command encoder.
         // Will copy data from storage buffer on GPU to staging buffer on CPU.
         let compute_size = 4;
-        encoder.copy_buffer_to_buffer(&self.compute_storage_buf, 0, &self.compute_staging_buf, 0, compute_size);
+        encoder.copy_buffer_to_buffer(
+            &self.compute_storage_buf,
+            0,
+            &self.compute_staging_buf,
+            0,
+            compute_size,
+        );
 
         // todo: HOw do we read the computed data?
-
 
         // println!(
         //     "Sto: {:?}; STa: {:?}",

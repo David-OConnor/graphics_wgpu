@@ -17,7 +17,7 @@ use image::ImageError;
 use crate::{
     graphics::GraphicsState,
     texture::Texture,
-    types::{EngineUpdates, InputSettings, Scene, UiSettings},
+    types::{EngineUpdates, InputSettings, Scene, UiLayout, UiSettings},
 };
 
 const WINDOW_TITLE_INIT: &str = "Graphics";
@@ -81,6 +81,7 @@ impl State {
         // The surface is the part of the window that we draw to. We need it to draw directly to the
         // screen. Our window needs to implement raw-window-handle (opens new window)'s
         // HasRawWindowHandle trait to create a surface.
+
         let surface_cfg = wgpu::SurfaceConfiguration {
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
             format: surface.get_supported_formats(&adapter)[0],
@@ -131,8 +132,18 @@ impl State {
                 .surface
                 .configure(&self.sys.device, &self.sys.surface_cfg);
 
-            self.graphics.scene.camera.aspect =
-                self.sys.surface_cfg.width as f32 / self.sys.surface_cfg.height as f32;
+            let (eff_width, eff_height) = match self.graphics.ui_settings.layout {
+                UiLayout::Left | UiLayout::Right => (
+                    self.sys.surface_cfg.width as f32 - self.graphics.ui_settings.size as f32,
+                    self.sys.surface_cfg.height as f32,
+                ),
+                _ => (
+                    self.sys.surface_cfg.width as f32,
+                    self.sys.surface_cfg.height as f32 - self.graphics.ui_settings.size as f32,
+                ),
+            };
+
+            self.graphics.scene.camera.aspect = eff_width / eff_height;
 
             self.graphics.depth_texture = Texture::create_depth_texture(
                 &self.sys.device,
@@ -147,8 +158,7 @@ impl State {
 
 fn load_icon(path: &Path) -> Result<Icon, ImageError> {
     let (icon_rgba, icon_width, icon_height) = {
-        let image = image::open(path)?
-            .into_rgba8();
+        let image = image::open(path)?.into_rgba8();
         let (width, height) = image.dimensions();
         let rgba = image.into_raw();
         (rgba, width, height)
@@ -185,7 +195,7 @@ pub fn run<T: 'static>(
                 // eg can't find the path
                 Err(_) => None,
             }
-        },
+        }
         // No path specified
         None => None,
     };
@@ -256,7 +266,7 @@ pub fn run<T: 'static>(
             } if window_id == window.id() => {
                 match event {
                     WindowEvent::CursorMoved { position, .. } => {
-                        if position.x < state.graphics.ui_settings.width {
+                        if position.x < state.graphics.ui_settings.size {
                             state.sys.mouse_in_gui = true;
 
                             // We reset the inputs, since otherwise a held key that
@@ -279,7 +289,7 @@ pub fn run<T: 'static>(
                     // If the window is being moved, disable mouse inputs, eg so click+drag
                     // doesn't cause a drag when moving the window using the mouse.
                     WindowEvent::Moved(_) => {
-                        // state.sys.mouse_in_gui = true;
+                        state.sys.mouse_in_gui = true;
                         // Prevents inadvertent mouse-click-activated free-look after moving the window.
                         state.graphics.inputs_commanded.free_look = false;
                     }

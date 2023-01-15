@@ -48,10 +48,9 @@ impl Mesh {
 
     /// Create a grid surface of triangles.
     /// Useful for building a grid surface like terrain, or a surface plot.
-    /// `grid`'s outer vec is rows; inner vec is col-associated values within that 
+    /// `grid`'s outer vec is rows; inner vec is col-associated values within that
     /// row. The grid is evenly-spaced.
     /// todo:  You should draw both sides.
-
 
     /// Create a sided surface. Useful as terrain, or as a 2-sided plot.
     /// Note that the grid is viewed here as x, z, with values in y direction, to be compatible
@@ -75,13 +74,21 @@ impl Mesh {
                 // the bottom and right edges.
                 // (grid.length is num_rows)
                 if i != grid.len() - 1 && j != row.len() - 1 {
-                    indices.append(&mut vec![this_vert_i, this_vert_i + grid.len(), this_vert_i + 1]);
+                    indices.append(&mut vec![
+                        this_vert_i,
+                        this_vert_i + grid.len(),
+                        this_vert_i + 1,
+                    ]);
                 }
 
                 // Lower triangle: This exists for every vertex except
                 // the top and left edges.
                 if i != 0 && j != 0 {
-                    indices.append(&mut vec![this_vert_i, this_vert_i - grid.len(), this_vert_i - 1]);
+                    indices.append(&mut vec![
+                        this_vert_i,
+                        this_vert_i - grid.len(),
+                        this_vert_i - 1,
+                    ]);
                 }
 
                 z += step;
@@ -109,7 +116,6 @@ impl Mesh {
             vertices[indices[tri_start_i]].normal = norm;
             vertices[indices[tri_start_i + 1]].normal = norm;
             vertices[indices[tri_start_i + 1]].normal = norm;
-
         }
 
         // If dual-sided, We need to replicate vertices, since the normal will be opposite.
@@ -131,7 +137,6 @@ impl Mesh {
                 new_indices.push(indices[tri_start_i] + orig_vert_len);
                 new_indices.push(indices[tri_start_i + 2] + orig_vert_len);
                 new_indices.push(indices[tri_start_i + 1] + orig_vert_len);
-
             }
             indices.append(&mut new_indices);
         }

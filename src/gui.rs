@@ -1,5 +1,4 @@
-//! GUI code for EGUI. This code doesn't include any WGPU-specific
-//! code; it's just the UI.
+//! GUI code for EGUI. This code doesn't include anything WGPU-specific; it's just the UI.
 //! See [this official example](https://github.com/emilk/egui/tree/master/crates/egui_demo_lib)
 
 use egui::FontDefinitions;

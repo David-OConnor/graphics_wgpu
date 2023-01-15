@@ -8,10 +8,10 @@ edition = "2021"
 wgpu = "^0.14.0"
 lin-alg2 = { path = "../lin_alg", features = ["computer_graphics"] }
 
-winit = "^0.27.3"
+winit = "^0.27.5"
 pollster = "^0.2.5"  # For 2 WGPU init fns that use async.
 
-image = "^0.24.1" # For loading textures
+image = "^0.24.5" # For loading textures
 obj = "^0.10.2"  # For loading OBJ meshes.
 
 egui = "^0.19"

@@ -358,18 +358,28 @@ impl Default for InputSettings {
     }
 }
 
+#[derive(Clone, Copy, Debug)]
+pub enum UiLayout {
+    Left,
+    Right,
+    Top,
+    Bottom,
+}
+
 #[derive(Clone, Debug)]
 /// GUI settings
 pub struct UiSettings {
+    pub layout: UiLayout,
     /// Used, as a quick+dirty approach, to disable events when the mouse is in the GUI section.
-    pub width: f64,
+    pub size: f64, // todo: rename size?
     pub icon_path: Option<String>,
 }
 
 impl Default for UiSettings {
     fn default() -> Self {
         Self {
-            width: 0.,
+            layout: UiLayout::Left,
+            size: 100.,
             icon_path: None,
         }
     }
