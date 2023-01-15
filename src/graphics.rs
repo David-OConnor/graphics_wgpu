@@ -419,6 +419,8 @@ impl GraphicsState {
             self.update_lighting(queue);
         }
 
+        self.ui_settings.size = engine_updates.ui_size as f64;
+
         // End the UI frame. We could now handle the output and draw the UI with the backend.
         let full_output = self.egui_platform.end_frame(Some(window));
         let paint_jobs = self.egui_platform.context().tessellate(full_output.shapes);

@@ -371,7 +371,7 @@ pub enum UiLayout {
 pub struct UiSettings {
     pub layout: UiLayout,
     /// Used, as a quick+dirty approach, to disable events when the mouse is in the GUI section.
-    pub size: f64, // todo: rename size?
+    pub size: f64, // todo: pub(crate), with a constructor?
     pub icon_path: Option<String>,
 }
 
@@ -379,7 +379,7 @@ impl Default for UiSettings {
     fn default() -> Self {
         Self {
             layout: UiLayout::Left,
-            size: 100.,
+            size: 0.,
             icon_path: None,
         }
     }
@@ -393,4 +393,5 @@ pub struct EngineUpdates {
     pub entities: bool,
     pub camera: bool,
     pub lighting: bool,
+    pub ui_size: f32,
 }
