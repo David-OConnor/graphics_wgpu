@@ -9,6 +9,7 @@
 //!
 //! 2022-08-21: https://github.com/gfx-rs/wgpu/blob/master/wgpu/examples/cube/main.rs
 
+use std::num::NonZeroU32;
 use std::time::Duration;
 
 use wgpu::{self, util::DeviceExt, BindGroup, BindGroupLayout, SurfaceConfiguration};
@@ -67,6 +68,24 @@ pub(crate) struct GraphicsState {
     rpass_egui: RenderPass,
 }
 
+// todo: Temp test for compute
+#[derive(Clone, Copy)]
+struct Cplx {
+    real: f32,
+    im: f32, // todo: How to f64 in shader?
+}
+
+impl Cplx {
+    pub fn to_bytes(&self) -> [u8; 8] {
+        let mut result = [0; 8];
+
+        result[0..4].clone_from_slice(&self.real.to_ne_bytes());
+        result[4..8].clone_from_slice(&self.im.to_ne_bytes());
+
+        result
+    }
+}
+
 impl GraphicsState {
     pub(crate) fn new(
         device: &wgpu::Device,
@@ -107,19 +126,48 @@ impl GraphicsState {
             usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
         });
 
+        // Set up test input of complex numbers.
+        let cplx_val = Cplx { real: 1.0, im: 0. };
+        let mut compute_input = Vec::new();
+        for _ in 0..10 {
+            compute_input.push(cplx_val);
+        }
+
+        // Serialize these as a byte array.
+        let mut compute_buf = Vec::new();
+        for cplx_num in compute_input {
+            let buf_this_val = cplx_num.to_bytes();
+            for i in 0..8 {
+                compute_buf.push(buf_this_val[i]);
+            }
+        }
+
+        let mut compute_buf_out = [0_u8; 8 * 10];
+
         // For our WIP compute functionality.
         let compute_storage_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Compute storage buffer"),
-            contents: &[0_u8],
+            contents: &[],
+            // contents: &compute_buf,
             usage: wgpu::BufferUsages::STORAGE
                 | wgpu::BufferUsages::COPY_DST
                 | wgpu::BufferUsages::COPY_SRC,
         });
 
-        let numbers = [0; 32]; // todo: For cmopute.
-                               // Gets the size in bytes of the buffer.
-        let slice_size = numbers.len() * std::mem::size_of::<u32>();
-        let size = slice_size as wgpu::BufferAddress;
+        let compute_storage_buf_output =
+            device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("Compute storage buffer output"),
+                contents: &[],
+                // contents: &compute_buf_out,
+                usage: wgpu::BufferUsages::STORAGE
+                    | wgpu::BufferUsages::COPY_DST
+                    | wgpu::BufferUsages::COPY_SRC,
+            });
+
+        // Gets the size in bytes of the buffer.
+        let size = compute_buf.len() as wgpu::BufferAddress;
+        let size = 0;
+
         // Instantiates buffer without data.
         // `usage` of buffer specifies how it can be used:
         //   `BufferUsages::MAP_READ` allows it to be read (outside the shader).
@@ -131,18 +179,24 @@ impl GraphicsState {
             mapped_at_creation: false,
         });
 
-        let bind_groups = create_bindgroups(device, &cam_buf, &lighting_buf, &compute_storage_buf);
+        let bind_groups = create_bindgroups(
+            device,
+            &cam_buf,
+            &lighting_buf,
+            &compute_storage_buf,
+            &compute_storage_buf_output,
+        );
 
         let depth_texture = Texture::create_depth_texture(device, surface_cfg, "Depth texture");
 
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: Some("Shader"),
+            label: Some("Graphics shader"),
             source: wgpu::ShaderSource::Wgsl(include_str!("shader.wgsl").into()),
         });
 
         // todo: Pass the shader file as a parameter.
         let shader_compute = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: None,
+            label: Some("Compute shader"),
             source: wgpu::ShaderSource::Wgsl(include_str!("shader_compute.wgsl").into()),
         });
 
@@ -534,6 +588,7 @@ impl GraphicsState {
         // Sets adds copy operation to command encoder.
         // Will copy data from storage buffer on GPU to staging buffer on CPU.
         let compute_size = 4;
+
         encoder.copy_buffer_to_buffer(
             &self.compute_storage_buf,
             0,
@@ -623,6 +678,7 @@ fn create_bindgroups(
     cam_buf: &wgpu::Buffer,
     lighting_buf: &wgpu::Buffer,
     compute_storage_buf: &wgpu::Buffer,
+    compute_storage_buf_output: &wgpu::Buffer,
 ) -> BindGroupData {
     // We only need vertex, not fragment info in the camera uniform.
     let layout_cam = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
@@ -732,74 +788,50 @@ fn create_bindgroups(
     //         label: Some("Texture bind group"),
     //     });
 
-    // todo: Pass GUI uniform buff as arg like others?
-    // let gui_uniform_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-    //     label: Some("egui_uniform_buffer"),
-    //     contents: bytemuck::cast_slice(&[gui::GuiUniformBuffer {
-    //         screen_size: [0.0, 0.0],
-    //         _padding: [0.0; 2],
-    //     }]),
-    //     usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-    // });
-
-    // let gui_uniform_buffer = gui::SizedBuffer {
-    //     buffer: gui_uniform_buffer,
-    //     size: std::mem::size_of::<gui::GuiUniformBuffer>(),
-    // };
-
-    // let layout_gui_uniform =
-    //     device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-    //         label: Some("GUI uniform bind group layout"),
-    //         entries: &[wgpu::BindGroupLayoutEntry {
-    //             binding: 0,
-    //             visibility: wgpu::ShaderStages::VERTEX,
-    //             ty: wgpu::BindingType::Buffer {
-    //                 has_dynamic_offset: false,
-    //                 min_binding_size: std::num::NonZeroU64::new(
-    //                     std::mem::size_of::<gui::GuiUniformBuffer>() as u64,
-    //                 ),
-    //                 ty: wgpu::BufferBindingType::Uniform,
-    //             },
-    //             count: None,
-    //         }],
-    //     });
-
-    // let gui_uniform = device.create_bind_group(&wgpu::BindGroupDescriptor {
-    //     label: Some("GUI uniform bind group"),
-    //     layout: &layout_gui_uniform,
-    //     entries: &[wgpu::BindGroupEntry {
-    //         binding: 0,
-    //         resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
-    //             buffer: &gui_uniform_buffer.buffer,
-    //             offset: 0,
-    //             size: std::num::NonZeroU64::new(std::mem::size_of::<gui::GuiUniformBuffer>() as u64),
-    //         }),
-    //     }],
-    // });
-
     // todo: Experimenting with compute
     let layout_compute = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-        entries: &[wgpu::BindGroupLayoutEntry {
-            binding: 0,
-            visibility: wgpu::ShaderStages::COMPUTE,
-            ty: wgpu::BindingType::Buffer {
-                ty: wgpu::BufferBindingType::Storage { read_only: true },
-                // The dynamic field indicates whether this buffer will change size or
-                // not. This is useful if we want to store an array of things in our uniforms.
-                has_dynamic_offset: false,
-                min_binding_size: None,
+        entries: &[
+            // Input
+            wgpu::BindGroupLayoutEntry {
+                binding: 0,
+                visibility: wgpu::ShaderStages::COMPUTE,
+                ty: wgpu::BindingType::Buffer {
+                    ty: wgpu::BufferBindingType::Storage { read_only: true },
+                    // The dynamic field indicates whether this buffer will change size or
+                    // not. This is useful if we want to store an array of things in our uniforms.
+                    has_dynamic_offset: false,
+                    min_binding_size: None,
+                },
+                count: None,
+                // count: NonZeroU32::new(10),
             },
-            count: None,
-        }],
+            // Output
+            wgpu::BindGroupLayoutEntry {
+                binding: 1,
+                visibility: wgpu::ShaderStages::COMPUTE,
+                ty: wgpu::BindingType::Buffer {
+                    ty: wgpu::BufferBindingType::Storage { read_only: false },
+                    has_dynamic_offset: false,
+                    min_binding_size: None,
+                },
+                count: None,
+            },
+        ],
         label: Some("Compute bind group layout"),
     });
 
     let compute = device.create_bind_group(&wgpu::BindGroupDescriptor {
         layout: &layout_compute,
-        entries: &[wgpu::BindGroupEntry {
-            binding: 0,
-            resource: compute_storage_buf.as_entire_binding(),
-        }],
+        entries: &[
+            wgpu::BindGroupEntry {
+                binding: 0,
+                resource: compute_storage_buf.as_entire_binding(),
+            },
+            wgpu::BindGroupEntry {
+                binding: 1,
+                resource: compute_storage_buf_output.as_entire_binding(),
+            },
+        ],
         label: Some("Compute bind group"),
     });
 
@@ -809,8 +841,6 @@ fn create_bindgroups(
         layout_lighting,
         lighting,
         layout_texture,
-        // layout_gui_uniform,
-        // gui_uniform,
         // texture
         compute,
         layout_compute,

@@ -4,7 +4,6 @@ struct F64 {
 }
 
 // todo: f64 not working? SIPRV passthrough for it? For now, use f32s.
-
 struct Cplx {
     real: f32,
     im: f32,
@@ -12,10 +11,15 @@ struct Cplx {
 
 @group(0)
 @binding(0)
-var<storage, read_write> cplx_input: array<Cplx>; // this is used as both input and output for convenience
+var<storage, read> cplx_input: array<Cplx>;
+//var<storage, read_write> cplx_input: array<Cplx>;
+
+@group(0)
+@binding(1)
+var<storage, write> cplx_output: array<f32>;
 
 
-// Compute the norm squared of a complex number.
+// Multiply a complex number.
 fn mul_cplx(v1: Cplx, v2: Cplx) -> Cplx {
     return Cplx (
         v1.real * v2.real - v1.im * v2.im,
@@ -32,13 +36,13 @@ fn norm_sq(v: Cplx) -> f32 {
 @compute
 @workgroup_size(1)
 fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
-//    var i: u32 = 0u;
-//    loop {
-//        if (i == 10) {
-//            break;
-//        }
-//    }
-//    v_indices[global_id.x] = 10;
-//    v_indices[global_id.x] = collatz_iterations(v_indices[global_id.x]);
+    var i: i32 = 0;
+    var len: i32 = 10; // todo: Pass in?
 
+    loop {
+        if (i == len) {
+            break;
+        }
+        cplx_output[i] = norm_sq(cplx_input[i]);
+    }
 }
