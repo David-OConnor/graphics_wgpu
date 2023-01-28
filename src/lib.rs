@@ -1,6 +1,7 @@
 #![allow(mixed_script_confusables)] // Theta in meshes
 
 mod camera;
+mod compute;
 mod graphics;
 mod gui;
 mod input;

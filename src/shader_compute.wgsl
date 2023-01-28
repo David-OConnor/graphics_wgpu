@@ -1,8 +1,3 @@
-struct F64 {
-    ms: f32,
-    ls: f32,
-}
-
 // todo: f64 not working? SIPRV passthrough for it? For now, use f32s.
 struct Cplx {
     real: f32,
@@ -12,11 +7,10 @@ struct Cplx {
 @group(0)
 @binding(0)
 var<storage, read> cplx_input: array<Cplx>;
-//var<storage, read_write> cplx_input: array<Cplx>;
 
 @group(0)
 @binding(1)
-var<storage, write> cplx_output: array<f32>;
+var<storage, read_write> cplx_output: array<f32>; // todo: Should this be just `write`?
 
 
 // Multiply a complex number.
@@ -33,16 +27,20 @@ fn norm_sq(v: Cplx) -> f32 {
     return mul_cplx(conj, v).real;
 }
 
+// VKguide.dev:
+// "Most of the time people choose a workgroup size that is a multiple of 64,
+// and not very big, as a bigger workgroup
+// size has to reserve more memory, and could be split within multiple cores.
 @compute
-@workgroup_size(1)
-fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
-    var i: i32 = 0;
-    var len: i32 = 10; // todo: Pass in?
+@workgroup_size(64)
+fn main(@builtin(global_invocation_id) global_invocation_id: vec3<u32>) {
+    let len = arrayLength(&cplx_input);
+    let i = global_invocation_id.x;
 
     loop {
         if (i == len) {
             break;
         }
-        cplx_output[i] = norm_sq(cplx_input[i]);
+         cplx_output[i] = norm_sq(cplx_input[i]);
     }
 }
