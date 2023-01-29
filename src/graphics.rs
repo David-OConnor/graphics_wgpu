@@ -79,6 +79,7 @@ impl GraphicsState {
         // these 3 args are for EGUI
         window: &Window,
         // adapter: &wgpu::Adapter,
+        compute_shader: &str, // Shader file as UTF-8
     ) -> Self {
         let vertex_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Vertex buffer"),
@@ -130,7 +131,7 @@ impl GraphicsState {
         // todo: Pass the shader file as a parameter.
         let shader_compute = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("Compute shader"),
-            source: wgpu::ShaderSource::Wgsl(include_str!("shader_compute.wgsl").into()),
+            source: wgpu::ShaderSource::Wgsl(compute_shader.into()),
         });
 
         let pipeline_layout_graphics =
@@ -377,49 +378,49 @@ impl GraphicsState {
         // // todo: Make sure if you add new instances to the Vec, that you recreate the instance_buffer
         // // todo and as well as camera_bind_group, otherwise your new instances won't show up correctly.
         //
-        // {
-        //     let mut cpass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
-        //         label: Some("Compute pass"),
-        //     });
-        //     cpass.set_pipeline(&self.pipeline_compute);
-        //     cpass.set_bind_group(0, &self.bind_groups.compute, &[]);
-        //     cpass.insert_debug_marker("Compute test 1.");
-        //
-        //     // todo: How does this work?
-        //     // Number of cells to run, the (x,y,z) size of item being processed
-        //
-        //     // todo: work_group_count as first var to dispatch_workgroups??
-        //     //         let work_group_count =
-        //     // ((NUM_PARTICLES as f32) / (PARTICLES_PER_GROUP as f32)).ceil() as u32;
-        //     let work_group_count = 64; // todo?
-        //     cpass.dispatch_workgroups(work_group_count, 1, 1);
-        // }
-        //
-        // let compute_size = 8 * 10; // todo: Sync this with buf
-        //
-        // // Sets adds copy operation to command encoder.
-        // // Will copy data from storage buffer on GPU to staging buffer on CPU.
-        // encoder.copy_buffer_to_buffer(
-        //     &self.compute_storage_buf_output,
-        //     0,
-        //     &self.compute_staging_buf,
-        //     0,
-        //     compute_size,
-        // );
-        //
-        // let compute_result = compute::buf_to_vec(&self.compute_staging_buf, device);
-        //
-        // let mut result_vals = Vec::new();
-        //
-        // let mut i = 0;
-        // for _ in 0..10 {
-        //     result_vals.push(
-        //         f32::from_ne_bytes(compute_result[i..i + 4].try_into().unwrap())
-        //     );
-        //     i += 4;
-        // }
-        //
-        // println!("Vals: {:?}\n", result_vals);
+        {
+            let mut cpass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
+                label: Some("Compute pass"),
+            });
+            cpass.set_pipeline(&self.pipeline_compute);
+            cpass.set_bind_group(0, &self.bind_groups.compute, &[]);
+            cpass.insert_debug_marker("Compute test 1.");
+
+            // todo: How does this work?
+            // Number of cells to run, the (x,y,z) size of item being processed
+
+            // todo: work_group_count as first var to dispatch_workgroups??
+            //         let work_group_count =
+            // ((NUM_PARTICLES as f32) / (PARTICLES_PER_GROUP as f32)).ceil() as u32;
+            let work_group_count = 64; // todo?
+            cpass.dispatch_workgroups(work_group_count, 1, 1);
+        }
+
+        let compute_size = 8 * 10; // todo: Sync this with buf
+
+        // Sets adds copy operation to command encoder.
+        // Will copy data from storage buffer on GPU to staging buffer on CPU.
+        encoder.copy_buffer_to_buffer(
+            &self.compute_storage_buf_output,
+            0,
+            &self.compute_staging_buf,
+            0,
+            compute_size,
+        );
+
+        let compute_result = compute::buf_to_vec(&self.compute_staging_buf, device);
+
+        let mut result_vals = Vec::new();
+
+        let mut i = 0;
+        for _ in 0..10 {
+            result_vals.push(
+                f32::from_ne_bytes(compute_result[i..i + 4].try_into().unwrap())
+            );
+            i += 4;
+        }
+
+        println!("Vals: {:?}\n", result_vals);
 
         // self.staging_belt
         //     .write_buffer(

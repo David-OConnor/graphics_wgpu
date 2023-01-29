@@ -71,7 +71,6 @@ pub(crate) fn setup(device: &wgpu::Device) -> (wgpu::Buffer, wgpu::Buffer, wgpu:
 
     // Gets the size in bytes of the buffer.
     let size = compute_buf.len() as wgpu::BufferAddress;
-    // let size = 1;
 
     // Instantiates buffer without data.
     // `usage` of buffer specifies how it can be used:
@@ -86,19 +85,17 @@ pub(crate) fn setup(device: &wgpu::Device) -> (wgpu::Buffer, wgpu::Buffer, wgpu:
 
     // For our WIP compute functionality.
     let compute_storage_buf_input = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-        label: Some("Compute storage buffer"),
+        label: Some("Compute storage buffer input"),
         contents: &compute_buf,
         usage: wgpu::BufferUsages::STORAGE
-            | wgpu::BufferUsages::COPY_DST // todo?
-            | wgpu::BufferUsages::COPY_SRC, // todo?
     });
 
     let compute_storage_buf_output = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
         label: Some("Compute storage buffer output"),
         contents: &compute_buf_out,
         usage: wgpu::BufferUsages::STORAGE
-                | wgpu::BufferUsages::COPY_DST // todo?
-                | wgpu::BufferUsages::COPY_SRC, // todo?
+                | wgpu::BufferUsages::COPY_DST
+                | wgpu::BufferUsages::COPY_SRC,
     });
 
     (
@@ -138,7 +135,6 @@ pub(crate) fn create_bindgroups(
                     ty: wgpu::BufferBindingType::Storage { read_only: false },
                     has_dynamic_offset: false,
                     min_binding_size: None,
-                    // min_binding_size: wgpu::BufferSize::new((80) as _), // todo?
                 },
                 count: None,
             },
