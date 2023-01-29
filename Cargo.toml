@@ -17,3 +17,6 @@ obj = "^0.10.2"  # For loading OBJ meshes.
 egui = "^0.19"
 egui_winit_platform = "^0.16"
 egui_wgpu_backend = "^0.20"
+
+# todo: Get rid of this asapractical. For converting compute buffers back to byte arrays
+futures-intrusive = "0.5.0"

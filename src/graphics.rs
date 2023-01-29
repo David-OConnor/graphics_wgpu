@@ -9,8 +9,7 @@
 //!
 //! 2022-08-21: https://github.com/gfx-rs/wgpu/blob/master/wgpu/examples/cube/main.rs
 
-use std::num::NonZeroU32;
-use std::time::Duration;
+use std::{num::NonZeroU32, time::Duration};
 
 use wgpu::{self, util::DeviceExt, BindGroup, BindGroupLayout, SurfaceConfiguration};
 
@@ -49,8 +48,9 @@ pub(crate) struct GraphicsState {
     pub vertex_buf: wgpu::Buffer,
     pub index_buf: wgpu::Buffer,
     instance_buf: wgpu::Buffer,
-    compute_storage_buf_input: wgpu::Buffer,
     compute_staging_buf: wgpu::Buffer,
+    compute_storage_buf_input: wgpu::Buffer,
+    compute_storage_buf_output: wgpu::Buffer,
     pub bind_groups: BindGroupData,
     camera_buf: wgpu::Buffer,
     lighting_buf: wgpu::Buffer,
@@ -187,6 +187,7 @@ impl GraphicsState {
             index_buf,
             instance_buf,
             compute_storage_buf_input,
+            compute_storage_buf_output,
             compute_staging_buf,
             bind_groups,
             camera_buf: cam_buf,
@@ -372,10 +373,10 @@ impl GraphicsState {
         let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
             label: Some("Render encoder"),
         });
-
-        // todo: Make sure if you add new instances to the Vec, that you recreate the instance_buffer
-        // todo and as well as camera_bind_group, otherwise your new instances won't show up correctly.
-
+        //
+        // // todo: Make sure if you add new instances to the Vec, that you recreate the instance_buffer
+        // // todo and as well as camera_bind_group, otherwise your new instances won't show up correctly.
+        //
         // {
         //     let mut cpass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
         //         label: Some("Compute pass"),
@@ -390,20 +391,35 @@ impl GraphicsState {
         //     // todo: work_group_count as first var to dispatch_workgroups??
         //     //         let work_group_count =
         //     // ((NUM_PARTICLES as f32) / (PARTICLES_PER_GROUP as f32)).ceil() as u32;
-        //     cpass.dispatch_workgroups(1, 1, 1);
+        //     let work_group_count = 64; // todo?
+        //     cpass.dispatch_workgroups(work_group_count, 1, 1);
         // }
-
-        // Sets adds copy operation to command encoder.
-        // Will copy data from storage buffer on GPU to staging buffer on CPU.
+        //
         // let compute_size = 8 * 10; // todo: Sync this with buf
-
+        //
+        // // Sets adds copy operation to command encoder.
+        // // Will copy data from storage buffer on GPU to staging buffer on CPU.
         // encoder.copy_buffer_to_buffer(
-        //     &self.compute_storage_buf,
+        //     &self.compute_storage_buf_output,
         //     0,
         //     &self.compute_staging_buf,
         //     0,
         //     compute_size,
         // );
+        //
+        // let compute_result = compute::buf_to_vec(&self.compute_staging_buf, device);
+        //
+        // let mut result_vals = Vec::new();
+        //
+        // let mut i = 0;
+        // for _ in 0..10 {
+        //     result_vals.push(
+        //         f32::from_ne_bytes(compute_result[i..i + 4].try_into().unwrap())
+        //     );
+        //     i += 4;
+        // }
+        //
+        // println!("Vals: {:?}\n", result_vals);
 
         // self.staging_belt
         //     .write_buffer(
@@ -504,6 +520,63 @@ impl GraphicsState {
             .remove_textures(tdelta)
             .expect("remove texture ok");
     }
+
+    // todo: Testing separating compute from render
+
+    pub fn compute(&mut self, device: &wgpu::Device, queue: &wgpu::Queue) {
+        let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+            label: Some("Render encoder"),
+        });
+
+        // todo: Make sure if you add new instances to the Vec, that you recreate the instance_buffer
+        // todo and as well as camera_bind_group, otherwise your new instances won't show up correctly.
+
+        {
+            let mut cpass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
+                label: Some("Compute pass"),
+            });
+            cpass.set_pipeline(&self.pipeline_compute);
+            cpass.set_bind_group(0, &self.bind_groups.compute, &[]);
+            cpass.insert_debug_marker("Compute test 1.");
+
+            // todo: How does this work?
+            // Number of cells to run, the (x,y,z) size of item being processed
+
+            // todo: work_group_count as first var to dispatch_workgroups??
+            //         let work_group_count =
+            // ((NUM_PARTICLES as f32) / (PARTICLES_PER_GROUP as f32)).ceil() as u32;
+            let work_group_count = 64; // todo?
+            cpass.dispatch_workgroups(work_group_count, 1, 1);
+        }
+
+        let compute_size = 8 * 10; // todo: Sync this with buf
+
+        // Sets adds copy operation to command encoder.
+        // Will copy data from storage buffer on GPU to staging buffer on CPU.
+        encoder.copy_buffer_to_buffer(
+            &self.compute_storage_buf_output,
+            0,
+            &self.compute_staging_buf,
+            0,
+            compute_size,
+        );
+
+        let compute_result = compute::buf_to_vec(&self.compute_staging_buf, device);
+
+        let mut result_vals = Vec::new();
+
+        let mut i = 0;
+        for _ in 0..10 {
+            result_vals.push(f32::from_ne_bytes(
+                compute_result[i..i + 4].try_into().unwrap(),
+            ));
+            i += 4;
+        }
+
+        println!("Vals: {:?}\n", result_vals);
+
+        queue.submit(Some(encoder.finish()));
+    }
 }
 
 /// Create render pipelines.
@@ -557,9 +630,9 @@ pub(crate) struct BindGroupData {
     pub lighting: BindGroup,
     /// We use this for GUI.
     pub layout_texture: BindGroupLayout,
-    pub compute: BindGroup,
-    pub layout_compute: BindGroupLayout,
     // pub texture: BindGroup,
+    pub layout_compute: BindGroupLayout,
+    pub compute: BindGroup,
 }
 
 fn create_bindgroups(
@@ -677,53 +750,13 @@ fn create_bindgroups(
     //         label: Some("Texture bind group"),
     //     });
 
-    // todo: Experimenting with compute
-    let layout_compute = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-        entries: &[
-            // Input
-            wgpu::BindGroupLayoutEntry {
-                binding: 0,
-                visibility: wgpu::ShaderStages::COMPUTE,
-                ty: wgpu::BindingType::Buffer {
-                    ty: wgpu::BufferBindingType::Storage { read_only: true },
-                    // The dynamic field indicates whether this buffer will change size or
-                    // not. This is useful if we want to store an array of things in our uniforms.
-                    has_dynamic_offset: false,
-                    min_binding_size: None,
-                    // min_binding_size: wgpu::BufferSize::new((NUM_PARTICLES * 16) as _),
-                },
-                count: None,
-            },
-            // Output
-            wgpu::BindGroupLayoutEntry {
-                binding: 1,
-                visibility: wgpu::ShaderStages::COMPUTE,
-                ty: wgpu::BindingType::Buffer {
-                    ty: wgpu::BufferBindingType::Storage { read_only: false },
-                    has_dynamic_offset: false,
-                    min_binding_size: None,
-                    // min_binding_size: wgpu::BufferSize::new((NUM_PARTICLES * 16) as _),
-                },
-                count: None,
-            },
-        ],
-        label: Some("Compute bind group layout"),
-    });
+    // todo: Consider calling `compute::create_bindgroups` separately, vice from this fn.
 
-    let compute = device.create_bind_group(&wgpu::BindGroupDescriptor {
-        layout: &layout_compute,
-        entries: &[
-            wgpu::BindGroupEntry {
-                binding: 0,
-                resource: compute_storage_buf_input.as_entire_binding(),
-            },
-            wgpu::BindGroupEntry {
-                binding: 1,
-                resource: compute_storage_buf_output.as_entire_binding(),
-            },
-        ],
-        label: Some("Compute bind group"),
-    });
+    let (layout_compute, compute) = compute::create_bindgroups(
+        device,
+        compute_storage_buf_input,
+        compute_storage_buf_output,
+    );
 
     BindGroupData {
         layout_cam,
@@ -732,7 +765,7 @@ fn create_bindgroups(
         lighting,
         layout_texture,
         // texture
-        compute,
         layout_compute,
+        compute,
     }
 }

@@ -34,13 +34,10 @@ fn norm_sq(v: Cplx) -> f32 {
 @compute
 @workgroup_size(64)
 fn main(@builtin(global_invocation_id) global_invocation_id: vec3<u32>) {
-    let len = arrayLength(&cplx_input);
+//    let len = arrayLength(&cplx_input);
+//    var len = 10; // todo temp
     let i = global_invocation_id.x;
 
-    loop {
-        if (i == len) {
-            break;
-        }
-         cplx_output[i] = norm_sq(cplx_input[i]);
-    }
+    // i / 2 since we're returning a f32 array while using complex input?
+    cplx_output[i] = norm_sq(cplx_input[i]);
 }

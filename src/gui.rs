@@ -89,7 +89,8 @@ pub(crate) fn render<T>(
 
     // This `execute` step must come after the render pass. Running this function after it
     // will accomplish this.
-    g_state.rpass_egui
+    g_state
+        .rpass_egui
         .execute(
             encoder,
             output_view,
