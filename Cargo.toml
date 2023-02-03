@@ -5,7 +5,7 @@ authors = ["David O'Connor <david.alan.oconnor@gmail.com>"]
 edition = "2021"
 
 [dependencies]
-wgpu = "^0.14.0"
+wgpu = "^0.14.0" # todo: Use 0.15 once WGPU backend is compatible or you discover a owrkaround.
 lin-alg2 = { path = "../lin_alg", features = ["computer_graphics"] }
 
 winit = "^0.27.5"

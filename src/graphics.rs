@@ -66,6 +66,7 @@ pub(crate) struct GraphicsState {
     /// for GUI
     pub egui_platform: Platform,
     pub rpass_egui: RenderPass,
+    pub ui_size_prev: f64,
 }
 
 impl GraphicsState {
@@ -178,6 +179,7 @@ impl GraphicsState {
         window.set_inner_size(window_size);
         window.set_title(&scene.window_title);
 
+        // todo: Not updated to match latest WGPU re surface_cfg.format and device.
         let rpass_egui = RenderPass::new(device, surface_cfg.format, 1);
 
         // Display the demo application that ships with egui.
@@ -205,6 +207,7 @@ impl GraphicsState {
             egui_platform,
             rpass_egui,
             // egui_app,
+            ui_size_prev: 0.,
         };
 
         result.setup_vertices_indices(device);
@@ -342,7 +345,9 @@ impl GraphicsState {
         window: &Window,
         mut gui_handler: impl FnMut(&mut T, &egui::Context, &mut Scene) -> EngineUpdates,
         user_state: &mut T,
-    ) {
+    ) -> bool {
+        let mut resize_required = false;
+
         // Adjust camera inputs using the in-engine control scheme.
         // Note that camera settings adjusted by the application code are handled in
         // `update_camera`.
@@ -378,49 +383,49 @@ impl GraphicsState {
         // // todo: Make sure if you add new instances to the Vec, that you recreate the instance_buffer
         // // todo and as well as camera_bind_group, otherwise your new instances won't show up correctly.
         //
-        {
-            let mut cpass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
-                label: Some("Compute pass"),
-            });
-            cpass.set_pipeline(&self.pipeline_compute);
-            cpass.set_bind_group(0, &self.bind_groups.compute, &[]);
-            cpass.insert_debug_marker("Compute test 1.");
-
-            // todo: How does this work?
-            // Number of cells to run, the (x,y,z) size of item being processed
-
-            // todo: work_group_count as first var to dispatch_workgroups??
-            //         let work_group_count =
-            // ((NUM_PARTICLES as f32) / (PARTICLES_PER_GROUP as f32)).ceil() as u32;
-            let work_group_count = 64; // todo?
-            cpass.dispatch_workgroups(work_group_count, 1, 1);
-        }
-
-        let compute_size = 8 * 10; // todo: Sync this with buf
-
-        // Sets adds copy operation to command encoder.
-        // Will copy data from storage buffer on GPU to staging buffer on CPU.
-        encoder.copy_buffer_to_buffer(
-            &self.compute_storage_buf_output,
-            0,
-            &self.compute_staging_buf,
-            0,
-            compute_size,
-        );
-
-        let compute_result = compute::buf_to_vec(&self.compute_staging_buf, device);
-
-        let mut result_vals = Vec::new();
-
-        let mut i = 0;
-        for _ in 0..10 {
-            result_vals.push(
-                f32::from_ne_bytes(compute_result[i..i + 4].try_into().unwrap())
-            );
-            i += 4;
-        }
-
-        println!("Vals: {:?}\n", result_vals);
+        // {
+        //     let mut cpass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
+        //         label: Some("Compute pass"),
+        //     });
+        //     cpass.set_pipeline(&self.pipeline_compute);
+        //     cpass.set_bind_group(0, &self.bind_groups.compute, &[]);
+        //     cpass.insert_debug_marker("Compute test 1.");
+        //
+        //     // todo: How does this work?
+        //     // Number of cells to run, the (x,y,z) size of item being processed
+        //
+        //     // todo: work_group_count as first var to dispatch_workgroups??
+        //     //         let work_group_count =
+        //     // ((NUM_PARTICLES as f32) / (PARTICLES_PER_GROUP as f32)).ceil() as u32;
+        //     let work_group_count = 64; // todo?
+        //     cpass.dispatch_workgroups(work_group_count, 1, 1);
+        // }
+        //
+        // let compute_size = 8 * 10; // todo: Sync this with buf
+        //
+        // // Sets adds copy operation to command encoder.
+        // // Will copy data from storage buffer on GPU to staging buffer on CPU.
+        // encoder.copy_buffer_to_buffer(
+        //     &self.compute_storage_buf_output,
+        //     0,
+        //     &self.compute_staging_buf,
+        //     0,
+        //     compute_size,
+        // );
+        //
+        // let compute_result = compute::buf_to_vec(&self.compute_staging_buf, device);
+        //
+        // let mut result_vals = Vec::new();
+        //
+        // let mut i = 0;
+        // for _ in 0..10 {
+        //     result_vals.push(
+        //         f32::from_ne_bytes(compute_result[i..i + 4].try_into().unwrap())
+        //     );
+        //     i += 4;
+        // }
+        //
+        // println!("Vals: {:?}\n", result_vals);
 
         // self.staging_belt
         //     .write_buffer(
@@ -462,6 +467,10 @@ impl GraphicsState {
             });
 
             let ui_size = self.ui_settings.size as f32;
+            if self.ui_size_prev != self.ui_settings.size {
+                resize_required = true;
+            }
+            self.ui_size_prev = self.ui_settings.size;
 
             let (x, y, eff_width, eff_height) = match self.ui_settings.layout {
                 UiLayout::Left => (ui_size, 0., width as f32 - ui_size, height as f32),
@@ -520,6 +529,8 @@ impl GraphicsState {
         self.rpass_egui
             .remove_textures(tdelta)
             .expect("remove texture ok");
+
+        resize_required
     }
 
     // todo: Testing separating compute from render

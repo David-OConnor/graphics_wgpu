@@ -87,15 +87,15 @@ pub(crate) fn setup(device: &wgpu::Device) -> (wgpu::Buffer, wgpu::Buffer, wgpu:
     let compute_storage_buf_input = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
         label: Some("Compute storage buffer input"),
         contents: &compute_buf,
-        usage: wgpu::BufferUsages::STORAGE
+        usage: wgpu::BufferUsages::STORAGE,
     });
 
     let compute_storage_buf_output = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
         label: Some("Compute storage buffer output"),
         contents: &compute_buf_out,
         usage: wgpu::BufferUsages::STORAGE
-                | wgpu::BufferUsages::COPY_DST
-                | wgpu::BufferUsages::COPY_SRC,
+            | wgpu::BufferUsages::COPY_DST
+            | wgpu::BufferUsages::COPY_SRC,
     });
 
     (

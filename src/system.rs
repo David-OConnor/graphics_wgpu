@@ -97,6 +97,53 @@ impl State {
             alpha_mode: wgpu::CompositeAlphaMode::Auto, // todo?
         };
 
+        // todo: 0.15 WGPU once it's compatible with WGPU_EGUI BACKEND:
+        //                             .ok()
+        //                     })
+        //                     .expect("couldn't append canvas to document body");
+        //             }
+        //
+        //         let size = window.inner_size();
+        //
+        //         // let backends = wgpu::util::backend_bits_from_env().unwrap_or_else(wgpu::Backends::all);
+        //         let backends = wgpu::Backends::VULKAN;
+        //         let dx12_shader_compiler = wgpu::util::dx12_shader_compiler_from_env().unwrap_or_default();
+        //
+        //         // The instance is a handle to our GPU. Its main purpose is to create Adapters and Surfaces.
+        //         let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
+        //             backends,
+        //             dx12_shader_compiler,
+        //         });
+        //
+        //         let surface = instance.create_surface(window).unwrap();
+        //
+        //         let (adapter, device, queue) = pollster::block_on(setup_async(&instance, &surface));
+        //
+        //         // The surface is the part of the window that we draw to. We need it to draw directly to the
+        //         // screen. Our window needs to implement raw-window-handle (opens new window)'s
+        //         // HasRawWindowHandle trait to create a surface.
+        //
+        //         let surface_cfg = wgpu::SurfaceConfiguration {
+        //             usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+        //             format: wgpu::TextureFormat::Rgba8UnormSrgb, // todo?
+        //             width: size.width,
+        //             height: size.height,
+        //             // https://docs.rs/wgpu/latest/wgpu/enum.PresentMode.html
+        //             // Note that `Fifo` locks FPS to the speed of the monitor.
+        //             present_mode: wgpu::PresentMode::Fifo,
+        //             // todo: Allow config from user.
+        //             // present_mode: wgpu::PresentMode::Immediate,
+        //             // present_mode: wgpu::PresentMode::Mailbox,
+        //             alpha_mode: wgpu::CompositeAlphaMode::Auto, // todo?
+        //             view_formats: vec![wgpu::TextureFormat::Rgba32Uint], // todo?
+        //         };
+        //
+        //         surface.configure(&device, &surface_cfg);
+        //
+        //         let sys = SystemState {
+        //             instance,
+        //             size,
+
         surface.configure(&device, &surface_cfg);
 
         let sys = SystemState {
@@ -341,6 +388,11 @@ pub fn run<T: 'static>(
                     state.graphics.update_lighting(&state.sys.queue);
                 }
 
+                if engine_updates.compute {
+                    // Entities have been updated in the scene; update the buffer.
+                    state.graphics.compute(&state.sys.device, &state.sys.queue);
+                }
+
                 // Note that the GUI handler can also modify entities, but
                 // we do that in the `init_graphics` module.
 
@@ -351,7 +403,7 @@ pub fn run<T: 'static>(
                             .texture
                             .create_view(&wgpu::TextureViewDescriptor::default());
 
-                        state.graphics.render(
+                        let resize_required = state.graphics.render(
                             output_frame,
                             &output_view,
                             &state.sys.device,
@@ -364,6 +416,10 @@ pub fn run<T: 'static>(
                             &mut gui_handler,
                             &mut user_state,
                         );
+
+                        if resize_required {
+                            state.resize(state.sys.size);
+                        }
                     }
                     // todo: Does this happen when minimized?
                     Err(_e) => {}
