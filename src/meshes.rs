@@ -56,54 +56,55 @@ impl Mesh {
     /// Note that the grid is viewed here as x, z, with values in y direction, to be compatible
     /// with the convention of Z-up used elsewhere.
     ///
-    /// Points are (x, y, z), with Z being the vertical component.
+    /// Points are (x, y, z), with Z being the vertical component. Their indices correspond to how they're
+    /// tied together in a mesh.
     // pub fn new_surface(grid: &Vec<Vec<f32>>, start: f32, step: f32, two_sided: bool) -> Self {
-    pub fn new_surface(points: &Vec<Vec<Vec<Vec3>>>, two_sided: bool) -> Self {
+    pub fn new_surface(points: &Vec<Vec<Vec3>>, two_sided: bool) -> Self {
         let mut vertices = Vec::new();
         let mut indices = Vec::new();
 
         // let mut x = start;
         let mut this_vert_i = 0;
 
+        // Note: Y is
         for (i, rows) in points.into_iter().enumerate() {
-            for (j, vals) in rows.into_iter().enumerate() {
-                for k in 0..vals.len() {
-                    let x = points[i][j][k].x;
-                    let y = points[i][j][k].y;
-                    let z = points[i][j][k].z;
+            for (j, point) in rows.into_iter().enumerate() {
+                let x = point.x;
+                let y = point.z; // Swap y and z coords.
+                let z = point.y;
 
-                    // for (i, row) in posits.iter().enumerate() {
-                    //     let mut z = start;
-                    //     for (j, y_posit) in row.into_iter().enumerate() {
-                    vertices.push(Vertex::new([x, y, z], Vec3::new_zero()));
+                // for (i, row) in posits.iter().enumerate() {
+                //     let mut z = start;
+                //     for (j, y_posit) in row.into_iter().enumerate() {
+                vertices.push(Vertex::new([x, y, z], Vec3::new_zero()));
 
-                    // To understand how we set up the triangles (index buffer),
-                    // it's best to draw it out.
+                // To understand how we set up the triangles (index buffer),
+                // it's best to draw it out.
 
-                    // Upper triangle: This exists for every vertex except
-                    // the bottom and right edges.
-                    // (grid.length is num_rows)
-                    if i != points.len() - 1 && j != rows.len() - 1 {
-                        indices.append(&mut vec![
-                            this_vert_i,
-                            this_vert_i + points.len(),
-                            this_vert_i + 1,
-                        ]);
-                    }
-
-                    // Lower triangle: This exists for every vertex except
-                    // the top and left edges.
-                    if i != 0 && j != 0 {
-                        indices.append(&mut vec![
-                            this_vert_i,
-                            this_vert_i - points.len(),
-                            this_vert_i - 1,
-                        ]);
-                    }
-
-                    // z += step;
-                    this_vert_i += 1;
+                // Upper triangle: This exists for every vertex except
+                // the bottom and right edges.
+                // (grid.length is num_rows)
+                if i != points.len() - 1 && j != rows.len() - 1 {
+                    indices.append(&mut vec![
+                        this_vert_i,
+                        this_vert_i + points.len(),
+                        this_vert_i + 1,
+                    ]);
                 }
+
+                // Lower triangle: This exists for every vertex except
+                // the top and left edges.
+                if i != 0 && j != 0 {
+                    indices.append(&mut vec![
+                        this_vert_i,
+                        this_vert_i - points.len(),
+                        this_vert_i - 1,
+                    ]);
+                }
+
+                // z += step;
+                this_vert_i += 1;
+                // }
             }
             // x += step;
         }
