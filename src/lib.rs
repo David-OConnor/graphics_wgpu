@@ -16,7 +16,7 @@ pub use input::InputsCommanded;
 pub use lighting::{LightType, Lighting, PointLight};
 pub use system::run;
 pub use types::{
-    ControlScheme, EngineUpdates, Entity, InputSettings, Mesh, Scene, UiLayout, UiSettings,
+    ControlScheme, EngineUpdates, Entity, InputSettings, Mesh, Scene, UiLayout, UiSettings, Vertex,
 };
 
 // Re-export winit DeviceEvents for use in the API; this prevents the calling

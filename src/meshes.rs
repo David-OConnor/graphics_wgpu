@@ -55,46 +55,57 @@ impl Mesh {
     /// Create a sided surface. Useful as terrain, or as a 2-sided plot.
     /// Note that the grid is viewed here as x, z, with values in y direction, to be compatible
     /// with the convention of Z-up used elsewhere.
-    pub fn new_surface(grid: &Vec<Vec<f32>>, start: f32, step: f32, two_sided: bool) -> Self {
+    ///
+    /// Points are (x, y, z), with Z being the vertical component.
+    // pub fn new_surface(grid: &Vec<Vec<f32>>, start: f32, step: f32, two_sided: bool) -> Self {
+    pub fn new_surface(points: &Vec<Vec<Vec<Vec3>>>, two_sided: bool) -> Self {
         let mut vertices = Vec::new();
         let mut indices = Vec::new();
 
-        let mut x = start;
+        // let mut x = start;
         let mut this_vert_i = 0;
 
-        for (i, row) in grid.iter().enumerate() {
-            let mut z = start;
-            for (j, y) in row.into_iter().enumerate() {
-                vertices.push(Vertex::new([x, *y, z], Vec3::new_zero()));
+        for (i, rows) in points.into_iter().enumerate() {
+            for (j, vals) in rows.into_iter().enumerate() {
+                for k in 0..vals.len() {
+                    let x = points[i][j][k].x;
+                    let y = points[i][j][k].y;
+                    let z = points[i][j][k].z;
 
-                // To understand how we set up the triangles (index buffer),
-                // it's best to draw it out.
+                    // for (i, row) in posits.iter().enumerate() {
+                    //     let mut z = start;
+                    //     for (j, y_posit) in row.into_iter().enumerate() {
+                    vertices.push(Vertex::new([x, y, z], Vec3::new_zero()));
 
-                // Upper triangle: This exists for every vertex except
-                // the bottom and right edges.
-                // (grid.length is num_rows)
-                if i != grid.len() - 1 && j != row.len() - 1 {
-                    indices.append(&mut vec![
-                        this_vert_i,
-                        this_vert_i + grid.len(),
-                        this_vert_i + 1,
-                    ]);
+                    // To understand how we set up the triangles (index buffer),
+                    // it's best to draw it out.
+
+                    // Upper triangle: This exists for every vertex except
+                    // the bottom and right edges.
+                    // (grid.length is num_rows)
+                    if i != points.len() - 1 && j != rows.len() - 1 {
+                        indices.append(&mut vec![
+                            this_vert_i,
+                            this_vert_i + points.len(),
+                            this_vert_i + 1,
+                        ]);
+                    }
+
+                    // Lower triangle: This exists for every vertex except
+                    // the top and left edges.
+                    if i != 0 && j != 0 {
+                        indices.append(&mut vec![
+                            this_vert_i,
+                            this_vert_i - points.len(),
+                            this_vert_i - 1,
+                        ]);
+                    }
+
+                    // z += step;
+                    this_vert_i += 1;
                 }
-
-                // Lower triangle: This exists for every vertex except
-                // the top and left edges.
-                if i != 0 && j != 0 {
-                    indices.append(&mut vec![
-                        this_vert_i,
-                        this_vert_i - grid.len(),
-                        this_vert_i - 1,
-                    ]);
-                }
-
-                z += step;
-                this_vert_i += 1;
             }
-            x += step;
+            // x += step;
         }
 
         // Now that we've populated our vertices, update their normals.
