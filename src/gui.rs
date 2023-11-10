@@ -2,7 +2,7 @@
 //! See [this official example](https://github.com/emilk/egui/tree/master/crates/egui_demo_lib)
 
 use egui::FontDefinitions;
-use egui_wgpu_backend::{RenderPass, ScreenDescriptor};
+use egui_wgpu_backend::{ScreenDescriptor};
 use egui_winit_platform::{Platform, PlatformDescriptor};
 use wgpu::{self, SurfaceConfiguration};
 use winit::window::Window;

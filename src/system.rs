@@ -47,7 +47,7 @@ impl State {
         scene: Scene,
         input_settings: InputSettings,
         ui_settings: UiSettings,
-        compute_shader: &str, // Shader file, as a UTF-8
+        // compute_shader: Option<&str>, // Shader file, as a UTF-8
     ) -> Self {
         #[cfg(target_arch = "wasm32")]
         {
@@ -166,7 +166,7 @@ impl State {
             ui_settings,
             window,
             // &sys.adapter,
-            compute_shader,
+            // compute_shader,
         );
 
         Self { sys, graphics }
@@ -223,7 +223,7 @@ pub fn run<T: 'static>(
     mut render_handler: impl FnMut(&mut T, &mut Scene, f32) -> EngineUpdates + 'static,
     mut event_handler: impl FnMut(&mut T, DeviceEvent, &mut Scene, f32) -> EngineUpdates + 'static,
     mut gui_handler: impl FnMut(&mut T, &egui::Context, &mut Scene) -> EngineUpdates + 'static,
-    compute_shader: &str,
+    // compute_shader: Option<&str>,
 ) {
     // cfg_if::cfg_if! {
     //     if #[cfg(target_arch = "wasm32")] {
@@ -261,7 +261,7 @@ pub fn run<T: 'static>(
         .build(&event_loop)
         .unwrap();
 
-    let mut state = State::new(&window, scene, input_settings, ui_settings, compute_shader);
+    let mut state = State::new(&window, scene, input_settings, ui_settings);
 
     let mut last_render_time = Instant::now();
     let mut dt = Duration::new(0, 0);
@@ -388,10 +388,10 @@ pub fn run<T: 'static>(
                     state.graphics.update_lighting(&state.sys.queue);
                 }
 
-                if engine_updates.compute {
-                    // Entities have been updated in the scene; update the buffer.
-                    state.graphics.compute(&state.sys.device, &state.sys.queue);
-                }
+                // if engine_updates.compute {
+                //     // Entities have been updated in the scene; update the buffer.
+                //     state.graphics.compute(&state.sys.device, &state.sys.queue);
+                // }
 
                 // Note that the GUI handler can also modify entities, but
                 // we do that in the `init_graphics` module.
