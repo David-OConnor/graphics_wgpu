@@ -9,24 +9,22 @@
 //!
 //! 2022-08-21: https://github.com/gfx-rs/wgpu/blob/master/wgpu/examples/cube/main.rs
 
-use std::{time::Duration};
+use std::time::Duration;
 
+use egui_wgpu_backend::RenderPass;
+use egui_winit_platform::Platform;
+use lin_alg2::f32::Vec3;
 use wgpu::{self, util::DeviceExt, BindGroup, BindGroupLayout, SurfaceConfiguration};
+use winit::{event::DeviceEvent, window::Window};
 
 use crate::{
-    compute, gui,
+    gui,
     input::{self, InputsCommanded},
     texture::Texture,
     types::{
         ControlScheme, EngineUpdates, InputSettings, Instance, Scene, UiLayout, UiSettings, Vertex,
     },
 };
-use lin_alg2::f32::Vec3;
-
-use winit::{event::DeviceEvent, window::Window};
-
-use egui_wgpu_backend::{RenderPass};
-use egui_winit_platform::Platform;
 
 pub(crate) const UP_VEC: Vec3 = Vec3 {
     x: 0.,
@@ -343,9 +341,8 @@ impl GraphicsState {
         dt: Duration,
         width: u32,
         height: u32,
-        // surface: &wgpu::Surface,
         window: &Window,
-        mut gui_handler: impl FnMut(&mut T, &egui::Context, &mut Scene) -> EngineUpdates,
+        gui_handler: impl FnMut(&mut T, &egui::Context, &mut Scene) -> EngineUpdates,
         user_state: &mut T,
     ) -> bool {
         let mut resize_required = false;

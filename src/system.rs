@@ -6,13 +6,12 @@ use std::{
     time::{Duration, Instant},
 };
 
+use image::ImageError;
 use winit::{
     event::{DeviceEvent, Event, WindowEvent},
     event_loop::{ControlFlow, EventLoop},
     window::{Icon, Window, WindowBuilder},
 };
-
-use image::ImageError;
 
 use crate::{
     graphics::GraphicsState,

@@ -1,15 +1,14 @@
 //! Handles keyboard and mouse input, eg for moving the camera.
 
+use lin_alg2::f32::{Quaternion, Vec3};
+// todo: remove Winit from this module if you can, and make it agnostic?
+use winit::event::{DeviceEvent, ElementState};
+
 use crate::{
     camera::Camera,
     graphics::{FWD_VEC, RIGHT_VEC, UP_VEC},
     types::InputSettings,
 };
-
-use lin_alg2::f32::{Quaternion, Vec3};
-
-// todo: remove Winit from this module if you can, and make it agnostic?
-use winit::event::{DeviceEvent, ElementState};
 
 const MOUSE_1_ID: u32 = 1;
 

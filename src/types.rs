@@ -1,8 +1,8 @@
 //! https://sotrh.github.io/learn-wgpu/beginner/tutorial9-models/#rendering-a-mesh
 
-use crate::{camera::Camera, lighting::Lighting};
-
 use lin_alg2::f32::{Mat4, Quaternion, Vec3};
+
+use crate::{camera::Camera, lighting::Lighting};
 
 // These sizes are in bytes. We do this, since that's the data format expected by the shader.
 pub const F32_SIZE: usize = 4;

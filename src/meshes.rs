@@ -6,12 +6,12 @@ use std::{
     io::{BufReader, Read},
 };
 
+use lin_alg2::f32::Vec3;
+
 use crate::{
     graphics::UP_VEC,
     types::{Mesh, Vertex},
 };
-
-use lin_alg2::f32::Vec3;
 
 /// Rotate a 2d vector counter-clockwise a given angle.
 fn rotate_vec_2d(vec: [f32; 2], θ: f32) -> [f32; 2] {
@@ -467,6 +467,43 @@ impl Mesh {
             // Bottom face
             vertices.push(Vertex::new([vert[0], -half_len, vert[1]], -UP_VEC));
             i_vertex += 1;
+        }
+
+        Self {
+            vertices,
+            indices,
+            material: 0,
+        }
+    }
+
+    /// Create an arrow, oriented up.
+    pub fn new_arrow(len: f32, radius: f32, num_sides: usize) -> Self {
+        let tip_offset = len / 2.;
+        let cylinder = Self::new_cylinder(len, radius, num_sides);
+
+        // todo; Temp; use a better arrow head.
+        let tip = Self::new_tetrahedron(radius * 4.);
+
+        let mut vertices = cylinder.vertices.clone();
+        let mut indices = cylinder.indices.clone();
+
+        for vertex in tip.vertices {
+            vertices.push(Vertex {
+                position: [
+                    vertex.position[0],
+                    vertex.position[1] + tip_offset,
+                    vertex.position[2],
+                ],
+                ..vertex
+            });
+        }
+
+        let ci2 = cylinder.indices.clone();
+        let tip_start_index = ci2.iter().max().unwrap() + 1;
+        println!("TSI: {}", tip_start_index);
+
+        for index in tip.indices {
+            indices.push(index + tip_start_index);
         }
 
         Self {

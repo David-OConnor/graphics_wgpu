@@ -2,9 +2,9 @@
 
 use core::f32::consts::TAU;
 
-use crate::types::{MAT4_SIZE, VEC3_UNIFORM_SIZE};
-
 use lin_alg2::f32::{Mat4, Quaternion, Vec3};
+
+use crate::types::{MAT4_SIZE, VEC3_UNIFORM_SIZE};
 
 // cam size is only the parts we pass to the shader.
 // For each of the 4 matrices in the camera, plus a padded vec3 for position.

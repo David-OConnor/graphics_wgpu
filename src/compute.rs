@@ -187,7 +187,7 @@ pub(crate) fn create_bindgroups(
 pub(crate) fn buf_to_vec(buf: &wgpu::Buffer, device: &wgpu::Device) -> Vec<u8> {
     let buffer_slice = buf.slice(..);
     // Sets the buffer up for mapping, sending over the result of the mapping back to us when it is finished.
-    let (sender, receiver) = futures_intrusive::channel::shared::oneshot_channel();
+    let (sender, _receiver) = futures_intrusive::channel::shared::oneshot_channel();
     buffer_slice.map_async(wgpu::MapMode::Read, move |v| sender.send(v).unwrap());
 
     // Poll the device in a blocking manner so that our future resolves.

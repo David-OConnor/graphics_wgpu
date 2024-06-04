@@ -1,7 +1,7 @@
 #![allow(mixed_script_confusables)] // Theta in meshes
 
 mod camera;
-mod compute;
+// mod compute;
 mod graphics;
 mod gui;
 mod input;
@@ -18,7 +18,6 @@ pub use system::run;
 pub use types::{
     ControlScheme, EngineUpdates, Entity, InputSettings, Mesh, Scene, UiLayout, UiSettings, Vertex,
 };
-
 // Re-export winit DeviceEvents for use in the API; this prevents the calling
 // lib from needing to use winit as a dependency directly.
 // todo: the equiv for mouse events too. And in the future, Gamepad events.

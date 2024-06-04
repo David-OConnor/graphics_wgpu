@@ -1,6 +1,6 @@
-use crate::types::{F32_SIZE, VEC3_UNIFORM_SIZE};
-
 use lin_alg2::f32::Vec3;
+
+use crate::types::{F32_SIZE, VEC3_UNIFORM_SIZE};
 
 // The extra 4 is due to uniform (and storage) buffers needing ton be a multiple of 16 in size.
 // This is for the non-array portion of the lighting uniform.
