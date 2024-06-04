@@ -447,8 +447,6 @@ impl Mesh {
             i_vertex += 1;
         }
 
-        // let mut vertices_top_face = Vec::new();
-        // let mut vertices_bottom_face = Vec::new();
         let top_anchor = i_vertex;
         let bottom_anchor = i_vertex + 1;
 
@@ -476,13 +474,74 @@ impl Mesh {
         }
     }
 
+    pub fn new_pyramid(len: f32, radius: f32, num_sides: usize) -> Self {
+        // Note: DRY with cylinder; this is similar, but one of the faces consists of a single, central point.
+        let angle_between_vertices = TAU / num_sides as f32;
+
+        let mut circle_vertices = Vec::new();
+        for i in 0..num_sides {
+            circle_vertices.push(rotate_vec_2d(
+                [radius, 0.],
+                i as f32 * angle_between_vertices,
+            ));
+        }
+
+        let half_len = len * 0.5;
+
+        let mut vertices = Vec::new();
+        let mut indices = Vec::new();
+
+        // A central point.
+        vertices.push(Vertex::new(
+            [0., half_len, 0.],
+            UP_VEC, // todo?
+        ));
+        indices.push(0);
+
+        let mut i_vertex = 1; // Takes into account the central one.
+
+        // Set up the sides.
+        for vert in &circle_vertices {
+            // The number of faces is the number of angles - 1.
+
+            // Triangle: This edge, next edge, central;
+            indices.append(&mut vec![i_vertex, i_vertex + 1, 0]);
+
+            vertices.push(Vertex::new(
+                [vert[0], -half_len, vert[1]],
+                Vec3::new(vert[0], len, vert[1]).to_normalized(),
+            ));
+
+            i_vertex += 1;
+        }
+
+        let bottom_anchor = i_vertex;
+
+        // Set up the bottom face.
+        for (j, vert) in circle_vertices.iter().enumerate() {
+            // We need num_sides - 2 triangles using this anchor-vertex algorithm.
+            if j != 0 && j != num_sides - 1 {
+                // We need CCW triangles, so reverse order on the bottom face.
+                indices.append(&mut vec![bottom_anchor, i_vertex, i_vertex + 1]);
+            }
+
+            vertices.push(Vertex::new([vert[0], -half_len, vert[1]], -UP_VEC));
+            i_vertex += 1;
+        }
+
+        Self {
+            vertices,
+            indices,
+            material: 0,
+        }
+    }
+
     /// Create an arrow, oriented up.
     pub fn new_arrow(len: f32, radius: f32, num_sides: usize) -> Self {
         let tip_offset = len / 2.;
         let cylinder = Self::new_cylinder(len, radius, num_sides);
 
-        // todo; Temp; use a better arrow head.
-        let tip = Self::new_tetrahedron(radius * 4.);
+        let tip = Self::new_pyramid(len * 0.5, radius * 3., num_sides);
 
         let mut vertices = cylinder.vertices.clone();
         let mut indices = cylinder.indices.clone();
@@ -500,7 +559,6 @@ impl Mesh {
 
         let ci2 = cylinder.indices.clone();
         let tip_start_index = ci2.iter().max().unwrap() + 1;
-        println!("TSI: {}", tip_start_index);
 
         for index in tip.indices {
             indices.push(index + tip_start_index);
