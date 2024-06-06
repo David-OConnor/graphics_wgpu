@@ -421,6 +421,7 @@ impl Mesh {
 
         let mut i_vertex = 0;
 
+        // Set up the sides
         for vert in &circle_vertices {
             // The number of faces is the number of angles - 1.
             // Triangle 1: This top, this bottom, next top.
@@ -491,38 +492,45 @@ impl Mesh {
         let mut vertices = Vec::new();
         let mut indices = Vec::new();
 
-        // A central point.
+        let tip = 0;
+
+        let mut i_vertex = 0;
+
+        // A central point; the tip of the arrow.
         vertices.push(Vertex::new(
             [0., half_len, 0.],
-            UP_VEC, // todo?
+            UP_VEC,
         ));
-        indices.push(0);
+        i_vertex += 1;
 
-        let mut i_vertex = 1; // Takes into account the central one.
+        indices.push(tip);
 
         // Set up the sides.
-        for vert in &circle_vertices {
+        for (j, vert) in circle_vertices.iter().enumerate() {
             // The number of faces is the number of angles - 1.
 
+            let next = if j == num_sides - 1 {
+                i_vertex + 1 - num_sides // Wrap to the first.
+            } else {
+                i_vertex + 1
+            };
             // Triangle: This edge, next edge, central;
-            indices.append(&mut vec![i_vertex, i_vertex + 1, 0]);
+            indices.append(&mut vec![i_vertex, next, tip]);
 
             vertices.push(Vertex::new(
                 [vert[0], -half_len, vert[1]],
                 Vec3::new(vert[0], len, vert[1]).to_normalized(),
             ));
-
             i_vertex += 1;
         }
 
-        let bottom_anchor = i_vertex;
+        let bottom_anchor = i_vertex; // An arbitrary point shared by all bottom triangles.
 
         // Set up the bottom face.
         for (j, vert) in circle_vertices.iter().enumerate() {
             // We need num_sides - 2 triangles using this anchor-vertex algorithm.
-            if j != 0 && j != num_sides - 1 {
-                // We need CCW triangles, so reverse order on the bottom face.
-                indices.append(&mut vec![bottom_anchor, i_vertex, i_vertex + 1]);
+            if j != 0 && j!= num_sides - 1 {
+                indices.append(&mut vec![bottom_anchor, i_vertex + 1, i_vertex]);
             }
 
             vertices.push(Vertex::new([vert[0], -half_len, vert[1]], -UP_VEC));
