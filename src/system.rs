@@ -12,7 +12,7 @@ use winit::{
     event_loop::{ControlFlow, EventLoop},
     window::{Icon, Window, WindowBuilder},
 };
-
+use winit::window::WindowAttributes;
 use crate::{
     graphics::GraphicsState,
     texture::Texture,
@@ -250,7 +250,8 @@ pub fn run<T: 'static>(
     };
 
     let event_loop = EventLoop::new();
-    let window = WindowBuilder::new()
+
+    let window_attributes = WindowAttributes::default()
         .with_title(WINDOW_TITLE_INIT)
         .with_inner_size(winit::dpi::LogicalSize::new(
             WINDOW_SIZE_X_INIT,
@@ -259,6 +260,8 @@ pub fn run<T: 'static>(
         .with_window_icon(icon)
         .build(&event_loop)
         .unwrap();
+
+    let window = event_loop.create_window(window_attributes);
 
     let mut state = State::new(&window, scene, input_settings, ui_settings);
 
@@ -274,8 +277,9 @@ pub fn run<T: 'static>(
         state.graphics.egui_platform.handle_event(&event);
 
         match event {
-            Event::MainEventsCleared => window.request_redraw(),
-            Event::DeviceEvent { event, .. } => {
+            WindowEvent::De
+            WindowEvent::MainEventsCleared => window.request_redraw(),
+            WindowEvent::DeviceEvent { event, .. } => {
                 // println!("EV: {:?}", event);
                 if !state.sys.mouse_in_gui {
                     let dt_secs = dt.as_secs() as f32 + dt.subsec_micros() as f32 / 1_000_000.;

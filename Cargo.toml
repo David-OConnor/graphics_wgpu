@@ -1,22 +1,22 @@
 [package]
 name = "graphics"
-version = "0.1.0"
+version = "0.2.0"
 authors = ["David O'Connor <david.alan.oconnor@gmail.com>"]
 edition = "2021"
 
 [dependencies]
-wgpu = "^0.14.0" # todo: Use 0.15 once WGPU backend is compatible or you discover a owrkaround.
+wgpu = "^22.1.0"
 lin-alg2 = { path = "../lin_alg", features = ["computer_graphics"] }
 
-winit = "^0.27.5"
-pollster = "^0.2.5"  # For 2 WGPU init fns that use async.
+winit = "^0.30.5"
+pollster = "^0.3.0"  # For 2 WGPU init fns that use async.
 
-image = "^0.24.5" # For loading textures
+image = "^0.25.2" # For loading textures
 obj = "^0.10.2"  # For loading OBJ meshes.
 
-egui = "^0.19"
-egui_winit_platform = "^0.16"
-egui_wgpu_backend = "^0.20"
+egui = "^0.29.1"
+egui_winit_platform = "^0.23"
+egui_wgpu_backend = "^0.30"
 
 # todo: Get rid of this asapractical. For converting compute buffers back to byte arrays
 futures-intrusive = "0.5.0"
