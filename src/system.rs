@@ -12,12 +12,13 @@ use winit::{
     event_loop::{ControlFlow, EventLoop},
     window::{Icon, Window, WindowBuilder},
 };
-use winit::window::WindowAttributes;
+use winit::window::{WindowAttributes, WindowId};
 use crate::{
     graphics::GraphicsState,
     texture::Texture,
     types::{EngineUpdates, InputSettings, Scene, UiLayout, UiSettings},
 };
+use std::sync::mpsc::{self, Receiver, Sender};
 
 const WINDOW_TITLE_INIT: &str = "Graphics";
 const WINDOW_SIZE_X_INIT: f32 = 900.0;
@@ -35,9 +36,11 @@ pub(crate) struct SystemState {
     pub mouse_in_gui: bool, // todo: Is this how you want to handle this?
 }
 
-struct State {
-    sys: SystemState,
-    graphics: GraphicsState,
+pub struct State {
+    pub sys: SystemState,
+    pub graphics: GraphicsState,
+    // Below is part of new Winit system
+    // pub windows: HashMap<WindowId, WindowState>,
 }
 
 impl State {
@@ -222,7 +225,6 @@ pub fn run<T: 'static>(
     mut render_handler: impl FnMut(&mut T, &mut Scene, f32) -> EngineUpdates + 'static,
     mut event_handler: impl FnMut(&mut T, DeviceEvent, &mut Scene, f32) -> EngineUpdates + 'static,
     mut gui_handler: impl FnMut(&mut T, &egui::Context, &mut Scene) -> EngineUpdates + 'static,
-    // compute_shader: Option<&str>,
 ) {
     // cfg_if::cfg_if! {
     //     if #[cfg(target_arch = "wasm32")] {
@@ -263,174 +265,34 @@ pub fn run<T: 'static>(
 
     let window = event_loop.create_window(window_attributes);
 
-    let mut state = State::new(&window, scene, input_settings, ui_settings);
+    let state = State::new(&window, scene, input_settings, ui_settings);
 
-    let mut last_render_time = Instant::now();
-    let mut dt = Duration::new(0, 0);
+    event_loop.run_app(state).unwrap();
 
-    event_loop.run(move |event, _, control_flow| {
-        let _ = (&state.sys.instance, &state.sys.adapter); // force ownership by the closure
-        *control_flow = ControlFlow::Poll;
-
-        // For the GUI
-        // Pass the winit events to the platform integration.
-        state.graphics.egui_platform.handle_event(&event);
-
-        match event {
-            WindowEvent::De
-            WindowEvent::MainEventsCleared => window.request_redraw(),
-            WindowEvent::DeviceEvent { event, .. } => {
-                // println!("EV: {:?}", event);
-                if !state.sys.mouse_in_gui {
-                    let dt_secs = dt.as_secs() as f32 + dt.subsec_micros() as f32 / 1_000_000.;
-                    let engine_updates = event_handler(
-                        &mut user_state,
-                        event.clone(),
-                        &mut state.graphics.scene,
-                        dt_secs,
-                    );
-
-                    if engine_updates.meshes {
-                        state.graphics.setup_vertices_indices(&state.sys.device);
-                        state.graphics.setup_entities(&state.sys.device);
-                    }
-
-                    // Entities have been updated in the scene; update the buffers.
-                    if engine_updates.entities {
-                        state.graphics.setup_entities(&state.sys.device);
-                    }
-
-                    if engine_updates.camera {
-                        // Entities have been updated in the scene; update the buffer.
-                        state.graphics.update_camera(&state.sys.queue);
-                    }
-
-                    if engine_updates.lighting {
-                        state.graphics.update_lighting(&state.sys.queue);
-                    }
-
-                    state.graphics.handle_input(event);
-                }
-            }
-            Event::WindowEvent {
-                ref event,
-                window_id,
-                // } if window_id == window.id() && !state.input(event) => {
-            } if window_id == window.id() => {
-                match event {
-                    WindowEvent::CursorMoved { position, .. } => {
-                        if position.x < state.graphics.ui_settings.size {
-                            state.sys.mouse_in_gui = true;
-
-                            // We reset the inputs, since otherwise a held key that
-                            // doesn't get the reset command will continue to execute.
-                            state.graphics.inputs_commanded = Default::default();
-                        } else {
-                            state.sys.mouse_in_gui = false;
-                        }
-                    }
-                    WindowEvent::CloseRequested => *control_flow = ControlFlow::Exit,
-                    WindowEvent::Resized(physical_size) => {
-                        state.resize(*physical_size);
-                        // Prevents inadvertent mouse-click-activated free-look.
-                        state.graphics.inputs_commanded.free_look = false;
-                    }
-                    // If the window scale changes, update the renderer size, and camera aspect ratio.
-                    WindowEvent::ScaleFactorChanged { new_inner_size, .. } => {
-                        state.resize(**new_inner_size);
-                    }
-                    // If the window is being moved, disable mouse inputs, eg so click+drag
-                    // doesn't cause a drag when moving the window using the mouse.
-                    WindowEvent::Moved(_) => {
-                        state.sys.mouse_in_gui = true;
-                        // Prevents inadvertent mouse-click-activated free-look after moving the window.
-                        state.graphics.inputs_commanded.free_look = false;
-                    }
-                    WindowEvent::Occluded(_) => {
-                        // Prevents inadvertent mouse-click-activated free-look after minimizing.
-                        state.graphics.inputs_commanded.free_look = false;
-                    }
-                    WindowEvent::Focused(_) => {
-                        // Eg clicking the tile bar icon.
-                        state.graphics.inputs_commanded.free_look = false;
-                    }
-                    WindowEvent::CursorLeft { device_id: _ } => {
-                        // todo: Not working
-                        // state.graphics.inputs_commanded.free_look = false;
-                    }
-                    _ => {}
-                }
-            }
-
-            Event::RedrawRequested(window_id) if window_id == window.id() => {
-                let now = Instant::now();
-                dt = now - last_render_time;
-                last_render_time = now;
-
-                let dt_secs = dt.as_secs() as f32 + dt.subsec_micros() as f32 / 1_000_000.;
-                let engine_updates =
-                    render_handler(&mut user_state, &mut state.graphics.scene, dt_secs);
-
-                if engine_updates.meshes {
-                    state.graphics.setup_vertices_indices(&state.sys.device);
-                    state.graphics.setup_entities(&state.sys.device);
-                }
-
-                // Entities have been updated in the scene; update the buffers
-                if engine_updates.entities {
-                    state.graphics.setup_entities(&state.sys.device);
-                }
-
-                if engine_updates.camera {
-                    // Entities have been updated in the scene; update the buffer.
-                    state.graphics.update_camera(&state.sys.queue);
-                }
-
-                if engine_updates.lighting {
-                    // Entities have been updated in the scene; update the buffer.
-                    state.graphics.update_lighting(&state.sys.queue);
-                }
-
-                // if engine_updates.compute {
-                //     // Entities have been updated in the scene; update the buffer.
-                //     state.graphics.compute(&state.sys.device, &state.sys.queue);
-                // }
-
-                // Note that the GUI handler can also modify entities, but
-                // we do that in the `init_graphics` module.
-
-                // todo: move this into `render`?
-                match state.sys.surface.get_current_texture() {
-                    Ok(output_frame) => {
-                        let output_view = output_frame
-                            .texture
-                            .create_view(&wgpu::TextureViewDescriptor::default());
-
-                        let resize_required = state.graphics.render(
-                            output_frame,
-                            &output_view,
-                            &state.sys.device,
-                            &state.sys.queue,
-                            dt,
-                            state.sys.surface_cfg.width,
-                            state.sys.surface_cfg.height,
-                            // &state.sys.surface,
-                            &window,
-                            &mut gui_handler,
-                            &mut user_state,
-                        );
-
-                        if resize_required {
-                            state.resize(state.sys.size);
-                        }
-                    }
-                    // todo: Does this happen when minimized?
-                    Err(_e) => {}
-                }
-            }
-            _ => {}
-        }
-    });
+    // event_loop.run(move |event, _, control_flow| {
+    //     let _ = (&state.sys.instance, &state.sys.adapter); // force ownership by the closure
+    //
+    //
+    //     // For the GUI
+    //     // Pass the winit events to the platform integration.
+    //
+    //
+    //     match event {
+    //         // WindowEvent::MainEventsCleared => window.request_redraw(),
+    //         // Event::WindowEvent {
+    //         //     ref event,
+    //         //     window_id,
+    //         //     // } if window_id == window.id() && !state.input(event) => {
+    //         // } if window_id == window.id() => {
+    //         //     match event {
+    //         //
+    //         //     }
+    //         // }
+    //
+    //
+    //         _ => {}
+    //     }
+    // });
 }
 
 #[cfg(target_arch = "wasm32")]
