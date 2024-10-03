@@ -1,5 +1,10 @@
 //! This module initiates the window, and graphics hardware.
+//! It initializes WGPU settings.
 
+//  Check out this example for winit/egui/wgpu (2024)
+// https://github.com/kaphula/winit-egui-wgpu-template/blob/master/src/main.rs
+
+use std::sync::mpsc::{self, Receiver, Sender};
 #[cfg(not(target_arch = "wasm32"))]
 use std::{
     path::Path,
@@ -7,18 +12,21 @@ use std::{
 };
 
 use image::ImageError;
+use wgpu::{
+    Adapter, Backends, Features, InstanceDescriptor, PowerPreference, Surface,
+    SurfaceConfiguration, TextureFormat,
+};
 use winit::{
     event::{DeviceEvent, Event, WindowEvent},
-    event_loop::{ControlFlow, EventLoop},
-    window::{Icon, Window, WindowBuilder},
+    event_loop::{ActiveEventLoop, ControlFlow, EventLoop},
+    window::{Icon, Window, WindowAttributes, WindowId},
 };
-use winit::window::{WindowAttributes, WindowId};
+
 use crate::{
     graphics::GraphicsState,
     texture::Texture,
     types::{EngineUpdates, InputSettings, Scene, UiLayout, UiSettings},
 };
-use std::sync::mpsc::{self, Receiver, Sender};
 
 const WINDOW_TITLE_INIT: &str = "Graphics";
 const WINDOW_SIZE_X_INIT: f32 = 900.0;
@@ -27,8 +35,8 @@ const WINDOW_SIZE_Y_INIT: f32 = 600.0;
 pub(crate) struct SystemState {
     pub instance: wgpu::Instance,
     pub size: winit::dpi::PhysicalSize<u32>,
-    pub surface: wgpu::Surface,
-    pub adapter: wgpu::Adapter,
+    pub surface: Surface,
+    pub adapter: Adapter,
     pub device: wgpu::Device,
     pub queue: wgpu::Queue,
     pub surface_cfg: wgpu::SurfaceConfiguration,
@@ -36,20 +44,46 @@ pub(crate) struct SystemState {
     pub mouse_in_gui: bool, // todo: Is this how you want to handle this?
 }
 
-pub struct State {
+pub struct State<T: 'static, FRender, FEvent, FGui>
+where
+    FRender: FnMut(&mut T, &mut Scene, f32) -> EngineUpdates + 'static,
+    FEvent: FnMut(&mut T, DeviceEvent, &mut Scene, f32) -> EngineUpdates + 'static,
+    FGui: FnMut(&mut T, &egui::Context, &mut Scene) -> EngineUpdates + 'static,
+{
     pub sys: SystemState,
     pub graphics: GraphicsState,
     // Below is part of new Winit system
     // pub windows: HashMap<WindowId, WindowState>,
+    pub user_state: T,
+    // pub render_handler: impl FnMut(&mut T, &mut Scene, f32) -> EngineUpdates + 'static,
+    // pub event_handler: impl FnMut(&mut T, DeviceEvent, &mut Scene, f32) -> EngineUpdates + 'static,
+    // pub gui_handler: impl FnMut(&mut T, &egui::Context, &mut Scene) -> EngineUpdates + 'static,
+    pub render_handler: FRender,
+    pub event_handler: FEvent,
+    pub gui_handler: FGui,
+    pub last_render_time: Instant,
+    pub dt: Duration,
+    pub window: Window,
 }
 
-impl State {
+impl<T: 'static, FRender, FEvent, FGui> State<T, FRender, FEvent, FGui>
+where
+    FRender: FnMut(&mut T, &mut Scene, f32) -> EngineUpdates + 'static,
+    FEvent: FnMut(&mut T, DeviceEvent, &mut Scene, f32) -> EngineUpdates + 'static,
+    FGui: FnMut(&mut T, &egui::Context, &mut Scene) -> EngineUpdates + 'static,
+{
     pub(crate) fn new(
-        window: &Window,
+        window: Window,
         scene: Scene,
         input_settings: InputSettings,
         ui_settings: UiSettings,
-        // compute_shader: Option<&str>, // Shader file, as a UTF-8
+        user_state: T,
+        // render_handler: impl FnMut(&mut T, &mut Scene, f32) -> EngineUpdates + 'static,
+        // event_handler: impl FnMut(&mut T, DeviceEvent, &mut Scene, f32) -> EngineUpdates + 'static,
+        // gui_handler: impl FnMut(&mut T, &egui::Context, &mut Scene) -> EngineUpdates + 'static,
+        render_handler: FRender,
+        event_handler: FEvent,
+        gui_handler: FGui,
     ) -> Self {
         #[cfg(target_arch = "wasm32")]
         {
@@ -75,9 +109,12 @@ impl State {
         let size = window.inner_size();
 
         // The instance is a handle to our GPU. Its main purpose is to create Adapters and Surfaces.
-        let instance = wgpu::Instance::new(wgpu::Backends::VULKAN);
+        let instance = wgpu::Instance::new(InstanceDescriptor {
+            backends: Backends::VULKAN,
+            ..Default::default()
+        });
 
-        let surface = unsafe { instance.create_surface(window) };
+        let surface = instance.create_surface(window).unwrap();
 
         let (adapter, device, queue) = pollster::block_on(setup_async(&instance, &surface));
 
@@ -85,9 +122,11 @@ impl State {
         // screen. Our window needs to implement raw-window-handle (opens new window)'s
         // HasRawWindowHandle trait to create a surface.
 
-        let surface_cfg = wgpu::SurfaceConfiguration {
+        // https://docs.rs/wgpu/latest/wgpu/type.SurfaceConfiguration.html
+        let surface_cfg = SurfaceConfiguration {
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
-            format: surface.get_supported_formats(&adapter)[0],
+            // format: surface.get_supported_formats(&adapter)[0],
+            format: TextureFormat::Rgba32Float, // todo: Changed 2024; no idea what this should be.
             width: size.width,
             height: size.height,
             // https://docs.rs/wgpu/latest/wgpu/enum.PresentMode.html
@@ -96,7 +135,9 @@ impl State {
             // todo: Allow config from user.
             // present_mode: wgpu::PresentMode::Immediate,
             // present_mode: wgpu::PresentMode::Mailbox,
-            alpha_mode: wgpu::CompositeAlphaMode::Auto, // todo?
+            desired_maximum_frame_latency: 2, // Default
+            alpha_mode: wgpu::CompositeAlphaMode::Auto,
+            view_formats: Vec::new(),
         };
 
         // todo: 0.15 WGPU once it's compatible with WGPU_EGUI BACKEND:
@@ -166,12 +207,25 @@ impl State {
             scene,
             input_settings,
             ui_settings,
-            window,
+            &window,
             // &sys.adapter,
             // compute_shader,
         );
 
-        Self { sys, graphics }
+        let last_render_time = Instant::now();
+        let dt = Duration::new(0, 0);
+
+        Self {
+            sys,
+            graphics,
+            user_state,
+            render_handler,
+            event_handler,
+            gui_handler,
+            last_render_time,
+            dt,
+            window,
+        }
     }
 
     pub(crate) fn resize(&mut self, new_size: winit::dpi::PhysicalSize<u32>) {
@@ -217,15 +271,22 @@ fn load_icon(path: &Path) -> Result<Icon, ImageError> {
     Ok(Icon::from_rgba(icon_rgba, icon_width, icon_height).expect("Failed to open icon"))
 }
 
-pub fn run<T: 'static>(
+pub fn run<T: 'static, FRender, FEvent, FGui>(
     mut user_state: T,
     scene: Scene,
     input_settings: InputSettings,
     ui_settings: UiSettings,
-    mut render_handler: impl FnMut(&mut T, &mut Scene, f32) -> EngineUpdates + 'static,
-    mut event_handler: impl FnMut(&mut T, DeviceEvent, &mut Scene, f32) -> EngineUpdates + 'static,
-    mut gui_handler: impl FnMut(&mut T, &egui::Context, &mut Scene) -> EngineUpdates + 'static,
-) {
+    // mut render_handler: impl FnMut(&mut T, &mut Scene, f32) -> EngineUpdates + 'static,
+    // mut event_handler: impl FnMut(&mut T, DeviceEvent, &mut Scene, f32) -> EngineUpdates + 'static,
+    // mut gui_handler: impl FnMut(&mut T, &egui::Context, &mut Scene) -> EngineUpdates + 'static,
+    render_handler: FRender,
+    event_handler: FEvent,
+    gui_handler: FGui,
+) where
+    FRender: FnMut(&mut T, &mut Scene, f32) -> EngineUpdates + 'static,
+    FEvent: FnMut(&mut T, DeviceEvent, &mut Scene, f32) -> EngineUpdates + 'static,
+    FGui: FnMut(&mut T, &egui::Context, &mut Scene) -> EngineUpdates + 'static,
+{
     // cfg_if::cfg_if! {
     //     if #[cfg(target_arch = "wasm32")] {
     //         std::panic::set_hook(Box::new(console_error_panic_hook::hook));
@@ -251,7 +312,7 @@ pub fn run<T: 'static>(
         None => None,
     };
 
-    let event_loop = EventLoop::new();
+    let event_loop = EventLoop::new().unwrap();
 
     let window_attributes = WindowAttributes::default()
         .with_title(WINDOW_TITLE_INIT)
@@ -259,15 +320,22 @@ pub fn run<T: 'static>(
             WINDOW_SIZE_X_INIT,
             WINDOW_SIZE_Y_INIT,
         ))
-        .with_window_icon(icon)
-        .build(&event_loop)
-        .unwrap();
+        .with_window_icon(icon);
 
-    let window = event_loop.create_window(window_attributes);
+    let window = event_loop.create_window(window_attributes).unwrap();
 
-    let state = State::new(&window, scene, input_settings, ui_settings);
+    let mut state: State<T, FRender, FEvent, FGui> = State::new(
+        window,
+        scene,
+        input_settings,
+        ui_settings,
+        user_state,
+        render_handler,
+        event_handler,
+        gui_handler,
+    );
 
-    event_loop.run_app(state).unwrap();
+    event_loop.run_app(&mut state).unwrap();
 
     // event_loop.run(move |event, _, control_flow| {
     //     let _ = (&state.sys.instance, &state.sys.adapter); // force ownership by the closure
@@ -295,55 +363,6 @@ pub fn run<T: 'static>(
     // });
 }
 
-#[cfg(target_arch = "wasm32")]
-pub fn run<E: Example>(title: &str) {
-    use wasm_bindgen::{prelude::*, JsCast};
-
-    let title = title.to_owned();
-    wasm_bindgen_futures::spawn_local(async move {
-        let setup = setup::<E>(&title).await;
-        let start_closure = Closure::once_into_js(move || start::<E>(setup));
-
-        // make sure to handle JS exceptions thrown inside start.
-        // Otherwise wasm_bindgen_futures Queue would break and never handle any tasks again.
-        // This is required, because winit uses JS exception for control flow to escape from `run`.
-        if let Err(error) = call_catch(&start_closure) {
-            let is_control_flow_exception = error.dyn_ref::<js_sys::Error>().map_or(false, |e| {
-                e.message().includes("Using exceptions for control flow", 0)
-            });
-
-            if !is_control_flow_exception {
-                web_sys::console::error_1(&error);
-            }
-        }
-
-        #[wasm_bindgen]
-        extern "C" {
-            #[wasm_bindgen(catch, js_namespace = Function, js_name = "prototype.call.call")]
-            fn call_catch(this: &JsValue) -> Result<(), JsValue>;
-        }
-    });
-}
-
-#[cfg(target_arch = "wasm32")]
-/// Parse the query string as returned by `web_sys::window()?.location().search()?` and get a
-/// specific key out of it.
-pub(crate) fn parse_url_query_string<'a>(query: &'a str, search_key: &str) -> Option<&'a str> {
-    let query_string = query.strip_prefix('?')?;
-
-    for pair in query_string.split('&') {
-        let mut pair = pair.split('=');
-        let key = pair.next()?;
-        let value = pair.next()?;
-
-        if key == search_key {
-            return Some(value);
-        }
-    }
-
-    None
-}
-
 /// Quarantine for the Async part of the API
 async fn setup_async(
     instance: &wgpu::Instance,
@@ -355,7 +374,7 @@ async fn setup_async(
     let adapter = instance
         .request_adapter(&wgpu::RequestAdapterOptions {
             // `Default` prefers low power when on battery, high performance when on mains.
-            power_preference: wgpu::PowerPreference::default(),
+            power_preference: PowerPreference::default(),
             compatible_surface: Some(surface),
             force_fallback_adapter: false,
         })
@@ -367,9 +386,9 @@ async fn setup_async(
             &wgpu::DeviceDescriptor {
                 label: None,
                 // https://docs.rs/wgpu/latest/wgpu/struct.Features.html
-                features: wgpu::Features::empty(),
+                required_features: Features::empty(),
                 // https://docs.rs/wgpu/latest/wgpu/struct.Limits.html
-                limits: wgpu::Limits::default(),
+                required_limits: Default::default(),
             },
             std::env::var("WGPU_TRACE")
                 .ok()

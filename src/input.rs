@@ -3,6 +3,7 @@
 use lin_alg2::f32::{Quaternion, Vec3};
 // todo: remove Winit from this module if you can, and make it agnostic?
 use winit::event::{DeviceEvent, ElementState};
+use winit::platform::scancode::PhysicalKeyExtScancode;
 
 use crate::{
     camera::Camera,
@@ -53,7 +54,8 @@ pub(crate) fn add_input_cmd(event: DeviceEvent, inputs: &mut InputsCommanded) {
     match event {
         DeviceEvent::Key(key) => {
             if key.state == ElementState::Pressed {
-                match key.scancode {
+                // todo: Map to PhysicalKey directly without the scancode part.
+                match key.physical_key.to_scancode().unwrap() {
                     17 => {
                         // W
                         inputs.fwd = true;
@@ -94,7 +96,7 @@ pub(crate) fn add_input_cmd(event: DeviceEvent, inputs: &mut InputsCommanded) {
                 }
             } else if key.state == ElementState::Released {
                 // todo: DRY
-                match key.scancode {
+                match key.physical_key.to_scancode().unwrap() {
                     17 => {
                         inputs.fwd = false;
                     }

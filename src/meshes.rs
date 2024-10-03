@@ -497,10 +497,7 @@ impl Mesh {
         let mut i_vertex = 0;
 
         // A central point; the tip of the arrow.
-        vertices.push(Vertex::new(
-            [0., half_len, 0.],
-            UP_VEC,
-        ));
+        vertices.push(Vertex::new([0., half_len, 0.], UP_VEC));
         i_vertex += 1;
 
         indices.push(tip);
@@ -529,7 +526,7 @@ impl Mesh {
         // Set up the bottom face.
         for (j, vert) in circle_vertices.iter().enumerate() {
             // We need num_sides - 2 triangles using this anchor-vertex algorithm.
-            if j != 0 && j!= num_sides - 1 {
+            if j != 0 && j != num_sides - 1 {
                 indices.append(&mut vec![bottom_anchor, i_vertex + 1, i_vertex]);
             }
 

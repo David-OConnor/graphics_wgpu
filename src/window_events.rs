@@ -1,19 +1,24 @@
 //! Handles window events, using Winit's system.
 
 use std::time::{Duration, Instant};
+
 use wgpu::core::id::DeviceId;
-use winit::application::ApplicationHandler;
-use winit::event::{DeviceEvent, WindowEvent};
-use crate::system::State;
-use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
-use winit::window::WindowId;
+use winit::{
+    application::ApplicationHandler,
+    event::{DeviceEvent, WindowEvent},
+    event_loop::{ActiveEventLoop, ControlFlow, EventLoop},
+    window::WindowId,
+};
 
+use crate::{system::State, EngineUpdates, Scene};
 
-impl ApplicationHandler for State {
-
-    fn resumed(&mut self, event_loop: &ActiveEventLoop) {
-
-    }
+impl<T, FRender, FEvent, FGui> ApplicationHandler for State<T, FRender, FEvent, FGui>
+where
+    FRender: FnMut(&mut T, &mut Scene, f32) -> EngineUpdates + 'static,
+    FEvent: FnMut(&mut T, DeviceEvent, &mut Scene, f32) -> EngineUpdates + 'static,
+    FGui: FnMut(&mut T, &egui::Context, &mut Scene) -> EngineUpdates + 'static,
+{
+    fn resumed(&mut self, event_loop: &ActiveEventLoop) {}
 
     fn window_event(
         &mut self,
@@ -29,17 +34,16 @@ impl ApplicationHandler for State {
 
         self.graphics.egui_platform.handle_event(&event);
 
-        let mut last_render_time = Instant::now();
-
         match event {
             WindowEvent::RedrawRequested => {
                 let now = Instant::now();
-                dt = now - last_render_time;
-                last_render_time = now;
+                self.dt = now - self.last_render_time;
+                self.last_render_time = now;
 
-                let dt_secs = dt.as_secs() as f32 + dt.subsec_micros() as f32 / 1_000_000.;
+                let dt_secs =
+                    self.dt.as_secs() as f32 + self.dt.subsec_micros() as f32 / 1_000_000.;
                 let engine_updates =
-                    render_handler(&mut user_state, &mut self.graphics.scene, dt_secs);
+                    (self.render_handler)(&mut self.user_state, &mut self.graphics.scene, dt_secs);
 
                 if engine_updates.meshes {
                     self.graphics.setup_vertices_indices(&self.sys.device);
@@ -81,13 +85,13 @@ impl ApplicationHandler for State {
                             &output_view,
                             &self.sys.device,
                             &self.sys.queue,
-                            dt,
+                            self.dt,
                             self.sys.surface_cfg.width,
                             self.sys.surface_cfg.height,
                             // &self.sys.surface,
                             &window,
-                            &mut gui_handler,
-                            &mut user_state,
+                            &mut self.gui_handler,
+                            &mut self.user_state,
                         );
 
                         if resize_required {
@@ -112,13 +116,18 @@ impl ApplicationHandler for State {
             // WindowEvent::CloseRequested => *control_flow = ControlFlow::Exit,
             // WindowEvent::CloseRequested =>  ControlFlow::Exit, // todo?
             WindowEvent::Resized(physical_size) => {
-                self.resize(*physical_size);
+                self.resize(physical_size);
                 // Prevents inadvertent mouse-click-activated free-look.
                 self.graphics.inputs_commanded.free_look = false;
             }
             // If the window scale changes, update the renderer size, and camera aspect ratio.
-            WindowEvent::ScaleFactorChanged { new_inner_size, .. } => {
-                self.resize(**new_inner_size);
+            WindowEvent::ScaleFactorChanged {
+                scale_factor,
+                inner_size_writer,
+                ..
+            } => {
+                // todo: Address this.
+                // self.resize(scale_factor); // todo: Changed in 2024
             }
             // If the window is being moved, disable mouse inputs, eg so click+drag
             // doesn't cause a drag when moving the window using the mouse.
@@ -149,13 +158,11 @@ impl ApplicationHandler for State {
         device_id: Option<DeviceId>,
         event: DeviceEvent,
     ) {
-        let mut dt = Duration::new(0, 0);
-
         // println!("EV: {:?}", event);
         if !self.sys.mouse_in_gui {
-            let dt_secs = dt.as_secs() as f32 + dt.subsec_micros() as f32 / 1_000_000.;
-            let engine_updates = event_handler(
-                &mut user_state,
+            let dt_secs = self.dt.as_secs() as f32 + self.dt.subsec_micros() as f32 / 1_000_000.;
+            let engine_updates = (self.event_handler)(
+                &mut self.user_state,
                 event.clone(),
                 &mut self.graphics.scene,
                 dt_secs,

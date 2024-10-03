@@ -1,6 +1,7 @@
 use std::num::NonZeroU32;
 
 use image::GenericImageView;
+use wgpu::TextureDescriptor;
 
 pub struct Texture {
     pub texture: wgpu::Texture,
@@ -23,7 +24,7 @@ impl Texture {
             depth_or_array_layers: 1,
         };
 
-        let desc = wgpu::TextureDescriptor {
+        let desc = TextureDescriptor {
             label: Some(label),
             size,
             mip_level_count: 1,
@@ -31,7 +32,7 @@ impl Texture {
             dimension: wgpu::TextureDimension::D2,
             format: Self::DEPTH_FORMAT,
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
-            // view_formats: &[], // todo WGPU 0.15
+            view_formats: &[],
         };
 
         let texture = device.create_texture(&desc);

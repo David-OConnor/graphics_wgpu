@@ -15,7 +15,7 @@ image = "^0.25.2" # For loading textures
 obj = "^0.10.2"  # For loading OBJ meshes.
 
 egui = "^0.29.1"
-egui_winit_platform = "^0.23"
+#egui_winit_platform = "^0.23"
 egui_wgpu_backend = "^0.30"
 
 # todo: Get rid of this asapractical. For converting compute buffers back to byte arrays

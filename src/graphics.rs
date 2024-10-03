@@ -11,10 +11,14 @@
 
 use std::time::Duration;
 
+use egui::CursorIcon::Default;
 use egui_wgpu_backend::RenderPass;
-use egui_winit_platform::Platform;
+// use egui_winit_platform::Platform;
 use lin_alg2::f32::Vec3;
-use wgpu::{self, util::DeviceExt, BindGroup, BindGroupLayout, SurfaceConfiguration};
+use wgpu::{
+    self, util::DeviceExt, BindGroup, BindGroupLayout, FragmentState, StoreOp,
+    SurfaceConfiguration, VertexState,
+};
 use winit::{event::DeviceEvent, window::Window};
 
 use crate::{
@@ -452,17 +456,19 @@ impl GraphicsState {
                             b: self.scene.background_color.2 as f64,
                             a: 1.0,
                         }),
-                        store: true,
+                        store: StoreOp::Store,
                     },
                 })],
                 depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
                     view: &self.depth_texture.view,
                     depth_ops: Some(wgpu::Operations {
                         load: wgpu::LoadOp::Clear(1.0),
-                        store: true,
+                        store: StoreOp::Store,
                     }),
                     stencil_ops: None,
                 }),
+                timestamp_writes: None,
+                occlusion_query_set: None,
             });
 
             let ui_size = self.ui_settings.size as f32;
@@ -600,14 +606,16 @@ fn create_render_pipeline(
     device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
         label: Some("Render pipeline"),
         layout: Some(layout),
-        vertex: wgpu::VertexState {
+        vertex: VertexState {
             module: &shader,
             entry_point: "vs_main",
+            compilation_options: Default::default(),
             buffers: &[Vertex::desc(), Instance::desc()],
         },
-        fragment: Some(wgpu::FragmentState {
+        fragment: Some(FragmentState {
             module: &shader,
             entry_point: "fs_main",
+            compilation_options: Default::default(),
             targets: &[Some(config.format.into())],
         }),
         primitive: wgpu::PrimitiveState {
@@ -631,6 +639,7 @@ fn create_render_pipeline(
         // If the pipeline will be used with a multiview render pass, this
         // indicates how many array layers the attachments will have.
         multiview: None,
+        cache: None,
     })
 }
 

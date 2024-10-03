@@ -3,8 +3,8 @@
 
 use egui::FontDefinitions;
 use egui_wgpu_backend::ScreenDescriptor;
-use egui_winit_platform::{Platform, PlatformDescriptor};
-use wgpu::{self, SurfaceConfiguration};
+// use egui_winit_platform::{Platform, PlatformDescriptor};
+use wgpu::{self, CommandEncoder, Device, Queue, SurfaceConfiguration};
 use winit::window::Window;
 
 use crate::types::{EngineUpdates, Scene};
@@ -23,9 +23,9 @@ pub(crate) fn setup_platform(surface_cfg: &SurfaceConfiguration, window: &Window
 /// Render pass code specific to the GUI.
 pub(crate) fn render<T>(
     g_state: &mut crate::graphics::GraphicsState,
-    device: &wgpu::Device,
-    queue: &wgpu::Queue,
-    encoder: &mut wgpu::CommandEncoder,
+    device: &Device,
+    queue: &Queue,
+    encoder: &mut CommandEncoder,
     user_state: &mut T,
     mut gui_handler: impl FnMut(&mut T, &egui::Context, &mut Scene) -> EngineUpdates,
     output_view: &wgpu::TextureView,
