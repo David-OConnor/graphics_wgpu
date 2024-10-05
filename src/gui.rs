@@ -1,8 +1,10 @@
 //! GUI code for EGUI, to run on the WGPU painter.
 //! See [this unofficial example](https://github.com/kaphula/winit-egui-wgpu-template/tree/master/src)
+//! https://github.com/rust-windowing/winit/issues/3626
 
 use egui::Context;
-use egui_wgpu_backend::{ScreenDescriptor};
+// use egui_wgpu_backend::{ScreenDescriptor};
+use egui_wgpu::{ScreenDescriptor};
 use egui_winit;
 use wgpu::{self, CommandEncoder, Device, Queue,TextureView};
 use winit::{window::Window};
@@ -58,7 +60,14 @@ pub(crate) fn render<T>(
     g_state.ui_settings.size = engine_updates.ui_size as f64;
 
     // End the UI frame. We could now handle the output and draw the UI with the backend.
-    let full_output = g_state.egui_state.egui_ctx().end_pass();
+    // let full_output = g_state.egui_state.egui_ctx().end_pass();
+    let raw_input = g_state.egui_state.take_egui_input(window);
+    let full_output = g_state.egui_state.egui_ctx().run(raw_input, |ui| {
+        // run_ui(g_state.egui_state.egui_ctx());
+
+        // todo: this?
+        // gui_handler(state_user, g_state.egui_state.egui_ctx(), scene);
+    });
 
     let paint_jobs = g_state.egui_state
         .egui_ctx()
@@ -68,6 +77,8 @@ pub(crate) fn render<T>(
     //     size_in_pixels: [width, height],
     //     pixels_per_point: window.scale_factor() as f32,
     // };
+
+    // todo: Maybe get rid of this egui_wgpu_backend lib.
     let screen_descriptor = ScreenDescriptor {
         physical_width: width,
         physical_height: height,
@@ -100,7 +111,7 @@ pub(crate) fn render<T>(
         .execute(
             encoder,
             output_view,
-            &paint_jobs,
+            &paint_jobs, // accepts: `egui::epaint::ClippedPrimitive` (egui_wgpu_backend) We provided it... the same.
             &screen_descriptor,
             None,
         )

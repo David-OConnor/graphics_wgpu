@@ -10,7 +10,7 @@ use std::{
     path::Path,
     time::{Duration, Instant},
 };
-
+use std::sync::Arc;
 use image::ImageError;
 use wgpu::{
     Adapter, Backends, Features, InstanceDescriptor, PowerPreference, Surface,
@@ -18,7 +18,7 @@ use wgpu::{
 };
 use winit::{
     event::{DeviceEvent, Event, WindowEvent},
-    event_loop::{ActiveEventLoop, ControlFlow, EventLoop},
+    event_loop::{ControlFlow, EventLoop},
     window::{Icon, Window, WindowAttributes, WindowId},
 };
 
@@ -66,7 +66,6 @@ where
     pub gui_handler: FGui,
     pub last_render_time: Instant,
     pub dt: Duration,
-    pub window: Window,
 }
 
 impl<T: 'static, FRender, FEvent, FGui> State<T, FRender, FEvent, FGui>
@@ -96,6 +95,10 @@ where
             ..Default::default()
         });
 
+        // Seems to be required with the 2024 Winit API.
+        let window = Arc::new(window);
+
+        // let surface = instance.create_surface(window.clone()).unwrap();
         let surface = instance.create_surface(window.clone()).unwrap();
 
         let (adapter, device, queue) = pollster::block_on(setup_async(&instance, &surface));
@@ -142,8 +145,7 @@ where
             scene,
             input_settings,
             ui_settings,
-            &window,
-            // &sys.adapter,
+            window,
         );
 
         let last_render_time = Instant::now();
@@ -158,7 +160,6 @@ where
             gui_handler,
             last_render_time,
             dt,
-            window,
         }
     }
 
@@ -258,7 +259,9 @@ pub fn run<T: 'static, FRender, FEvent, FGui>(
         ))
         .with_window_icon(icon);
 
+    // todo: ActiveEventLoop is the new way
     let window = event_loop.create_window(window_attributes).unwrap();
+    // let window = event_loop_active.create_window(window_attributes).unwrap();
 
     let mut state: State<T, FRender, FEvent, FGui> = State::new(
         window,

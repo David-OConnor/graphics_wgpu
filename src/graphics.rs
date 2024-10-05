@@ -9,11 +9,11 @@
 //!
 //! 2022-08-21: https://github.com/gfx-rs/wgpu/blob/master/wgpu/examples/cube/main.rs
 
+use std::sync::Arc;
 use std::time::Duration;
 use egui::Context;
 use egui_wgpu::Renderer;
-use egui_wgpu_backend::RenderPass;
-// use egui_winit_platform::Platform;
+// use egui_wgpu_backend::RenderPass;
 use lin_alg2::f32::Vec3;
 use wgpu::{
     self, util::DeviceExt, BindGroup, BindGroupLayout, FragmentState, StoreOp,
@@ -67,6 +67,7 @@ pub(crate) struct GraphicsState {
     pub egui_state: egui_winit::State,
     pub egui_renderer: Renderer,
     pub ui_size_prev: f64,
+    pub window: Arc<Window>,
 }
 
 impl GraphicsState {
@@ -77,8 +78,7 @@ impl GraphicsState {
         mut scene: Scene,
         input_settings: InputSettings,
         ui_settings: UiSettings,
-        // these 3 args are for EGUI
-        window: &Window,
+        window: Arc<Window>,
     ) -> Self {
         let vertex_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Vertex buffer"),
@@ -147,6 +147,7 @@ impl GraphicsState {
         window.request_inner_size(window_size);
         window.set_title(&scene.window_title);
 
+        // todo: Remove this wegui_wgpu_backend lib?
         // todo: Not updated to match latest WGPU re surface_cfg.format and device.
         let rpass_egui = RenderPass::new(device, surface_cfg.format, 1);
 
@@ -154,7 +155,7 @@ impl GraphicsState {
         // let mut egui_app = egui_demo_lib::DemoWindows::default();
 
         let egui_context = Context::default();
-        let egui_state =  egui_winit::State::new(
+        let egui_state = egui_winit::State::new(
             egui_context,
             egui::viewport::ViewportId::ROOT,
             &window,
@@ -190,6 +191,7 @@ impl GraphicsState {
             egui_renderer,
             rpass_egui,
             ui_size_prev: 0.,
+            window,
         };
 
         result.setup_vertices_indices(device);
@@ -323,8 +325,8 @@ impl GraphicsState {
         dt: Duration,
         width: u32,
         height: u32,
-        window: &Window,
-        gui_handler: impl FnMut(&mut T, &egui::Context, &mut Scene) -> EngineUpdates,
+        // window: &Window,
+        gui_handler: impl FnMut(&mut T, &Context, &mut Scene) -> EngineUpdates,
         user_state: &mut T,
     ) -> bool {
         let mut resize_required = false;
@@ -438,7 +440,7 @@ impl GraphicsState {
             user_state,
             gui_handler,
             output_view,
-            window,
+            &self.window,
             width,
             height,
         );

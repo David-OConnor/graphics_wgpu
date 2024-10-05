@@ -2,14 +2,13 @@
 
 use std::time::{Duration, Instant};
 
-use wgpu::core::id::DeviceId;
 use winit::{
     application::ApplicationHandler,
     event::{DeviceEvent, WindowEvent},
     event_loop::{ActiveEventLoop, ControlFlow, EventLoop},
     window::WindowId,
 };
-
+use winit::event::DeviceId;
 use crate::{system::State, EngineUpdates, Scene};
 
 impl<T, FRender, FEvent, FGui> ApplicationHandler for State<T, FRender, FEvent, FGui>
@@ -18,7 +17,9 @@ where
     FEvent: FnMut(&mut T, DeviceEvent, &mut Scene, f32) -> EngineUpdates + 'static,
     FGui: FnMut(&mut T, &egui::Context, &mut Scene) -> EngineUpdates + 'static,
 {
-    fn resumed(&mut self, event_loop: &ActiveEventLoop) {}
+    fn resumed(&mut self, event_loop: &ActiveEventLoop) {
+
+    }
 
     fn window_event(
         &mut self,
@@ -85,7 +86,7 @@ where
                             self.sys.surface_cfg.width,
                             self.sys.surface_cfg.height,
                             // &self.sys.surface,
-                            &self.window,
+                            // &self.graphics.window,
                             &mut self.gui_handler,
                             &mut self.user_state,
                         );
@@ -150,8 +151,9 @@ where
 
     fn device_event(
         &mut self,
-        _event_loop: &ActiveEventLoop,
-        _device_id: DeviceId,
+        event_loop: &ActiveEventLoop,
+        device_id: DeviceId,
+        // device_id:  wgpu::core::id::Id<wgpu::core::id::markers::Device>,
         event: DeviceEvent,
     ) {
         // println!("EV: {:?}", event);
@@ -191,6 +193,11 @@ where
         // if self.windows.is_empty() {
         //     event_loop.exit();
         // }
+
+        // todo
+        // (self.gui_handler)(args)
+        // (self.event_handler)(args)
+        // (self.render_handler_handler)(args)
     }
 
     #[cfg(not(android_platform))]
