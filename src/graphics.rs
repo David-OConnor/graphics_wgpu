@@ -12,13 +12,10 @@
 use std::sync::Arc;
 use std::time::Duration;
 use egui::Context;
-use egui_wgpu::Renderer;
+use egui_wgpu::{Renderer, ScreenDescriptor};
 // use egui_wgpu_backend::RenderPass;
 use lin_alg2::f32::Vec3;
-use wgpu::{
-    self, util::DeviceExt, BindGroup, BindGroupLayout, FragmentState, StoreOp,
-    SurfaceConfiguration, VertexState,
-};
+use wgpu::{self, util::DeviceExt, BindGroup, BindGroupLayout, FragmentState, StoreOp, SurfaceConfiguration, VertexState, Surface};
 use winit::{event::DeviceEvent, window::Window};
 
 use crate::{
@@ -63,7 +60,7 @@ pub(crate) struct GraphicsState {
     pub scene: Scene,
     mesh_mappings: Vec<(i32, u32, u32)>,
     /// for GUI
-    pub rpass_egui: RenderPass,
+    // pub rpass_egui: RenderPass,
     pub egui_state: egui_winit::State,
     pub egui_renderer: Renderer,
     pub ui_size_prev: f64,
@@ -147,13 +144,6 @@ impl GraphicsState {
         window.request_inner_size(window_size);
         window.set_title(&scene.window_title);
 
-        // todo: Remove this wegui_wgpu_backend lib?
-        // todo: Not updated to match latest WGPU re surface_cfg.format and device.
-        let rpass_egui = RenderPass::new(device, surface_cfg.format, 1);
-
-        // Display the demo application that ships with egui.
-        // let mut egui_app = egui_demo_lib::DemoWindows::default();
-
         let egui_context = Context::default();
         let egui_state = egui_winit::State::new(
             egui_context,
@@ -189,7 +179,6 @@ impl GraphicsState {
             mesh_mappings,
             egui_state,
             egui_renderer,
-            rpass_egui,
             ui_size_prev: 0.,
             window,
         };
@@ -328,6 +317,7 @@ impl GraphicsState {
         // window: &Window,
         gui_handler: impl FnMut(&mut T, &Context, &mut Scene) -> EngineUpdates,
         user_state: &mut T,
+        surface: &Surface,
     ) -> bool {
         let mut resize_required = false;
 
@@ -363,6 +353,7 @@ impl GraphicsState {
             label: Some("Render encoder"),
         });
 
+        // This block: Non-GUI.
         {
             let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("Render pass"),
@@ -431,27 +422,81 @@ impl GraphicsState {
             }
         }
 
+        let raw_input = self.egui_state.take_egui_input(&self.window);
+        let full_output = self.egui_state.egui_ctx().run(raw_input, |ui| {
+            // run_ui(g_state.egui_state.egui_ctx());
+
+            // todo: this?
+            // gui_handler(state_user, g_state.egui_state.egui_ctx(), scene);
+        });
+
+        // This block: Generally GUI. (Move to gui module once working)
+        {
+            // let paint_jobs = g_state.egui_state
+            //     .egui_ctx()
+            //     .tessellate(full_output.shapes, full_output.pixels_per_point);
+
+            let screen_descriptor = ScreenDescriptor {
+                size_in_pixels: [width, height],
+                pixels_per_point: self.window.scale_factor() as f32,
+            };
+
+            // let tdelta: egui::TexturesDelta = full_output.textures_delta;
+
+            let tris = self.egui_state
+                .egui_ctx()
+                .tessellate(full_output.shapes, self.egui_state.egui_ctx().pixels_per_point());
+
+            for (id, image_delta) in &full_output.textures_delta.set {
+                self.egui_renderer
+                    .update_texture(device, queue, *id, image_delta);
+            }
+
+            // todo: Put back: Mut borrow issue with Encoder.
+            // self.egui_renderer
+            //     .update_buffers(device, queue, &mut encoder, &tris, &screen_descriptor);
+
+            let surface_texture = surface
+                .get_current_texture()
+                .expect("Failed to acquire next swap chain texture");
+
+            // let surface_view = surface_texture
+            //     .texture
+            //     .create_view(&wgpu::TextureViewDescriptor::default());
+
+            // todo: put these back.
+            // self.egui_renderer.render(&mut rpass, &tris, &screen_descriptor);
+            // drop(rpass);
+
+            for x in &full_output.textures_delta.free {
+                self.egui_renderer.free_texture(x)
+            }
+
+            // todo: Put this back, but lifetime issues.
+            // queue.submit(Some(encoder.finish()));
+            surface_texture.present();
+            self.window.request_redraw();
+        }
+
+
+
         // Set up the GUI render.
-        let texture_delta = gui::render(
+        gui::render(
             self,
             device,
             queue,
-            &mut encoder,
+            // &mut encoder,
             user_state,
             gui_handler,
             output_view,
-            &self.window,
             width,
             height,
+            surface,
         );
 
-        queue.submit(Some(encoder.finish()));
-        // queue.submit(iter::once(encoder.finish()));
-
         // Redraw egui
-        output_frame.present();
+        // output_frame.present();
 
-        // todo: Put this back once the program compiles. (2024)
         // self.rpass_egui
         //     .remove_textures(texture_delta)
         //     .expect("remove texture ok");

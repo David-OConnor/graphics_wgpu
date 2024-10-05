@@ -13,23 +13,7 @@ pollster = "^0.3.0"  # For 2 WGPU init fns that use async.
 image = "^0.25.2" # For loading textures
 obj = "^0.10.2"  # For loading OBJ meshes.
 
-# todo: egui_wgpu_backend 0.30 requires egui (and egui-winit etc) 0.28; egui 0.29 is not compatible.
-# todo: Egui-winit requires winit 0.29, not 0.30.
-# egui-winit 0.30 uses the new ApplicationHandler system...
-
 winit = "^0.30.5"
-#winit = "^0.29.15"
-
-#egui = "^0.29.1"
-#egui-wgpu = "^0.29.1"
-#egui-winit = "^0.29.1"
-#egui = "^0.28.1"
-#egui-wgpu = "^0.28.1"
-#egui-winit = "^0.28.1"
-egui = { path = "../egui/crates/egui" }  # Sympathetic withi egui-winit
-egui-wgpu = { path = "../egui/crates/egui-wgpu" }  # Sympathetic withi egui-winit
-egui-winit = { path = "../egui/crates/egui-winit" }  # Updated to use winit ^0.30.5
-
-# todo: Remove this wegui_wgpu_backend lib?
-#egui_wgpu_backend = "^0.30"
-#egui_wgpu_backend = {path = "../egui_wgpu_backend"}   # Updated to use egui 0.29.1
+egui = "^0.29.1"
+egui-wgpu = "^0.29.1"
+egui-winit = "^0.29.1"

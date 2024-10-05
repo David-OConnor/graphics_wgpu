@@ -89,6 +89,7 @@ where
                             // &self.graphics.window,
                             &mut self.gui_handler,
                             &mut self.user_state,
+                            &self.sys.surface,
                         );
 
                         if resize_required {
