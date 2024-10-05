@@ -28,6 +28,9 @@ use crate::{
     types::{EngineUpdates, InputSettings, Scene, UiLayout, UiSettings},
 };
 
+// todo: Changed 2024; no idea what this should be
+pub const TEXTURE_FORMAT: TextureFormat = TextureFormat::Rgba32Float;
+
 const WINDOW_TITLE_INIT: &str = "Graphics";
 const WINDOW_SIZE_X_INIT: f32 = 900.0;
 const WINDOW_SIZE_Y_INIT: f32 = 600.0;
@@ -35,11 +38,11 @@ const WINDOW_SIZE_Y_INIT: f32 = 600.0;
 pub(crate) struct SystemState {
     pub instance: wgpu::Instance,
     pub size: winit::dpi::PhysicalSize<u32>,
-    pub surface: Surface,
+    pub surface: Surface<'static>, // Sshare the same lifetime as the window, A/R.
     pub adapter: Adapter,
     pub device: wgpu::Device,
     pub queue: wgpu::Queue,
-    pub surface_cfg: wgpu::SurfaceConfiguration,
+    pub surface_cfg: SurfaceConfiguration,
     /// Used to disable inputs while the mouse is in the GUI section.
     pub mouse_in_gui: bool, // todo: Is this how you want to handle this?
 }
@@ -85,27 +88,6 @@ where
         event_handler: FEvent,
         gui_handler: FGui,
     ) -> Self {
-        #[cfg(target_arch = "wasm32")]
-        {
-            use winit::platform::web::WindowExtWebSys;
-            let query_string = web_sys::window().unwrap().location().search().unwrap();
-            let level: log::Level = parse_url_query_string(&query_string, "RUST_LOG")
-                .map(|x| x.parse().ok())
-                .flatten()
-                .unwrap_or(log::Level::Error);
-            console_log::init_with_level(level).expect("could not initialize logger");
-            std::panic::set_hook(Box::new(console_error_panic_hook::hook));
-            // On wasm, append the canvas to the document body
-            web_sys::window()
-                .and_then(|win| win.document())
-                .and_then(|doc| doc.body())
-                .and_then(|body| {
-                    body.append_child(&web_sys::Element::from(window.canvas()))
-                        .ok()
-                })
-                .expect("couldn't append canvas to document body");
-        }
-
         let size = window.inner_size();
 
         // The instance is a handle to our GPU. Its main purpose is to create Adapters and Surfaces.
@@ -114,7 +96,7 @@ where
             ..Default::default()
         });
 
-        let surface = instance.create_surface(window).unwrap();
+        let surface = instance.create_surface(window.clone()).unwrap();
 
         let (adapter, device, queue) = pollster::block_on(setup_async(&instance, &surface));
 
@@ -126,7 +108,7 @@ where
         let surface_cfg = SurfaceConfiguration {
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
             // format: surface.get_supported_formats(&adapter)[0],
-            format: TextureFormat::Rgba32Float, // todo: Changed 2024; no idea what this should be.
+            format: TEXTURE_FORMAT,
             width: size.width,
             height: size.height,
             // https://docs.rs/wgpu/latest/wgpu/enum.PresentMode.html
@@ -139,53 +121,6 @@ where
             alpha_mode: wgpu::CompositeAlphaMode::Auto,
             view_formats: Vec::new(),
         };
-
-        // todo: 0.15 WGPU once it's compatible with WGPU_EGUI BACKEND:
-        //                             .ok()
-        //                     })
-        //                     .expect("couldn't append canvas to document body");
-        //             }
-        //
-        //         let size = window.inner_size();
-        //
-        //         // let backends = wgpu::util::backend_bits_from_env().unwrap_or_else(wgpu::Backends::all);
-        //         let backends = wgpu::Backends::VULKAN;
-        //         let dx12_shader_compiler = wgpu::util::dx12_shader_compiler_from_env().unwrap_or_default();
-        //
-        //         // The instance is a handle to our GPU. Its main purpose is to create Adapters and Surfaces.
-        //         let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
-        //             backends,
-        //             dx12_shader_compiler,
-        //         });
-        //
-        //         let surface = instance.create_surface(window).unwrap();
-        //
-        //         let (adapter, device, queue) = pollster::block_on(setup_async(&instance, &surface));
-        //
-        //         // The surface is the part of the window that we draw to. We need it to draw directly to the
-        //         // screen. Our window needs to implement raw-window-handle (opens new window)'s
-        //         // HasRawWindowHandle trait to create a surface.
-        //
-        //         let surface_cfg = wgpu::SurfaceConfiguration {
-        //             usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
-        //             format: wgpu::TextureFormat::Rgba8UnormSrgb, // todo?
-        //             width: size.width,
-        //             height: size.height,
-        //             // https://docs.rs/wgpu/latest/wgpu/enum.PresentMode.html
-        //             // Note that `Fifo` locks FPS to the speed of the monitor.
-        //             present_mode: wgpu::PresentMode::Fifo,
-        //             // todo: Allow config from user.
-        //             // present_mode: wgpu::PresentMode::Immediate,
-        //             // present_mode: wgpu::PresentMode::Mailbox,
-        //             alpha_mode: wgpu::CompositeAlphaMode::Auto, // todo?
-        //             view_formats: vec![wgpu::TextureFormat::Rgba32Uint], // todo?
-        //         };
-        //
-        //         surface.configure(&device, &surface_cfg);
-        //
-        //         let sys = SystemState {
-        //             instance,
-        //             size,
 
         surface.configure(&device, &surface_cfg);
 
@@ -209,7 +144,6 @@ where
             ui_settings,
             &window,
             // &sys.adapter,
-            // compute_shader,
         );
 
         let last_render_time = Instant::now();
@@ -271,8 +205,10 @@ fn load_icon(path: &Path) -> Result<Icon, ImageError> {
     Ok(Icon::from_rgba(icon_rgba, icon_width, icon_height).expect("Failed to open icon"))
 }
 
+/// This is the entry point to the renderer. It's called by the application to initialize the event
+/// loop.
 pub fn run<T: 'static, FRender, FEvent, FGui>(
-    mut user_state: T,
+    user_state: T,
     scene: Scene,
     input_settings: InputSettings,
     ui_settings: UiSettings,
@@ -366,7 +302,7 @@ pub fn run<T: 'static, FRender, FEvent, FGui>(
 /// Quarantine for the Async part of the API
 async fn setup_async(
     instance: &wgpu::Instance,
-    surface: &wgpu::Surface,
+    surface: &Surface<'static>,
 ) -> (wgpu::Adapter, wgpu::Device, wgpu::Queue) {
     // The adapter is a handle to our actual graphics card. You can use this to get
     // information about the graphics card such as its name and what backend the
@@ -389,6 +325,7 @@ async fn setup_async(
                 required_features: Features::empty(),
                 // https://docs.rs/wgpu/latest/wgpu/struct.Limits.html
                 required_limits: Default::default(),
+                memory_hints: Default::default(),
             },
             std::env::var("WGPU_TRACE")
                 .ok()

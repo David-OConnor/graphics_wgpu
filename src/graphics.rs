@@ -10,8 +10,8 @@
 //! 2022-08-21: https://github.com/gfx-rs/wgpu/blob/master/wgpu/examples/cube/main.rs
 
 use std::time::Duration;
-
-use egui::CursorIcon::Default;
+use egui::Context;
+use egui_wgpu::Renderer;
 use egui_wgpu_backend::RenderPass;
 // use egui_winit_platform::Platform;
 use lin_alg2::f32::Vec3;
@@ -24,6 +24,7 @@ use winit::{event::DeviceEvent, window::Window};
 use crate::{
     gui,
     input::{self, InputsCommanded},
+    system::TEXTURE_FORMAT,
     texture::Texture,
     types::{
         ControlScheme, EngineUpdates, InputSettings, Instance, Scene, UiLayout, UiSettings, Vertex,
@@ -50,14 +51,10 @@ pub(crate) struct GraphicsState {
     pub vertex_buf: wgpu::Buffer,
     pub index_buf: wgpu::Buffer,
     instance_buf: wgpu::Buffer,
-    // compute_staging_buf: wgpu::Buffer,
-    // compute_storage_buf_input: wgpu::Buffer,
-    // compute_storage_buf_output: wgpu::Buffer,
     pub bind_groups: BindGroupData,
     camera_buf: wgpu::Buffer,
     lighting_buf: wgpu::Buffer,
     pub pipeline_graphics: wgpu::RenderPipeline,
-    // pipeline_compute: wgpu::ComputePipeline,
     pub depth_texture: Texture,
     pub input_settings: InputSettings,
     pub ui_settings: UiSettings,
@@ -66,8 +63,9 @@ pub(crate) struct GraphicsState {
     pub scene: Scene,
     mesh_mappings: Vec<(i32, u32, u32)>,
     /// for GUI
-    pub egui_platform: Platform,
     pub rpass_egui: RenderPass,
+    pub egui_state: egui_winit::State,
+    pub egui_renderer: Renderer,
     pub ui_size_prev: f64,
 }
 
@@ -81,8 +79,6 @@ impl GraphicsState {
         ui_settings: UiSettings,
         // these 3 args are for EGUI
         window: &Window,
-        // adapter: &wgpu::Adapter,
-        // compute_shader: Option<&str>, // Shader file as UTF-8
     ) -> Self {
         let vertex_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Vertex buffer"),
@@ -113,16 +109,7 @@ impl GraphicsState {
         });
         //
 
-        // let (compute_storage_buf_input, compute_storage_buf_output, compute_staging_buf) =
-        //     compute::setup(device);
-
-        let bind_groups = create_bindgroups(
-            device,
-            &cam_buf,
-            &lighting_buf,
-            // &compute_storage_buf_input,
-            // &compute_storage_buf_output,
-        );
+        let bind_groups = create_bindgroups(device, &cam_buf, &lighting_buf);
 
         let depth_texture = Texture::create_depth_texture(device, surface_cfg, "Depth texture");
 
@@ -130,14 +117,6 @@ impl GraphicsState {
             label: Some("Graphics shader"),
             source: wgpu::ShaderSource::Wgsl(include_str!("shader.wgsl").into()),
         });
-
-        // todo: Pass the shader file as a parameter.
-        //         if let Some(shader) = compute_shader {
-        //             let shader_compute = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-        //                 label: Some("Compute shader"),
-        //                 source: wgpu::ShaderSource::Wgsl(shader.into()),
-        //             });
-        //         }
 
         let pipeline_layout_graphics =
             device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
@@ -148,21 +127,6 @@ impl GraphicsState {
 
         let pipeline_graphics =
             create_render_pipeline(device, &pipeline_layout_graphics, shader, surface_cfg);
-
-        // todo compute pipeline layout? Not in example
-        // let pipeline_layout_compute =
-        //     device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-        //         label: Some("Compute pipeline layout"),
-        //         bind_group_layouts: &[&bind_groups.layout_compute],
-        //         push_constant_ranges: &[],
-        //     });
-        //
-        // let pipeline_compute = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
-        //     label: Some("Compute pipeline"),
-        //     layout: Some(&pipeline_layout_compute),
-        //     module: &shader_compute,
-        //     entry_point: "main",
-        // });
 
         // We initialize instances, the instance buffer and mesh mappings in `setup_entities`.
         // let instances = Vec::new();
@@ -175,12 +139,12 @@ impl GraphicsState {
         // Placeholder value
         let mesh_mappings = Vec::new();
 
-        let egui_platform = gui::setup_platform(surface_cfg, window);
 
         // todo: Logical (scaling by device?) vs physical pixels
         let window_size = winit::dpi::LogicalSize::new(scene.window_size.0, scene.window_size.1);
 
-        window.set_inner_size(window_size);
+        // window.set_inner_size(window_size);
+        window.request_inner_size(window_size);
         window.set_title(&scene.window_title);
 
         // todo: Not updated to match latest WGPU re surface_cfg.format and device.
@@ -189,18 +153,32 @@ impl GraphicsState {
         // Display the demo application that ships with egui.
         // let mut egui_app = egui_demo_lib::DemoWindows::default();
 
+        let egui_context = Context::default();
+        let egui_state =  egui_winit::State::new(
+            egui_context,
+            egui::viewport::ViewportId::ROOT,
+            &window,
+            Some(window.scale_factor() as f32),
+            None,
+            None,
+        );
+
+        let egui_renderer = Renderer::new(
+            device,
+            surface_cfg.format,
+            None,
+            1, // todo
+            false, // todo: Dithering?
+        );
+
         let mut result = Self {
             vertex_buf,
             index_buf,
             instance_buf,
-            // compute_storage_buf_input,
-            // compute_storage_buf_output,
-            // compute_staging_buf,
             bind_groups,
             camera_buf: cam_buf,
             lighting_buf,
             pipeline_graphics: pipeline_graphics,
-            // pipeline_compute,
             depth_texture,
             // staging_belt: wgpu::util::StagingBelt::new(0x100),
             scene,
@@ -208,9 +186,9 @@ impl GraphicsState {
             ui_settings,
             inputs_commanded: Default::default(),
             mesh_mappings,
-            egui_platform,
+            egui_state,
+            egui_renderer,
             rpass_egui,
-            // egui_app,
             ui_size_prev: 0.,
         };
 
@@ -382,66 +360,6 @@ impl GraphicsState {
         let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
             label: Some("Render encoder"),
         });
-        //
-        // // todo: Make sure if you add new instances to the Vec, that you recreate the instance_buffer
-        // // todo and as well as camera_bind_group, otherwise your new instances won't show up correctly.
-        //
-        // {
-        //     let mut cpass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
-        //         label: Some("Compute pass"),
-        //     });
-        //     cpass.set_pipeline(&self.pipeline_compute);
-        //     cpass.set_bind_group(0, &self.bind_groups.compute, &[]);
-        //     cpass.insert_debug_marker("Compute test 1.");
-        //
-        //     // todo: How does this work?
-        //     // Number of cells to run, the (x,y,z) size of item being processed
-        //
-        //     // todo: work_group_count as first var to dispatch_workgroups??
-        //     //         let work_group_count =
-        //     // ((NUM_PARTICLES as f32) / (PARTICLES_PER_GROUP as f32)).ceil() as u32;
-        //     let work_group_count = 64; // todo?
-        //     cpass.dispatch_workgroups(work_group_count, 1, 1);
-        // }
-        //
-        // let compute_size = 8 * 10; // todo: Sync this with buf
-        //
-        // // Sets adds copy operation to command encoder.
-        // // Will copy data from storage buffer on GPU to staging buffer on CPU.
-        // encoder.copy_buffer_to_buffer(
-        //     &self.compute_storage_buf_output,
-        //     0,
-        //     &self.compute_staging_buf,
-        //     0,
-        //     compute_size,
-        // );
-        //
-        // let compute_result = compute::buf_to_vec(&self.compute_staging_buf, device);
-        //
-        // let mut result_vals = Vec::new();
-        //
-        // let mut i = 0;
-        // for _ in 0..10 {
-        //     result_vals.push(
-        //         f32::from_ne_bytes(compute_result[i..i + 4].try_into().unwrap())
-        //     );
-        //     i += 4;
-        // }
-        //
-        // println!("Vals: {:?}\n", result_vals);
-
-        // self.staging_belt
-        //     .write_buffer(
-        //         &mut encoder,
-        //         &self.camera_buf,
-        //         1, // todo: What should this be?
-        //         // x4 since all value are f32.
-        //         wgpu::BufferSize::new(CAM_UNIFORM_SIZE as wgpu::BufferAddress).unwrap(),
-        //         device,
-        //     )
-        //     .copy_from_slice(&self.scene.camera.to_uniform().to_bytes());
-        //
-        // self.staging_belt.finish();
 
         {
             let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
@@ -512,7 +430,7 @@ impl GraphicsState {
         }
 
         // Set up the GUI render.
-        let tdelta = gui::render(
+        let texture_delta = gui::render(
             self,
             device,
             queue,
@@ -531,69 +449,13 @@ impl GraphicsState {
         // Redraw egui
         output_frame.present();
 
-        self.rpass_egui
-            .remove_textures(tdelta)
-            .expect("remove texture ok");
+        // todo: Put this back once the program compiles. (2024)
+        // self.rpass_egui
+        //     .remove_textures(texture_delta)
+        //     .expect("remove texture ok");
 
         resize_required
     }
-
-    // todo: Testing separating compute from render
-
-    // pub fn compute(&mut self, device: &wgpu::Device, queue: &wgpu::Queue) {
-    //     let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
-    //         label: Some("Render encoder"),
-    //     });
-    //
-    //     // todo: Make sure if you add new instances to the Vec, that you recreate the instance_buffer
-    //     // todo and as well as camera_bind_group, otherwise your new instances won't show up correctly.
-    //
-    //     {
-    //         let mut cpass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
-    //             label: Some("Compute pass"),
-    //         });
-    //         cpass.set_pipeline(&self.pipeline_compute);
-    //         cpass.set_bind_group(0, &self.bind_groups.compute, &[]);
-    //         cpass.insert_debug_marker("Compute test 1.");
-    //
-    //         // todo: How does this work?
-    //         // Number of cells to run, the (x,y,z) size of item being processed
-    //
-    //         // todo: work_group_count as first var to dispatch_workgroups??
-    //         //         let work_group_count =
-    //         // ((NUM_PARTICLES as f32) / (PARTICLES_PER_GROUP as f32)).ceil() as u32;
-    //         let work_group_count = 64; // todo?
-    //         cpass.dispatch_workgroups(work_group_count, 1, 1);
-    //     }
-    //
-    //     let compute_size = 8 * 10; // todo: Sync this with buf
-    //
-    //     // Sets adds copy operation to command encoder.
-    //     // Will copy data from storage buffer on GPU to staging buffer on CPU.
-    //     encoder.copy_buffer_to_buffer(
-    //         &self.compute_storage_buf_output,
-    //         0,
-    //         &self.compute_staging_buf,
-    //         0,
-    //         compute_size,
-    //     );
-    //
-    //     let compute_result = compute::buf_to_vec(&self.compute_staging_buf, device);
-    //
-    //     let mut result_vals = Vec::new();
-    //
-    //     let mut i = 0;
-    //     for _ in 0..10 {
-    //         result_vals.push(f32::from_ne_bytes(
-    //             compute_result[i..i + 4].try_into().unwrap(),
-    //         ));
-    //         i += 4;
-    //     }
-    //
-    //     println!("Vals: {:?}\n", result_vals);
-    //
-    //     queue.submit(Some(encoder.finish()));
-    // }
 }
 
 /// Create render pipelines.
@@ -651,16 +513,12 @@ pub(crate) struct BindGroupData {
     /// We use this for GUI.
     pub layout_texture: BindGroupLayout,
     // pub texture: BindGroup,
-    // pub layout_compute: BindGroupLayout,
-    // pub compute: BindGroup,
 }
 
 fn create_bindgroups(
     device: &wgpu::Device,
     cam_buf: &wgpu::Buffer,
     lighting_buf: &wgpu::Buffer,
-    // compute_storage_buf_input: &wgpu::Buffer,
-    // compute_storage_buf_output: &wgpu::Buffer,
 ) -> BindGroupData {
     // We only need vertex, not fragment info in the camera uniform.
     let layout_cam = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
@@ -770,14 +628,6 @@ fn create_bindgroups(
     //         label: Some("Texture bind group"),
     //     });
 
-    // todo: Consider calling `compute::create_bindgroups` separately, vice from this fn.
-
-    // let (layout_compute, compute) = compute::create_bindgroups(
-    //     device,
-    //     compute_storage_buf_input,
-    //     compute_storage_buf_output,
-    // );
-
     BindGroupData {
         layout_cam,
         cam,
@@ -785,7 +635,5 @@ fn create_bindgroups(
         lighting,
         layout_texture,
         // texture
-        // layout_compute,
-        // compute,
     }
 }

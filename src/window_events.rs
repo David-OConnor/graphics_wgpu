@@ -32,7 +32,8 @@ where
         // };
         // *control_flow = ControlFlow::Poll;
 
-        self.graphics.egui_platform.handle_event(&event);
+        // todo?
+        // self.graphics.egui_renderer.handle_input(&window, &event);
 
         match event {
             WindowEvent::RedrawRequested => {
@@ -65,11 +66,6 @@ where
                     self.graphics.update_lighting(&self.sys.queue);
                 }
 
-                // if engine_updates.compute {
-                //     // Entities have been updated in the scene; update the buffer.
-                //     self.graphics.compute(&self.sys.device, &self.sys.queue);
-                // }
-
                 // Note that the GUI handler can also modify entities, but
                 // we do that in the `init_graphics` module.
 
@@ -89,7 +85,7 @@ where
                             self.sys.surface_cfg.width,
                             self.sys.surface_cfg.height,
                             // &self.sys.surface,
-                            &window,
+                            &self.window,
                             &mut self.gui_handler,
                             &mut self.user_state,
                         );
@@ -155,7 +151,7 @@ where
     fn device_event(
         &mut self,
         _event_loop: &ActiveEventLoop,
-        device_id: Option<DeviceId>,
+        _device_id: DeviceId,
         event: DeviceEvent,
     ) {
         // println!("EV: {:?}", event);

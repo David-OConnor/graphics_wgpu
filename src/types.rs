@@ -394,6 +394,4 @@ pub struct EngineUpdates {
     pub camera: bool,
     pub lighting: bool,
     pub ui_size: f32,
-    // todo: We'd like to desync compute from this flow, but for now, it's here
-    pub compute: bool,
 }
