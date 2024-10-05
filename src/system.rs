@@ -4,13 +4,16 @@
 //  Check out this example for winit/egui/wgpu (2024)
 // https://github.com/kaphula/winit-egui-wgpu-template/blob/master/src/main.rs
 
-use std::sync::mpsc::{self, Receiver, Sender};
+use std::sync::{
+    mpsc::{self, Receiver, Sender},
+    Arc,
+};
 #[cfg(not(target_arch = "wasm32"))]
 use std::{
     path::Path,
     time::{Duration, Instant},
 };
-use std::sync::Arc;
+
 use image::ImageError;
 use wgpu::{
     Adapter, Backends, Features, InstanceDescriptor, PowerPreference, Surface,
@@ -225,17 +228,7 @@ pub fn run<T: 'static, FRender, FEvent, FGui>(
     FEvent: FnMut(&mut T, DeviceEvent, &mut Scene, f32) -> EngineUpdates + 'static,
     FGui: FnMut(&mut T, &egui::Context, &mut Scene) -> EngineUpdates + 'static,
 {
-    // cfg_if::cfg_if! {
-    //     if #[cfg(target_arch = "wasm32")] {
-    //         std::panic::set_hook(Box::new(console_error_panic_hook::hook));
-    //         console_log::init_with_level(log::Level::Warn).expect("Couldn't initialize logger");
-    //     } else {
-    // }
-    // }
-
-    #[cfg(not(target_arch = "wasm32"))]
     let mut _last_frame_inst = Instant::now();
-    #[cfg(not(target_arch = "wasm32"))]
     let (_frame_count, mut _accum_time) = (0, 0.0);
 
     let icon = match ui_settings.icon_path {
@@ -276,31 +269,6 @@ pub fn run<T: 'static, FRender, FEvent, FGui>(
     );
 
     event_loop.run_app(&mut state).unwrap();
-
-    // event_loop.run(move |event, _, control_flow| {
-    //     let _ = (&state.sys.instance, &state.sys.adapter); // force ownership by the closure
-    //
-    //
-    //     // For the GUI
-    //     // Pass the winit events to the platform integration.
-    //
-    //
-    //     match event {
-    //         // WindowEvent::MainEventsCleared => window.request_redraw(),
-    //         // Event::WindowEvent {
-    //         //     ref event,
-    //         //     window_id,
-    //         //     // } if window_id == window.id() && !state.input(event) => {
-    //         // } if window_id == window.id() => {
-    //         //     match event {
-    //         //
-    //         //     }
-    //         // }
-    //
-    //
-    //         _ => {}
-    //     }
-    // });
 }
 
 /// Quarantine for the Async part of the API

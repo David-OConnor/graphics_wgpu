@@ -4,11 +4,11 @@ use std::time::{Duration, Instant};
 
 use winit::{
     application::ApplicationHandler,
-    event::{DeviceEvent, WindowEvent},
+    event::{DeviceEvent, DeviceId, WindowEvent},
     event_loop::{ActiveEventLoop, ControlFlow, EventLoop},
     window::WindowId,
 };
-use winit::event::DeviceId;
+
 use crate::{system::State, EngineUpdates, Scene};
 
 impl<T, FRender, FEvent, FGui> ApplicationHandler for State<T, FRender, FEvent, FGui>
@@ -17,9 +17,7 @@ where
     FEvent: FnMut(&mut T, DeviceEvent, &mut Scene, f32) -> EngineUpdates + 'static,
     FGui: FnMut(&mut T, &egui::Context, &mut Scene) -> EngineUpdates + 'static,
 {
-    fn resumed(&mut self, event_loop: &ActiveEventLoop) {
-
-    }
+    fn resumed(&mut self, event_loop: &ActiveEventLoop) {}
 
     fn window_event(
         &mut self,
@@ -71,6 +69,7 @@ where
                 // we do that in the `init_graphics` module.
 
                 // todo: move this into `render`?
+                // todo 2024: Temp removed; getting an error.
                 match self.sys.surface.get_current_texture() {
                     Ok(output_frame) => {
                         let output_view = output_frame

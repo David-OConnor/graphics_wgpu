@@ -9,19 +9,20 @@
 //!
 //! 2022-08-21: https://github.com/gfx-rs/wgpu/blob/master/wgpu/examples/cube/main.rs
 
-use std::sync::Arc;
-use std::time::Duration;
+use std::{sync::Arc, time::Duration};
+
 use egui::Context;
-use egui_wgpu::{Renderer, ScreenDescriptor};
-// use egui_wgpu_backend::RenderPass;
+use egui_wgpu::Renderer;
 use lin_alg2::f32::Vec3;
-use wgpu::{self, util::DeviceExt, BindGroup, BindGroupLayout, FragmentState, StoreOp, SurfaceConfiguration, VertexState, Surface};
+use wgpu::{
+    self, util::DeviceExt, BindGroup, BindGroupLayout, FragmentState, Queue, StoreOp, Surface,
+    SurfaceConfiguration, VertexState,
+};
 use winit::{event::DeviceEvent, window::Window};
 
 use crate::{
     gui,
     input::{self, InputsCommanded},
-    system::TEXTURE_FORMAT,
     texture::Texture,
     types::{
         ControlScheme, EngineUpdates, InputSettings, Instance, Scene, UiLayout, UiSettings, Vertex,
@@ -136,7 +137,6 @@ impl GraphicsState {
         // Placeholder value
         let mesh_mappings = Vec::new();
 
-
         // todo: Logical (scaling by device?) vs physical pixels
         let window_size = winit::dpi::LogicalSize::new(scene.window_size.0, scene.window_size.1);
 
@@ -158,7 +158,7 @@ impl GraphicsState {
             device,
             surface_cfg.format,
             None,
-            1, // todo
+            1,     // todo
             false, // todo: Dithering?
         );
 
@@ -307,10 +307,10 @@ impl GraphicsState {
 
     pub(crate) fn render<T>(
         &mut self,
-        output_frame: wgpu::SurfaceTexture,
+        surface_view: wgpu::SurfaceTexture,
         output_view: &wgpu::TextureView,
         device: &wgpu::Device,
-        queue: &wgpu::Queue,
+        queue: &Queue,
         dt: Duration,
         width: u32,
         height: u32,
@@ -353,36 +353,17 @@ impl GraphicsState {
             label: Some("Render encoder"),
         });
 
-        let raw_input = self.egui_state.take_egui_input(&self.window);
-        let full_output = self.egui_state.egui_ctx().run(raw_input, |ui| {
-            // run_ui(g_state.egui_state.egui_ctx());
+        let (gui_full_output, tris, screen_descriptor) = gui::render_gui_pre_rpass(
+            self,
+            user_state,
+            device,
+            // gui_handler,
+            &mut encoder,
+            queue,
+            width,
+            height,
+        );
 
-            // todo: this?
-            // gui_handler(state_user, g_state.egui_state.egui_ctx(), scene);
-        });
-
-        let tris = self.egui_state
-            .egui_ctx()
-            .tessellate(full_output.shapes, self.egui_state.egui_ctx().pixels_per_point());
-
-        for (id, image_delta) in &full_output.textures_delta.set {
-            self.egui_renderer
-                .update_texture(device, queue, *id, image_delta);
-        }
-
-        let surface_texture = surface
-            .get_current_texture()
-            .expect("Failed to acquire next swap chain texture");
-
-        let screen_descriptor = ScreenDescriptor {
-            size_in_pixels: [width, height],
-            pixels_per_point: self.window.scale_factor() as f32,
-        };
-
-        self.egui_renderer
-            .update_buffers(device, queue, &mut encoder, &tris, &screen_descriptor);
-
-        // This block: Non-GUI.
         let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("Render pass"),
             color_attachments: &[Some(wgpu::RenderPassColorAttachment {
@@ -449,50 +430,29 @@ impl GraphicsState {
             start_ind += mesh.indices.len() as u32;
         }
 
-
         // This block: Generally GUI. (Move to gui module once working)
-        {
-            // let paint_jobs = g_state.egui_state
-            //     .egui_ctx()
-            //     .tessellate(full_output.shapes, full_output.pixels_per_point);
+        // todo: put this back; encoder lifetime errors.
+        drop(rpass);
+        self.egui_renderer.render(&mut rpass, &tris, &screen_descriptor);
 
 
-            // let tdelta: egui::TexturesDelta = full_output.textures_delta;
-
-
-            // let surface_view = surface_texture
-            //     .texture
-            //     .create_view(&wgpu::TextureViewDescriptor::default());
-
-            // todo: put this back; encoder lifetime errors.
-            // self.egui_renderer.render(&mut rpass, &tris, &screen_descriptor);
-            drop(rpass);
-
-            for x in &full_output.textures_delta.free {
-                self.egui_renderer.free_texture(x)
-            }
-
-            queue.submit(Some(encoder.finish()));
-            surface_texture.present();
-            self.window.request_redraw();
+        for x in &gui_full_output.textures_delta.free {
+            self.egui_renderer.free_texture(x)
         }
 
-        // Set up the GUI render.
-        gui::render(
+        // queue.submit(Some(encoder.finish())); // todo: Required?
+        self.window.request_redraw();
+
+        gui::process_engine_updates(
             self,
             device,
             queue,
-            // &mut encoder,
             user_state,
             gui_handler,
-            output_view,
-            width,
-            height,
-            surface,
         );
 
         // Redraw egui
-        output_frame.present();
+        surface_view.present();
 
         resize_required
     }
