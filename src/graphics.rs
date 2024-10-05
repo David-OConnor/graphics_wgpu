@@ -353,75 +353,6 @@ impl GraphicsState {
             label: Some("Render encoder"),
         });
 
-        // This block: Non-GUI.
-        {
-            let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                label: Some("Render pass"),
-                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                    view: output_view,
-                    resolve_target: None,
-                    ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(wgpu::Color {
-                            r: self.scene.background_color.0 as f64,
-                            g: self.scene.background_color.1 as f64,
-                            b: self.scene.background_color.2 as f64,
-                            a: 1.0,
-                        }),
-                        store: StoreOp::Store,
-                    },
-                })],
-                depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
-                    view: &self.depth_texture.view,
-                    depth_ops: Some(wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(1.0),
-                        store: StoreOp::Store,
-                    }),
-                    stencil_ops: None,
-                }),
-                timestamp_writes: None,
-                occlusion_query_set: None,
-            });
-
-            let ui_size = self.ui_settings.size as f32;
-            if self.ui_size_prev != self.ui_settings.size {
-                resize_required = true;
-            }
-            self.ui_size_prev = self.ui_settings.size;
-
-            let (x, y, eff_width, eff_height) = match self.ui_settings.layout {
-                UiLayout::Left => (ui_size, 0., width as f32 - ui_size, height as f32),
-                UiLayout::Right => (0., 0., width as f32 - ui_size, height as f32),
-                UiLayout::Top => (0., ui_size, width as f32, height as f32 - ui_size),
-                UiLayout::Bottom => (0., 0., width as f32, height as f32 - ui_size),
-            };
-
-            // Adjust the portion of the 3D rendering to take up the space not taken up by the UI.
-            rpass.set_viewport(x, y, eff_width, eff_height, 0., 1.);
-
-            rpass.set_pipeline(&self.pipeline_graphics);
-
-            rpass.set_bind_group(0, &self.bind_groups.cam, &[]);
-            rpass.set_bind_group(1, &self.bind_groups.lighting, &[]);
-
-            rpass.set_vertex_buffer(0, self.vertex_buf.slice(..));
-            rpass.set_vertex_buffer(1, self.instance_buf.slice(..));
-            rpass.set_index_buffer(self.index_buf.slice(..), wgpu::IndexFormat::Uint32);
-
-            let mut start_ind = 0;
-            for (i, mesh) in self.scene.meshes.iter().enumerate() {
-                let (vertex_start_this_mesh, instance_start_this_mesh, instance_count_this_mesh) =
-                    self.mesh_mappings[i];
-
-                rpass.draw_indexed(
-                    start_ind..start_ind + mesh.indices.len() as u32,
-                    vertex_start_this_mesh,
-                    instance_start_this_mesh..instance_start_this_mesh + instance_count_this_mesh,
-                );
-
-                start_ind += mesh.indices.len() as u32;
-            }
-        }
-
         let raw_input = self.egui_state.take_egui_input(&self.window);
         let full_output = self.egui_state.egui_ctx().run(raw_input, |ui| {
             // run_ui(g_state.egui_state.egui_ctx());
@@ -430,55 +361,121 @@ impl GraphicsState {
             // gui_handler(state_user, g_state.egui_state.egui_ctx(), scene);
         });
 
+        let tris = self.egui_state
+            .egui_ctx()
+            .tessellate(full_output.shapes, self.egui_state.egui_ctx().pixels_per_point());
+
+        for (id, image_delta) in &full_output.textures_delta.set {
+            self.egui_renderer
+                .update_texture(device, queue, *id, image_delta);
+        }
+
+        let surface_texture = surface
+            .get_current_texture()
+            .expect("Failed to acquire next swap chain texture");
+
+        let screen_descriptor = ScreenDescriptor {
+            size_in_pixels: [width, height],
+            pixels_per_point: self.window.scale_factor() as f32,
+        };
+
+        self.egui_renderer
+            .update_buffers(device, queue, &mut encoder, &tris, &screen_descriptor);
+
+        // This block: Non-GUI.
+        let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+            label: Some("Render pass"),
+            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                view: output_view,
+                resolve_target: None,
+                ops: wgpu::Operations {
+                    load: wgpu::LoadOp::Clear(wgpu::Color {
+                        r: self.scene.background_color.0 as f64,
+                        g: self.scene.background_color.1 as f64,
+                        b: self.scene.background_color.2 as f64,
+                        a: 1.0,
+                    }),
+                    store: StoreOp::Store,
+                },
+            })],
+            depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
+                view: &self.depth_texture.view,
+                depth_ops: Some(wgpu::Operations {
+                    load: wgpu::LoadOp::Clear(1.0),
+                    store: StoreOp::Store,
+                }),
+                stencil_ops: None,
+            }),
+            timestamp_writes: None,
+            occlusion_query_set: None,
+        });
+
+        let ui_size = self.ui_settings.size as f32;
+        if self.ui_size_prev != self.ui_settings.size {
+            resize_required = true;
+        }
+        self.ui_size_prev = self.ui_settings.size;
+
+        let (x, y, eff_width, eff_height) = match self.ui_settings.layout {
+            UiLayout::Left => (ui_size, 0., width as f32 - ui_size, height as f32),
+            UiLayout::Right => (0., 0., width as f32 - ui_size, height as f32),
+            UiLayout::Top => (0., ui_size, width as f32, height as f32 - ui_size),
+            UiLayout::Bottom => (0., 0., width as f32, height as f32 - ui_size),
+        };
+
+        // Adjust the portion of the 3D rendering to take up the space not taken up by the UI.
+        rpass.set_viewport(x, y, eff_width, eff_height, 0., 1.);
+
+        rpass.set_pipeline(&self.pipeline_graphics);
+
+        rpass.set_bind_group(0, &self.bind_groups.cam, &[]);
+        rpass.set_bind_group(1, &self.bind_groups.lighting, &[]);
+
+        rpass.set_vertex_buffer(0, self.vertex_buf.slice(..));
+        rpass.set_vertex_buffer(1, self.instance_buf.slice(..));
+        rpass.set_index_buffer(self.index_buf.slice(..), wgpu::IndexFormat::Uint32);
+
+        let mut start_ind = 0;
+        for (i, mesh) in self.scene.meshes.iter().enumerate() {
+            let (vertex_start_this_mesh, instance_start_this_mesh, instance_count_this_mesh) =
+                self.mesh_mappings[i];
+
+            rpass.draw_indexed(
+                start_ind..start_ind + mesh.indices.len() as u32,
+                vertex_start_this_mesh,
+                instance_start_this_mesh..instance_start_this_mesh + instance_count_this_mesh,
+            );
+
+            start_ind += mesh.indices.len() as u32;
+        }
+
+
         // This block: Generally GUI. (Move to gui module once working)
         {
             // let paint_jobs = g_state.egui_state
             //     .egui_ctx()
             //     .tessellate(full_output.shapes, full_output.pixels_per_point);
 
-            let screen_descriptor = ScreenDescriptor {
-                size_in_pixels: [width, height],
-                pixels_per_point: self.window.scale_factor() as f32,
-            };
 
             // let tdelta: egui::TexturesDelta = full_output.textures_delta;
 
-            let tris = self.egui_state
-                .egui_ctx()
-                .tessellate(full_output.shapes, self.egui_state.egui_ctx().pixels_per_point());
-
-            for (id, image_delta) in &full_output.textures_delta.set {
-                self.egui_renderer
-                    .update_texture(device, queue, *id, image_delta);
-            }
-
-            // todo: Put back: Mut borrow issue with Encoder.
-            // self.egui_renderer
-            //     .update_buffers(device, queue, &mut encoder, &tris, &screen_descriptor);
-
-            let surface_texture = surface
-                .get_current_texture()
-                .expect("Failed to acquire next swap chain texture");
 
             // let surface_view = surface_texture
             //     .texture
             //     .create_view(&wgpu::TextureViewDescriptor::default());
 
-            // todo: put these back.
+            // todo: put this back; encoder lifetime errors.
             // self.egui_renderer.render(&mut rpass, &tris, &screen_descriptor);
-            // drop(rpass);
+            drop(rpass);
 
             for x in &full_output.textures_delta.free {
                 self.egui_renderer.free_texture(x)
             }
 
-            // todo: Put this back, but lifetime issues.
-            // queue.submit(Some(encoder.finish()));
+            queue.submit(Some(encoder.finish()));
             surface_texture.present();
             self.window.request_redraw();
         }
-
-
 
         // Set up the GUI render.
         gui::render(
@@ -495,11 +492,7 @@ impl GraphicsState {
         );
 
         // Redraw egui
-        // output_frame.present();
-
-        // self.rpass_egui
-        //     .remove_textures(texture_delta)
-        //     .expect("remove texture ok");
+        output_frame.present();
 
         resize_required
     }

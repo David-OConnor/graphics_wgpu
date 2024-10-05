@@ -28,8 +28,9 @@ use crate::{
     types::{EngineUpdates, InputSettings, Scene, UiLayout, UiSettings},
 };
 
-// todo: Changed 2024; no idea what this should be
-pub const TEXTURE_FORMAT: TextureFormat = TextureFormat::Rgba32Float;
+// todo: Changed 2024; not sure how to auto-choose. From an error message, on my system, options are:
+// todo: [Bgra8Unorm, Bgra8UnormSrgb, Rgba8Unorm, Rgba8UnormSrgb]. Chose this value from an unofficial example.
+pub const TEXTURE_FORMAT: TextureFormat = TextureFormat::Bgra8UnormSrgb;
 
 const WINDOW_TITLE_INIT: &str = "Graphics";
 const WINDOW_SIZE_X_INIT: f32 = 900.0;
