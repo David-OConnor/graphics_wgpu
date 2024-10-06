@@ -238,12 +238,6 @@ impl Instance {
 
 #[derive(Clone, Debug)]
 pub struct Mesh {
-    // pub name: String,
-    // pub vertex_buffer: wgpu::Buffer,
-    // pub index_buffer: wgpu::Buffer,
-    // pub vertex_buffer: Vec<usize>,
-    // pub index_buffer: Vec<usize>,
-    // pub num_elements: u32,
     pub vertices: Vec<Vertex>,
     /// These indices are relative to 0 for this mesh. When adding to a global index
     /// buffer, we offset them by previous meshes' vertex counts.

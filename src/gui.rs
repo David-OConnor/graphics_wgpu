@@ -49,7 +49,6 @@ pub(crate) fn render_gui_pre_rpass<T>(
             .update_texture(device, queue, *id, image_delta);
     }
 
-
     g_state
         .egui_renderer
         .update_buffers(device, queue, encoder, &tris, &screen_descriptor);

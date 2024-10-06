@@ -14,10 +14,7 @@ use std::{sync::Arc, time::Duration};
 use egui::Context;
 use egui_wgpu::Renderer;
 use lin_alg2::f32::Vec3;
-use wgpu::{
-    self, util::DeviceExt, BindGroup, BindGroupLayout, FragmentState, Queue, StoreOp, Surface,
-    SurfaceConfiguration, VertexState,
-};
+use wgpu::{self, hal::empty::Encoder, util::DeviceExt, BindGroup, BindGroupLayout, FragmentState, Queue, RenderPass, StoreOp, Surface, SurfaceConfiguration, TextureView, VertexState, CommandEncoder};
 use winit::{event::DeviceEvent, window::Window};
 
 use crate::{
@@ -71,7 +68,6 @@ pub(crate) struct GraphicsState {
 impl GraphicsState {
     pub(crate) fn new(
         device: &wgpu::Device,
-        // queue: &wgpu::Queue,
         surface_cfg: &SurfaceConfiguration,
         mut scene: Scene,
         input_settings: InputSettings,
@@ -305,16 +301,92 @@ impl GraphicsState {
         queue.write_buffer(&self.lighting_buf, 0, &self.scene.lighting.to_bytes());
     }
 
+    fn setup_render_pass<'a>(
+        &mut self,
+        encoder: &'a mut CommandEncoder,
+        output_view: &TextureView,
+        width: u32,
+        height: u32,
+        resize_required: &mut bool,
+    ) -> RenderPass<'a> {
+        let ui_size = self.ui_settings.size as f32;
+        if self.ui_size_prev != self.ui_settings.size {
+            *resize_required = true;
+        }
+        self.ui_size_prev = self.ui_settings.size;
+
+        let (x, y, eff_width, eff_height) = match self.ui_settings.layout {
+            UiLayout::Left => (ui_size, 0., width as f32 - ui_size, height as f32),
+            UiLayout::Right => (0., 0., width as f32 - ui_size, height as f32),
+            UiLayout::Top => (0., ui_size, width as f32, height as f32 - ui_size),
+            UiLayout::Bottom => (0., 0., width as f32, height as f32 - ui_size),
+        };
+
+        let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+            label: Some("Render pass"),
+            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                view: output_view,
+                resolve_target: None,
+                ops: wgpu::Operations {
+                    load: wgpu::LoadOp::Clear(wgpu::Color {
+                        r: self.scene.background_color.0 as f64,
+                        g: self.scene.background_color.1 as f64,
+                        b: self.scene.background_color.2 as f64,
+                        a: 1.0,
+                    }),
+                    store: StoreOp::Store,
+                },
+            })],
+            depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
+                view: &self.depth_texture.view,
+                depth_ops: Some(wgpu::Operations {
+                    load: wgpu::LoadOp::Clear(1.0),
+                    store: StoreOp::Store,
+                }),
+                stencil_ops: None,
+            }),
+            timestamp_writes: None,
+            occlusion_query_set: None,
+        });
+
+        // Adjust the portion of the 3D rendering to take up the space not taken up by the UI.
+        rpass.set_viewport(x, y, eff_width, eff_height, 0., 1.);
+
+        rpass.set_pipeline(&self.pipeline_graphics);
+
+        rpass.set_bind_group(0, &self.bind_groups.cam, &[]);
+        rpass.set_bind_group(1, &self.bind_groups.lighting, &[]);
+
+        rpass.set_vertex_buffer(0, self.vertex_buf.slice(..));
+        rpass.set_vertex_buffer(1, self.instance_buf.slice(..));
+        rpass.set_index_buffer(self.index_buf.slice(..), wgpu::IndexFormat::Uint32);
+
+        let mut start_ind = 0;
+        for (i, mesh) in self.scene.meshes.iter().enumerate() {
+            let (vertex_start_this_mesh, instance_start_this_mesh, instance_count_this_mesh) =
+                self.mesh_mappings[i];
+
+            rpass.draw_indexed(
+                start_ind..start_ind + mesh.indices.len() as u32,
+                vertex_start_this_mesh,
+                instance_start_this_mesh..instance_start_this_mesh + instance_count_this_mesh,
+            );
+
+            start_ind += mesh.indices.len() as u32;
+        }
+
+        rpass
+    }
+
     pub(crate) fn render<T>(
         &mut self,
         surface_view: wgpu::SurfaceTexture,
-        output_view: &wgpu::TextureView,
+        output_view: &TextureView,
         device: &wgpu::Device,
         queue: &Queue,
         dt: Duration,
         width: u32,
         height: u32,
-        // window: &Window,
         gui_handler: impl FnMut(&mut T, &Context, &mut Scene) -> EngineUpdates,
         user_state: &mut T,
         surface: &Surface,
@@ -364,95 +436,27 @@ impl GraphicsState {
             height,
         );
 
-        let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-            label: Some("Render pass"),
-            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                view: output_view,
-                resolve_target: None,
-                ops: wgpu::Operations {
-                    load: wgpu::LoadOp::Clear(wgpu::Color {
-                        r: self.scene.background_color.0 as f64,
-                        g: self.scene.background_color.1 as f64,
-                        b: self.scene.background_color.2 as f64,
-                        a: 1.0,
-                    }),
-                    store: StoreOp::Store,
-                },
-            })],
-            depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
-                view: &self.depth_texture.view,
-                depth_ops: Some(wgpu::Operations {
-                    load: wgpu::LoadOp::Clear(1.0),
-                    store: StoreOp::Store,
-                }),
-                stencil_ops: None,
-            }),
-            timestamp_writes: None,
-            occlusion_query_set: None,
-        });
+        let mut rpass = self.setup_render_pass(
+            &mut encoder,
+            output_view,
+            width,
+            height,
+            &mut resize_required,
+        );
 
-        let ui_size = self.ui_settings.size as f32;
-        if self.ui_size_prev != self.ui_settings.size {
-            resize_required = true;
-        }
-        self.ui_size_prev = self.ui_settings.size;
-
-        let (x, y, eff_width, eff_height) = match self.ui_settings.layout {
-            UiLayout::Left => (ui_size, 0., width as f32 - ui_size, height as f32),
-            UiLayout::Right => (0., 0., width as f32 - ui_size, height as f32),
-            UiLayout::Top => (0., ui_size, width as f32, height as f32 - ui_size),
-            UiLayout::Bottom => (0., 0., width as f32, height as f32 - ui_size),
-        };
-
-        // Adjust the portion of the 3D rendering to take up the space not taken up by the UI.
-        rpass.set_viewport(x, y, eff_width, eff_height, 0., 1.);
-
-        rpass.set_pipeline(&self.pipeline_graphics);
-
-        rpass.set_bind_group(0, &self.bind_groups.cam, &[]);
-        rpass.set_bind_group(1, &self.bind_groups.lighting, &[]);
-
-        rpass.set_vertex_buffer(0, self.vertex_buf.slice(..));
-        rpass.set_vertex_buffer(1, self.instance_buf.slice(..));
-        rpass.set_index_buffer(self.index_buf.slice(..), wgpu::IndexFormat::Uint32);
-
-        let mut start_ind = 0;
-        for (i, mesh) in self.scene.meshes.iter().enumerate() {
-            let (vertex_start_this_mesh, instance_start_this_mesh, instance_count_this_mesh) =
-                self.mesh_mappings[i];
-
-            rpass.draw_indexed(
-                start_ind..start_ind + mesh.indices.len() as u32,
-                vertex_start_this_mesh,
-                instance_start_this_mesh..instance_start_this_mesh + instance_count_this_mesh,
-            );
-
-            start_ind += mesh.indices.len() as u32;
-        }
-
-        // This block: Generally GUI. (Move to gui module once working)
-        // todo: put this back; encoder lifetime errors.
-        drop(rpass);
+        let mut rpass = rpass.forget_lifetime();
         self.egui_renderer.render(&mut rpass, &tris, &screen_descriptor);
-
+        // drop(rpass);
 
         for x in &gui_full_output.textures_delta.free {
             self.egui_renderer.free_texture(x)
         }
 
-        // queue.submit(Some(encoder.finish())); // todo: Required?
+        queue.submit(Some(encoder.finish()));
+        surface_view.present();
         self.window.request_redraw();
 
-        gui::process_engine_updates(
-            self,
-            device,
-            queue,
-            user_state,
-            gui_handler,
-        );
-
-        // Redraw egui
-        surface_view.present();
+        gui::process_engine_updates(self, device, queue, user_state, gui_handler);
 
         resize_required
     }
