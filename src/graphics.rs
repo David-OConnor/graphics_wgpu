@@ -14,7 +14,10 @@ use std::{sync::Arc, time::Duration};
 use egui::Context;
 use egui_wgpu::Renderer;
 use lin_alg2::f32::Vec3;
-use wgpu::{self, hal::empty::Encoder, util::DeviceExt, BindGroup, BindGroupLayout, FragmentState, Queue, RenderPass, StoreOp, Surface, SurfaceConfiguration, TextureView, VertexState, CommandEncoder};
+use wgpu::{
+    self, util::DeviceExt, BindGroup, BindGroupLayout, CommandEncoder, FragmentState, Queue,
+    RenderPass, StoreOp, Surface, SurfaceConfiguration, TextureView, VertexState,
+};
 use winit::{event::DeviceEvent, window::Window};
 
 use crate::{
@@ -49,7 +52,7 @@ pub(crate) struct GraphicsState {
     pub bind_groups: BindGroupData,
     camera_buf: wgpu::Buffer,
     lighting_buf: wgpu::Buffer,
-    pub pipeline_graphics: wgpu::RenderPipeline,
+    pub pipeline: wgpu::RenderPipeline,
     pub depth_texture: Texture,
     pub input_settings: InputSettings,
     pub ui_settings: UiSettings,
@@ -57,12 +60,13 @@ pub(crate) struct GraphicsState {
     // staging_belt: wgpu::util::StagingBelt, // todo: Do we want this? Probably in sys, not here.
     pub scene: Scene,
     mesh_mappings: Vec<(i32, u32, u32)>,
+    /// This is perhaps more ideal in `SystemState`, but we have it here for convenience.
+    pub window: Arc<Window>,
     /// for GUI
-    // pub rpass_egui: RenderPass,
     pub egui_state: egui_winit::State,
     pub egui_renderer: Renderer,
     pub ui_size_prev: f64,
-    pub window: Arc<Window>,
+
 }
 
 impl GraphicsState {
@@ -153,6 +157,7 @@ impl GraphicsState {
         let egui_renderer = Renderer::new(
             device,
             surface_cfg.format,
+            // wgpu::TextureFormat::Depth32Float, // todo: Experimenting.
             None,
             1,     // todo
             false, // todo: Dithering?
@@ -165,7 +170,7 @@ impl GraphicsState {
             bind_groups,
             camera_buf: cam_buf,
             lighting_buf,
-            pipeline_graphics: pipeline_graphics,
+            pipeline: pipeline_graphics,
             depth_texture,
             // staging_belt: wgpu::util::StagingBelt::new(0x100),
             scene,
@@ -352,7 +357,7 @@ impl GraphicsState {
         // Adjust the portion of the 3D rendering to take up the space not taken up by the UI.
         rpass.set_viewport(x, y, eff_width, eff_height, 0., 1.);
 
-        rpass.set_pipeline(&self.pipeline_graphics);
+        rpass.set_pipeline(&self.pipeline);
 
         rpass.set_bind_group(0, &self.bind_groups.cam, &[]);
         rpass.set_bind_group(1, &self.bind_groups.lighting, &[]);
@@ -429,7 +434,7 @@ impl GraphicsState {
             self,
             user_state,
             device,
-            // gui_handler,
+            gui_handler,
             &mut encoder,
             queue,
             width,
@@ -445,8 +450,10 @@ impl GraphicsState {
         );
 
         let mut rpass = rpass.forget_lifetime();
-        self.egui_renderer.render(&mut rpass, &tris, &screen_descriptor);
-        // drop(rpass);
+
+        self.egui_renderer
+            .render(&mut rpass, &tris, &screen_descriptor);
+        drop(rpass);
 
         for x in &gui_full_output.textures_delta.free {
             self.egui_renderer.free_texture(x)
@@ -456,7 +463,8 @@ impl GraphicsState {
         surface_view.present();
         self.window.request_redraw();
 
-        gui::process_engine_updates(self, device, queue, user_state, gui_handler);
+        // gui::process_engine_updates(self, device, queue, user_state, gui_handler);
+        gui::process_engine_updates(self, device, queue, user_state);
 
         resize_required
     }

@@ -144,7 +144,6 @@ where
 
         let graphics = GraphicsState::new(
             &sys.device,
-            // &sys.queue,
             &sys.surface_cfg,
             scene,
             input_settings,
