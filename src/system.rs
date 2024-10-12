@@ -4,13 +4,9 @@
 //  Check out this example for winit/egui/wgpu (2024)
 // https://github.com/kaphula/winit-egui-wgpu-template/blob/master/src/main.rs
 
-use std::sync::{
-    mpsc::{self, Receiver, Sender},
-    Arc,
-};
-#[cfg(not(target_arch = "wasm32"))]
 use std::{
     path::Path,
+    sync::Arc,
     time::{Duration, Instant},
 };
 
@@ -20,9 +16,9 @@ use wgpu::{
     SurfaceConfiguration, TextureFormat,
 };
 use winit::{
-    event::{DeviceEvent, Event, WindowEvent},
-    event_loop::{ControlFlow, EventLoop},
-    window::{Icon, Window, WindowAttributes, WindowId},
+    event::DeviceEvent,
+    event_loop::EventLoop,
+    window::{Icon, Window, WindowAttributes},
 };
 
 use crate::{
@@ -60,12 +56,7 @@ where
 {
     pub sys: SystemState,
     pub graphics: GraphicsState,
-    // Below is part of new Winit system
-    // pub windows: HashMap<WindowId, WindowState>,
     pub user_state: T,
-    // pub render_handler: impl FnMut(&mut T, &mut Scene, f32) -> EngineUpdates + 'static,
-    // pub event_handler: impl FnMut(&mut T, DeviceEvent, &mut Scene, f32) -> EngineUpdates + 'static,
-    // pub gui_handler: impl FnMut(&mut T, &egui::Context, &mut Scene) -> EngineUpdates + 'static,
     pub render_handler: FRender,
     pub event_handler: FEvent,
     pub gui_handler: FGui,
@@ -85,9 +76,6 @@ where
         input_settings: InputSettings,
         ui_settings: UiSettings,
         user_state: T,
-        // render_handler: impl FnMut(&mut T, &mut Scene, f32) -> EngineUpdates + 'static,
-        // event_handler: impl FnMut(&mut T, DeviceEvent, &mut Scene, f32) -> EngineUpdates + 'static,
-        // gui_handler: impl FnMut(&mut T, &egui::Context, &mut Scene) -> EngineUpdates + 'static,
         render_handler: FRender,
         event_handler: FEvent,
         gui_handler: FGui,
@@ -217,9 +205,6 @@ pub fn run<T: 'static, FRender, FEvent, FGui>(
     scene: Scene,
     input_settings: InputSettings,
     ui_settings: UiSettings,
-    // mut render_handler: impl FnMut(&mut T, &mut Scene, f32) -> EngineUpdates + 'static,
-    // mut event_handler: impl FnMut(&mut T, DeviceEvent, &mut Scene, f32) -> EngineUpdates + 'static,
-    // mut gui_handler: impl FnMut(&mut T, &egui::Context, &mut Scene) -> EngineUpdates + 'static,
     render_handler: FRender,
     event_handler: FEvent,
     gui_handler: FGui,

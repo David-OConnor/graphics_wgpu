@@ -23,12 +23,12 @@ use winit::{event::DeviceEvent, window::Window};
 use crate::{
     gui,
     input::{self, InputsCommanded},
+    system::DEPTH_FORMAT,
     texture::Texture,
     types::{
         ControlScheme, EngineUpdates, InputSettings, Instance, Scene, UiLayout, UiSettings, Vertex,
     },
 };
-use crate::system::DEPTH_FORMAT;
 
 pub(crate) const UP_VEC: Vec3 = Vec3 {
     x: 0.,
@@ -67,7 +67,6 @@ pub(crate) struct GraphicsState {
     pub egui_state: egui_winit::State,
     pub egui_renderer: Renderer,
     pub ui_size_prev: f64,
-
 }
 
 impl GraphicsState {

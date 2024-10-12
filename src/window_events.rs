@@ -1,11 +1,11 @@
 //! Handles window events, using Winit's system.
 
-use std::time::{Duration, Instant};
+use std::{process::exit, time::Instant};
 
 use winit::{
     application::ApplicationHandler,
     event::{DeviceEvent, DeviceId, WindowEvent},
-    event_loop::{ActiveEventLoop, ControlFlow, EventLoop},
+    event_loop::ActiveEventLoop,
     window::WindowId,
 };
 
@@ -17,7 +17,7 @@ where
     FEvent: FnMut(&mut T, DeviceEvent, &mut Scene, f32) -> EngineUpdates + 'static,
     FGui: FnMut(&mut T, &egui::Context, &mut Scene) -> EngineUpdates + 'static,
 {
-    fn resumed(&mut self, event_loop: &ActiveEventLoop) {}
+    fn resumed(&mut self, _event_loop: &ActiveEventLoop) {}
 
     fn window_event(
         &mut self,
@@ -25,15 +25,6 @@ where
         window_id: WindowId,
         event: WindowEvent,
     ) {
-        // let window = match self.windows.get_mut(&window_id) {
-        //     Some(window) => window,
-        //     None => return,
-        // };
-        // *control_flow = ControlFlow::Poll;
-
-        // todo?
-        // self.graphics.egui_renderer.handle_input(&window, &event);
-
         match event {
             WindowEvent::RedrawRequested => {
                 let now = Instant::now();
@@ -69,7 +60,6 @@ where
                 // we do that in the `init_graphics` module.
 
                 // todo: move this into `render`?
-                // todo 2024: Temp removed; getting an error.
                 match self.sys.surface.get_current_texture() {
                     Ok(output_frame) => {
                         let output_view = output_frame
@@ -84,8 +74,6 @@ where
                             self.dt,
                             self.sys.surface_cfg.width,
                             self.sys.surface_cfg.height,
-                            // &self.sys.surface,
-                            // &self.graphics.window,
                             &mut self.gui_handler,
                             &mut self.user_state,
                             &self.sys.surface,
@@ -110,12 +98,14 @@ where
                     self.sys.mouse_in_gui = false;
                 }
             }
-            // WindowEvent::CloseRequested => *control_flow = ControlFlow::Exit,
-            // WindowEvent::CloseRequested =>  ControlFlow::Exit, // todo?
+            WindowEvent::CloseRequested => {
+                exit(0);
+            }
             WindowEvent::Resized(physical_size) => {
                 self.resize(physical_size);
                 // Prevents inadvertent mouse-click-activated free-look.
                 self.graphics.inputs_commanded.free_look = false;
+                // self.graphics.window.resize(size); // todo??
             }
             // If the window scale changes, update the renderer size, and camera aspect ratio.
             WindowEvent::ScaleFactorChanged {
@@ -156,7 +146,6 @@ where
         // device_id:  wgpu::core::id::Id<wgpu::core::id::markers::Device>,
         event: DeviceEvent,
     ) {
-        // println!("EV: {:?}", event);
         if !self.sys.mouse_in_gui {
             let dt_secs = self.dt.as_secs() as f32 + self.dt.subsec_micros() as f32 / 1_000_000.;
             let engine_updates = (self.event_handler)(
@@ -190,17 +179,11 @@ where
     }
 
     fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {
-        // if self.windows.is_empty() {
-        //     event_loop.exit();
-        // }
 
-        // todo
+        // todo?
         // (self.gui_handler)(args)
-        // (self.event_handler)(args)
-        // (self.render_handler_handler)(args)
     }
 
-    #[cfg(not(android_platform))]
     fn exiting(&mut self, _event_loop: &ActiveEventLoop) {
         // We must drop the context here.
         // self.context = None;

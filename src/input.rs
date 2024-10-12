@@ -1,9 +1,13 @@
 //! Handles keyboard and mouse input, eg for moving the camera.
 
+use egui::Key;
 use lin_alg2::f32::{Quaternion, Vec3};
 // todo: remove Winit from this module if you can, and make it agnostic?
 use winit::event::{DeviceEvent, ElementState};
-use winit::platform::scancode::PhysicalKeyExtScancode;
+use winit::{
+    keyboard::{KeyCode, PhysicalKey::Code},
+    platform::scancode::PhysicalKeyExtScancode,
+};
 
 use crate::{
     camera::Camera,
@@ -11,6 +15,7 @@ use crate::{
     types::InputSettings,
 };
 
+const MOUSE_0_ID: u32 = 0;
 const MOUSE_1_ID: u32 = 1;
 
 #[derive(Default, Debug)]
@@ -55,81 +60,78 @@ pub(crate) fn add_input_cmd(event: DeviceEvent, inputs: &mut InputsCommanded) {
         DeviceEvent::Key(key) => {
             if key.state == ElementState::Pressed {
                 // todo: Map to PhysicalKey directly without the scancode part.
-                match key.physical_key.to_scancode().unwrap() {
-                    17 => {
-                        // W
-                        inputs.fwd = true;
-                    }
-                    31 => {
-                        // S
-                        inputs.back = true;
-                    }
-                    32 => {
-                        // D
-                        inputs.right = true;
-                    }
-                    30 => {
-                        // A
-                        inputs.left = true;
-                    }
-                    57 => {
-                        // Space
-                        inputs.up = true;
-                    }
-                    46 => {
-                        // C
-                        inputs.down = true;
-                    }
-                    16 => {
-                        // Q
-                        inputs.roll_ccw = true;
-                    }
-                    18 => {
-                        // E
-                        inputs.roll_cw = true;
-                    }
-                    42 => {
-                        // Shift
-                        inputs.run = true;
-                    }
+                match key.physical_key {
+                    Code(key) => match key {
+                        KeyCode::KeyW => {
+                            inputs.fwd = true;
+                        }
+                        KeyCode::KeyS => {
+                            inputs.back = true;
+                        }
+                        KeyCode::KeyA => {
+                            inputs.left = true;
+                        }
+                        KeyCode::KeyD => {
+                            inputs.right = true;
+                        }
+                        KeyCode::Space => {
+                            inputs.up = true;
+                        }
+                        KeyCode::KeyC => {
+                            inputs.down = true;
+                        }
+                        KeyCode::KeyQ => {
+                            inputs.roll_ccw = true;
+                        }
+                        KeyCode::KeyE => {
+                            inputs.roll_cw = true;
+                        }
+                        KeyCode::ShiftLeft => {
+                            inputs.run = true;
+                        }
+                        _ => (),
+                    },
                     _ => (),
                 }
             } else if key.state == ElementState::Released {
                 // todo: DRY
-                match key.physical_key.to_scancode().unwrap() {
-                    17 => {
-                        inputs.fwd = false;
-                    }
-                    31 => {
-                        inputs.back = false;
-                    }
-                    32 => {
-                        inputs.right = false;
-                    }
-                    30 => {
-                        inputs.left = false;
-                    }
-                    57 => {
-                        inputs.up = false;
-                    }
-                    46 => {
-                        inputs.down = false;
-                    }
-                    16 => {
-                        inputs.roll_ccw = false;
-                    }
-                    18 => {
-                        inputs.roll_cw = false;
-                    }
-                    42 => {
-                        inputs.run = false;
-                    }
+                match key.physical_key {
+                    Code(key) => match key {
+                        KeyCode::KeyW => {
+                            inputs.fwd = false;
+                        }
+                        KeyCode::KeyS => {
+                            inputs.back = false;
+                        }
+                        KeyCode::KeyA => {
+                            inputs.left = false;
+                        }
+                        KeyCode::KeyD => {
+                            inputs.right = false;
+                        }
+                        KeyCode::Space => {
+                            inputs.up = false;
+                        }
+                        KeyCode::KeyC => {
+                            inputs.down = false;
+                        }
+                        KeyCode::KeyQ => {
+                            inputs.roll_ccw = false;
+                        }
+                        KeyCode::KeyE => {
+                            inputs.roll_cw = false;
+                        }
+                        KeyCode::ShiftLeft => {
+                            inputs.run = false;
+                        }
+                        _ => (),
+                    },
                     _ => (),
                 }
             }
         }
         DeviceEvent::Button { button, state } => {
-            if button == MOUSE_1_ID {
+            if button == MOUSE_0_ID {
                 inputs.free_look = match state {
                     ElementState::Pressed => true,
                     ElementState::Released => false,

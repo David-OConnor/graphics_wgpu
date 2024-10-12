@@ -29,7 +29,8 @@ pub(crate) fn render_gui_pre_rpass<T>(
         pixels_per_point: g_state.window.scale_factor() as f32,
     };
 
-    g_state.egui_state
+    g_state
+        .egui_state
         .egui_ctx()
         .set_pixels_per_point(screen_descriptor.pixels_per_point);
 
@@ -42,7 +43,8 @@ pub(crate) fn render_gui_pre_rpass<T>(
         );
     });
 
-    g_state.egui_state
+    g_state
+        .egui_state
         .handle_platform_output(&g_state.window, full_output.platform_output.clone()); // todo: Is this clone OK?
 
     let tris = g_state.egui_state.egui_ctx().tessellate(
@@ -73,20 +75,25 @@ pub(crate) fn process_engine_updates(
     if engine_updates.meshes {
         g_state.setup_vertices_indices(device);
         g_state.setup_entities(device);
+
+        println!("MESHES");
     }
 
     if engine_updates.entities {
         g_state.setup_entities(device);
+        println!("ENTITIES");
     }
 
     if engine_updates.camera {
         // Entities have been updated in the scene; update the buffer.
         g_state.update_camera(queue);
+        println!("CAM");
     }
 
     if engine_updates.lighting {
         // Entities have been updated in the scene; update the buffer.
         g_state.update_lighting(queue);
+        println!("LIGHTING");
     }
 
     g_state.ui_settings.size = engine_updates.ui_size as f64;

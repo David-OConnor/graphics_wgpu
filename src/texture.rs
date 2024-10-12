@@ -1,5 +1,6 @@
 use image::GenericImageView;
 use wgpu::{TextureDescriptor, TextureFormat};
+
 use crate::system::{COLOR_FORMAT, DEPTH_FORMAT};
 
 pub struct Texture {
