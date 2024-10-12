@@ -33,7 +33,8 @@ use crate::{
 
 // todo: Changed 2024; not sure how to auto-choose. From an error message, on my system, options are:
 // todo: [Bgra8Unorm, Bgra8UnormSrgb, Rgba8Unorm, Rgba8UnormSrgb]. Chose this value from an unofficial example.
-pub const TEXTURE_FORMAT: TextureFormat = TextureFormat::Bgra8UnormSrgb;
+pub const COLOR_FORMAT: TextureFormat = TextureFormat::Bgra8UnormSrgb;
+pub const DEPTH_FORMAT: TextureFormat = TextureFormat::Depth32Float;
 
 const WINDOW_TITLE_INIT: &str = "Graphics";
 const WINDOW_SIZE_X_INIT: f32 = 900.0;
@@ -115,7 +116,7 @@ where
         let surface_cfg = SurfaceConfiguration {
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
             // format: surface.get_supported_formats(&adapter)[0],
-            format: TEXTURE_FORMAT,
+            format: COLOR_FORMAT,
             width: size.width,
             height: size.height,
             // https://docs.rs/wgpu/latest/wgpu/enum.PresentMode.html

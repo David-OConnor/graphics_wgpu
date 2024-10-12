@@ -28,6 +28,7 @@ use crate::{
         ControlScheme, EngineUpdates, InputSettings, Instance, Scene, UiLayout, UiSettings, Vertex,
     },
 };
+use crate::system::DEPTH_FORMAT;
 
 pub(crate) const UP_VEC: Vec3 = Vec3 {
     x: 0.,
@@ -157,8 +158,7 @@ impl GraphicsState {
         let egui_renderer = Renderer::new(
             device,
             surface_cfg.format,
-            // wgpu::TextureFormat::Depth32Float, // todo: Experimenting.
-            None,
+            Some(DEPTH_FORMAT),
             1,     // todo
             false, // todo: Dithering?
         );
@@ -430,6 +430,8 @@ impl GraphicsState {
             label: Some("Render encoder"),
         });
 
+        let mut engine_updates = Default::default();
+
         let (gui_full_output, tris, screen_descriptor) = gui::render_gui_pre_rpass(
             self,
             user_state,
@@ -439,6 +441,7 @@ impl GraphicsState {
             queue,
             width,
             height,
+            &mut engine_updates,
         );
 
         let mut rpass = self.setup_render_pass(
@@ -463,8 +466,7 @@ impl GraphicsState {
         surface_view.present();
         self.window.request_redraw();
 
-        // gui::process_engine_updates(self, device, queue, user_state, gui_handler);
-        gui::process_engine_updates(self, device, queue, user_state);
+        gui::process_engine_updates(self, &engine_updates, device, queue);
 
         resize_required
     }
@@ -503,7 +505,7 @@ fn create_render_pipeline(
         },
 
         depth_stencil: Some(wgpu::DepthStencilState {
-            format: Texture::DEPTH_FORMAT,
+            format: DEPTH_FORMAT,
             depth_write_enabled: true,
             depth_compare: wgpu::CompareFunction::Less,
             stencil: wgpu::StencilState::default(),

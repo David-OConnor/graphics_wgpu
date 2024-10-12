@@ -1,5 +1,6 @@
 use image::GenericImageView;
-use wgpu::TextureDescriptor;
+use wgpu::{TextureDescriptor, TextureFormat};
+use crate::system::{COLOR_FORMAT, DEPTH_FORMAT};
 
 pub struct Texture {
     pub texture: wgpu::Texture,
@@ -8,8 +9,6 @@ pub struct Texture {
 }
 
 impl Texture {
-    pub const DEPTH_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Depth32Float;
-
     /// Create a 2d texture for the depth stencil.
     pub fn create_depth_texture(
         device: &wgpu::Device,
@@ -28,7 +27,7 @@ impl Texture {
             mip_level_count: 1,
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
-            format: Self::DEPTH_FORMAT,
+            format: DEPTH_FORMAT,
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
             view_formats: &[],
         };
