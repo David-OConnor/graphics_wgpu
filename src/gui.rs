@@ -5,7 +5,7 @@
 use egui::{ClippedPrimitive, Context, FullOutput};
 use egui_wgpu::ScreenDescriptor;
 use egui_winit;
-use wgpu::{self, CommandEncoder, Device, Queue, Surface, TextureView};
+use wgpu::{self, CommandEncoder, Device, Queue};
 
 use crate::{
     graphics::GraphicsState,

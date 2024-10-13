@@ -1,6 +1,6 @@
 //! Handles window events, using Winit's system.
 
-use std::{process::exit, time::Instant};
+use std::time::Instant;
 
 use winit::{
     application::ApplicationHandler,

@@ -2,7 +2,7 @@
 
 use core::f32::consts::TAU;
 
-use lin_alg2::f32::{Mat4, Quaternion, Vec3};
+use lin_alg::f32::{Mat4, Quaternion, Vec3};
 
 use crate::types::{MAT4_SIZE, VEC3_UNIFORM_SIZE};
 

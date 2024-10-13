@@ -6,7 +6,7 @@ use std::{
     io::{BufReader, Read},
 };
 
-use lin_alg2::f32::Vec3;
+use lin_alg::f32::Vec3;
 
 use crate::{
     graphics::UP_VEC,

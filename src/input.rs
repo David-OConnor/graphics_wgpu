@@ -1,7 +1,7 @@
 //! Handles keyboard and mouse input, eg for moving the camera.
 
 use egui::Key;
-use lin_alg2::f32::{Quaternion, Vec3};
+use lin_alg::f32::{Quaternion, Vec3};
 // todo: remove Winit from this module if you can, and make it agnostic?
 use winit::event::{DeviceEvent, ElementState};
 use winit::{

@@ -1,4 +1,4 @@
-use lin_alg2::f32::Vec3;
+use lin_alg::f32::Vec3;
 
 use crate::types::{F32_SIZE, VEC3_UNIFORM_SIZE};
 

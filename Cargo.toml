@@ -6,7 +6,7 @@ edition = "2021"
 
 [dependencies]
 wgpu = "^22.1.0"
-lin-alg2 = { path = "../lin_alg", features = ["computer_graphics"] }
+lin-alg = { package = "lin-alg2", path = "../lin_alg", features = ["computer_graphics"] }
 
 pollster = "^0.3.0"  # For 2 WGPU init fns that use async.
 

@@ -1,6 +1,6 @@
 //! https://sotrh.github.io/learn-wgpu/beginner/tutorial9-models/#rendering-a-mesh
 
-use lin_alg2::f32::{Mat4, Quaternion, Vec3};
+use lin_alg::f32::{Mat4, Quaternion, Vec3};
 
 use crate::{camera::Camera, lighting::Lighting};
 

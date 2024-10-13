@@ -13,7 +13,7 @@ use std::{sync::Arc, time::Duration};
 
 use egui::Context;
 use egui_wgpu::Renderer;
-use lin_alg2::f32::Vec3;
+use lin_alg::f32::Vec3;
 use wgpu::{
     self, util::DeviceExt, BindGroup, BindGroupLayout, CommandEncoder, FragmentState, Queue,
     RenderPass, StoreOp, Surface, SurfaceConfiguration, TextureView, VertexState,
