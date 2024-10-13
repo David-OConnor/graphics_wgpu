@@ -11,6 +11,75 @@ use winit::{
 
 use crate::{system::State, EngineUpdates, Scene};
 
+impl<T, FRender, FEvent, FGui> State<T, FRender, FEvent, FGui>
+where
+    FRender: FnMut(&mut T, &mut Scene, f32) -> EngineUpdates + 'static,
+    FEvent: FnMut(&mut T, DeviceEvent, &mut Scene, f32) -> EngineUpdates + 'static,
+    FGui: FnMut(&mut T, &egui::Context, &mut Scene) -> EngineUpdates + 'static,
+{
+    fn redraw(&mut self) {
+        let now = Instant::now();
+        self.dt = now - self.last_render_time;
+        self.last_render_time = now;
+
+        let dt_secs = self.dt.as_secs() as f32 + self.dt.subsec_micros() as f32 / 1_000_000.;
+        let engine_updates =
+            (self.render_handler)(&mut self.user_state, &mut self.graphics.scene, dt_secs);
+
+        if engine_updates.meshes {
+            self.graphics.setup_vertices_indices(&self.sys.device);
+            self.graphics.setup_entities(&self.sys.device);
+        }
+
+        // Entities have been updated in the scene; update the buffers
+        if engine_updates.entities {
+            self.graphics.setup_entities(&self.sys.device);
+        }
+
+        if engine_updates.camera {
+            // Entities have been updated in the scene; update the buffer.
+            self.graphics.update_camera(&self.sys.queue);
+        }
+
+        if engine_updates.lighting {
+            // Entities have been updated in the scene; update the buffer.
+            self.graphics.update_lighting(&self.sys.queue);
+        }
+
+        // Note that the GUI handler can also modify entities, but
+        // we do that in the `init_graphics` module.
+
+        // todo: move this into `render`?
+        match self.sys.surface.get_current_texture() {
+            Ok(output_frame) => {
+                let output_view = output_frame
+                    .texture
+                    .create_view(&wgpu::TextureViewDescriptor::default());
+
+                let resize_required = self.graphics.render(
+                    output_frame,
+                    &output_view,
+                    &self.sys.device,
+                    &self.sys.queue,
+                    self.dt,
+                    self.sys.surface_cfg.width,
+                    self.sys.surface_cfg.height,
+                    &mut self.gui_handler,
+                    &mut self.user_state,
+                    &self.sys.surface,
+                );
+
+                if resize_required {
+                    self.resize(self.sys.size);
+                }
+            }
+            // todo: Does this happen when minimized?
+            Err(_e) => {}
+        }
+        self.graphics.window.as_ref().request_redraw();
+    }
+}
+
 impl<T, FRender, FEvent, FGui> ApplicationHandler for State<T, FRender, FEvent, FGui>
 where
     FRender: FnMut(&mut T, &mut Scene, f32) -> EngineUpdates + 'static,
@@ -25,67 +94,13 @@ where
         window_id: WindowId,
         event: WindowEvent,
     ) {
+        // Let the EGUI renderer to process the event first. This step is required for the UI
+        // to process inputs.
+        let _ = self.graphics.egui_state.on_window_event(&self.graphics.window, &event);
+
         match event {
             WindowEvent::RedrawRequested => {
-                let now = Instant::now();
-                self.dt = now - self.last_render_time;
-                self.last_render_time = now;
-
-                let dt_secs =
-                    self.dt.as_secs() as f32 + self.dt.subsec_micros() as f32 / 1_000_000.;
-                let engine_updates =
-                    (self.render_handler)(&mut self.user_state, &mut self.graphics.scene, dt_secs);
-
-                if engine_updates.meshes {
-                    self.graphics.setup_vertices_indices(&self.sys.device);
-                    self.graphics.setup_entities(&self.sys.device);
-                }
-
-                // Entities have been updated in the scene; update the buffers
-                if engine_updates.entities {
-                    self.graphics.setup_entities(&self.sys.device);
-                }
-
-                if engine_updates.camera {
-                    // Entities have been updated in the scene; update the buffer.
-                    self.graphics.update_camera(&self.sys.queue);
-                }
-
-                if engine_updates.lighting {
-                    // Entities have been updated in the scene; update the buffer.
-                    self.graphics.update_lighting(&self.sys.queue);
-                }
-
-                // Note that the GUI handler can also modify entities, but
-                // we do that in the `init_graphics` module.
-
-                // todo: move this into `render`?
-                match self.sys.surface.get_current_texture() {
-                    Ok(output_frame) => {
-                        let output_view = output_frame
-                            .texture
-                            .create_view(&wgpu::TextureViewDescriptor::default());
-
-                        let resize_required = self.graphics.render(
-                            output_frame,
-                            &output_view,
-                            &self.sys.device,
-                            &self.sys.queue,
-                            self.dt,
-                            self.sys.surface_cfg.width,
-                            self.sys.surface_cfg.height,
-                            &mut self.gui_handler,
-                            &mut self.user_state,
-                            &self.sys.surface,
-                        );
-
-                        if resize_required {
-                            self.resize(self.sys.size);
-                        }
-                    }
-                    // todo: Does this happen when minimized?
-                    Err(_e) => {}
-                }
+                self.redraw();
             }
             WindowEvent::CursorMoved { position, .. } => {
                 if position.x < self.graphics.ui_settings.size {
@@ -99,7 +114,7 @@ where
                 }
             }
             WindowEvent::CloseRequested => {
-                exit(0);
+                event_loop.exit();
             }
             WindowEvent::Resized(physical_size) => {
                 self.resize(physical_size);
@@ -141,9 +156,8 @@ where
 
     fn device_event(
         &mut self,
-        event_loop: &ActiveEventLoop,
-        device_id: DeviceId,
-        // device_id:  wgpu::core::id::Id<wgpu::core::id::markers::Device>,
+        _event_loop: &ActiveEventLoop,
+        _device_id: DeviceId,
         event: DeviceEvent,
     ) {
         if !self.sys.mouse_in_gui {

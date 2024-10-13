@@ -75,25 +75,20 @@ pub(crate) fn process_engine_updates(
     if engine_updates.meshes {
         g_state.setup_vertices_indices(device);
         g_state.setup_entities(device);
-
-        println!("MESHES");
     }
 
     if engine_updates.entities {
         g_state.setup_entities(device);
-        println!("ENTITIES");
     }
 
     if engine_updates.camera {
         // Entities have been updated in the scene; update the buffer.
         g_state.update_camera(queue);
-        println!("CAM");
     }
 
     if engine_updates.lighting {
         // Entities have been updated in the scene; update the buffer.
         g_state.update_lighting(queue);
-        println!("LIGHTING");
     }
 
     g_state.ui_settings.size = engine_updates.ui_size as f64;
