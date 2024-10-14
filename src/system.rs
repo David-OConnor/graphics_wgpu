@@ -16,6 +16,7 @@ use wgpu::{
     SurfaceConfiguration, TextureFormat,
 };
 use winit::{
+    dpi::PhysicalSize,
     event::DeviceEvent,
     event_loop::EventLoop,
     window::{Icon, Window, WindowAttributes},
@@ -38,7 +39,7 @@ const WINDOW_SIZE_Y_INIT: f32 = 600.0;
 
 pub(crate) struct SystemState {
     pub instance: wgpu::Instance,
-    pub size: winit::dpi::PhysicalSize<u32>,
+    pub size: PhysicalSize<u32>,
     pub surface: Surface<'static>, // Sshare the same lifetime as the window, A/R.
     pub adapter: Adapter,
     pub device: wgpu::Device,
@@ -54,12 +55,17 @@ where
     FEvent: FnMut(&mut T, DeviceEvent, &mut Scene, f32) -> EngineUpdates + 'static,
     FGui: FnMut(&mut T, &egui::Context, &mut Scene) -> EngineUpdates + 'static,
 {
-    pub sys: SystemState,
-    pub graphics: GraphicsState,
+    /// `sys` and `graphics` are only None at init; they require the `Window` event loop
+    /// to be run.
+    pub sys: Option<SystemState>,
+    pub graphics: Option<GraphicsState>,
     pub user_state: T,
     pub render_handler: FRender,
     pub event_handler: FEvent,
     pub gui_handler: FGui,
+    pub input_settings: InputSettings,
+    pub ui_settings: UiSettings,
+    pub scene: Scene,
     pub last_render_time: Instant,
     pub dt: Duration,
 }
@@ -70,8 +76,9 @@ where
     FEvent: FnMut(&mut T, DeviceEvent, &mut Scene, f32) -> EngineUpdates + 'static,
     FGui: FnMut(&mut T, &egui::Context, &mut Scene) -> EngineUpdates + 'static,
 {
+    /// This constructor sets up the basics required for Winit's events loop. We initialize the important
+    /// parts later, once the window has been set up.
     pub(crate) fn new(
-        window: Window,
         scene: Scene,
         input_settings: InputSettings,
         ui_settings: UiSettings,
@@ -80,6 +87,27 @@ where
         event_handler: FEvent,
         gui_handler: FGui,
     ) -> Self {
+        let last_render_time = Instant::now();
+        let dt = Duration::new(0, 0);
+
+        Self {
+            sys: None,
+            graphics: None,
+            user_state,
+            render_handler,
+            event_handler,
+            gui_handler,
+            input_settings,
+            ui_settings,
+            scene,
+            last_render_time,
+            dt,
+        }
+    }
+
+    /// Initializes the renderer and GUI. We launch this from the Window's event loop.
+    pub(crate) fn init(&mut self, window: Window) {
+        println!("Initializing grpahics and sys...");
         let size = window.inner_size();
 
         // The instance is a handle to our GPU. Its main purpose is to create Adapters and Surfaces.
@@ -134,57 +162,48 @@ where
         let graphics = GraphicsState::new(
             &sys.device,
             &sys.surface_cfg,
-            scene,
-            input_settings,
-            ui_settings,
+            self.scene.clone(), // todo: Now we have two scene states... not good.
+            // input_settings,
+            // ui_settings,
             window,
         );
 
-        let last_render_time = Instant::now();
-        let dt = Duration::new(0, 0);
-
-        Self {
-            sys,
-            graphics,
-            user_state,
-            render_handler,
-            event_handler,
-            gui_handler,
-            last_render_time,
-            dt,
-        }
+        self.sys = Some(sys);
+        self.graphics = Some(graphics);
     }
 
-    pub(crate) fn resize(&mut self, new_size: winit::dpi::PhysicalSize<u32>) {
-        println!("Resizing..."); // todo temp
-        if new_size.width > 0 && new_size.height > 0 {
-            self.sys.size = new_size;
-            self.sys.surface_cfg.width = new_size.width;
-            self.sys.surface_cfg.height = new_size.height;
-            self.sys
-                .surface
-                .configure(&self.sys.device, &self.sys.surface_cfg);
+    pub(crate) fn resize(&mut self, new_size: PhysicalSize<u32>) {
+        if self.sys.is_none() || self.graphics.is_none() {
+            return;
+        }
 
-            let (eff_width, eff_height) = match self.graphics.ui_settings.layout {
+        println!("Resizing..."); // todo temp
+        let mut sys = &mut self.sys.as_mut().unwrap();
+        let mut graphics = &mut self.graphics.as_mut().unwrap();
+
+        if new_size.width > 0 && new_size.height > 0 {
+            sys.size = new_size;
+            sys.surface_cfg.width = new_size.width;
+            sys.surface_cfg.height = new_size.height;
+            sys.surface.configure(&sys.device, &sys.surface_cfg);
+
+            let (eff_width, eff_height) = match self.ui_settings.layout {
                 UiLayout::Left | UiLayout::Right => (
-                    self.sys.surface_cfg.width as f32 - self.graphics.ui_settings.size as f32,
-                    self.sys.surface_cfg.height as f32,
+                    sys.surface_cfg.width as f32 - self.ui_settings.size as f32,
+                    sys.surface_cfg.height as f32,
                 ),
                 _ => (
-                    self.sys.surface_cfg.width as f32,
-                    self.sys.surface_cfg.height as f32 - self.graphics.ui_settings.size as f32,
+                    sys.surface_cfg.width as f32,
+                    sys.surface_cfg.height as f32 - self.ui_settings.size as f32,
                 ),
             };
 
-            self.graphics.scene.camera.aspect = eff_width / eff_height;
+            graphics.scene.camera.aspect = eff_width / eff_height;
 
-            self.graphics.depth_texture = Texture::create_depth_texture(
-                &self.sys.device,
-                &self.sys.surface_cfg,
-                "Depth texture",
-            );
+            graphics.depth_texture =
+                Texture::create_depth_texture(&sys.device, &sys.surface_cfg, "Depth texture");
 
-            self.graphics.scene.camera.update_proj_mat();
+            graphics.scene.camera.update_proj_mat();
         }
     }
 }
@@ -228,8 +247,6 @@ pub fn run<T: 'static, FRender, FEvent, FGui>(
         None => None,
     };
 
-    // let event_loop = EventLoop::new().unwrap();
-
     let window_attributes = WindowAttributes::default()
         .with_title(WINDOW_TITLE_INIT)
         .with_inner_size(winit::dpi::LogicalSize::new(
@@ -238,12 +255,7 @@ pub fn run<T: 'static, FRender, FEvent, FGui>(
         ))
         .with_window_icon(icon);
 
-    // todo: ActiveEventLoop is the new way
-    // let window = event_loop.create_window(window_attributes).unwrap();
-    // let window = event_loop_active.create_window(window_attributes).unwrap();
-
     let mut state: State<T, FRender, FEvent, FGui> = State::new(
-        window,
         scene,
         input_settings,
         ui_settings,
@@ -252,8 +264,6 @@ pub fn run<T: 'static, FRender, FEvent, FGui>(
         event_handler,
         gui_handler,
     );
-
-    event_loop.run_app(&mut state).unwrap();
 }
 
 /// Quarantine for the Async part of the API

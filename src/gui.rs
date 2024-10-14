@@ -10,6 +10,7 @@ use wgpu::{self, CommandEncoder, Device, Queue};
 use crate::{
     graphics::GraphicsState,
     types::{EngineUpdates, Scene},
+    UiSettings,
 };
 
 /// This function contains code specific to rendering the GUI prior to the render pass.
@@ -69,6 +70,7 @@ pub(crate) fn render_gui_pre_rpass<T>(
 /// In each render, process engine updates from the GUI handler callback, from the application.
 pub(crate) fn process_engine_updates(
     g_state: &mut GraphicsState,
+    ui_settings: &mut UiSettings,
     engine_updates: &EngineUpdates,
     device: &Device,
     queue: &Queue,
@@ -92,5 +94,5 @@ pub(crate) fn process_engine_updates(
         g_state.update_lighting(queue);
     }
 
-    g_state.ui_settings.size = engine_updates.ui_size as f64;
+    ui_settings.size = engine_updates.ui_size as f64;
 }

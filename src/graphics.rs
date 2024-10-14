@@ -55,13 +55,14 @@ pub(crate) struct GraphicsState {
     lighting_buf: wgpu::Buffer,
     pub pipeline: wgpu::RenderPipeline,
     pub depth_texture: Texture,
-    pub input_settings: InputSettings,
-    pub ui_settings: UiSettings,
+    // pub input_settings: InputSettings,
+    // pub ui_settings: UiSettings,
     pub inputs_commanded: InputsCommanded,
     // staging_belt: wgpu::util::StagingBelt, // todo: Do we want this? Probably in sys, not here.
     pub scene: Scene,
     mesh_mappings: Vec<(i32, u32, u32)>,
     /// This is perhaps more ideal in `SystemState`, but we have it here for convenience.
+    /// todo: MOve it to system.
     pub window: Arc<Window>,
     /// for GUI
     pub egui_state: egui_winit::State,
@@ -74,8 +75,6 @@ impl GraphicsState {
         device: &wgpu::Device,
         surface_cfg: &SurfaceConfiguration,
         mut scene: Scene,
-        input_settings: InputSettings,
-        ui_settings: UiSettings,
         window: Arc<Window>,
     ) -> Self {
         let vertex_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
@@ -173,8 +172,6 @@ impl GraphicsState {
             depth_texture,
             // staging_belt: wgpu::util::StagingBelt::new(0x100),
             scene,
-            input_settings,
-            ui_settings,
             inputs_commanded: Default::default(),
             mesh_mappings,
             egui_state,
@@ -189,8 +186,8 @@ impl GraphicsState {
         result
     }
 
-    pub(crate) fn handle_input(&mut self, event: DeviceEvent) {
-        match self.input_settings.initial_controls {
+    pub(crate) fn handle_input(&mut self, event: DeviceEvent, input_settings: &InputSettings) {
+        match input_settings.initial_controls {
             ControlScheme::FreeCamera => input::add_input_cmd(event, &mut self.inputs_commanded),
             _ => (),
         }
@@ -311,15 +308,16 @@ impl GraphicsState {
         output_view: &TextureView,
         width: u32,
         height: u32,
+        ui_settings: &UiSettings,
         resize_required: &mut bool,
     ) -> RenderPass<'a> {
-        let ui_size = self.ui_settings.size as f32;
-        if self.ui_size_prev != self.ui_settings.size {
+        let ui_size = ui_settings.size as f32;
+        if self.ui_size_prev != ui_settings.size {
             *resize_required = true;
         }
-        self.ui_size_prev = self.ui_settings.size;
+        self.ui_size_prev = ui_settings.size;
 
-        let (x, y, eff_width, eff_height) = match self.ui_settings.layout {
+        let (x, y, eff_width, eff_height) = match ui_settings.layout {
             UiLayout::Left => (ui_size, 0., width as f32 - ui_size, height as f32),
             UiLayout::Right => (0., 0., width as f32 - ui_size, height as f32),
             UiLayout::Top => (0., ui_size, width as f32, height as f32 - ui_size),
@@ -391,6 +389,7 @@ impl GraphicsState {
         dt: Duration,
         width: u32,
         height: u32,
+        ui_settings: &mut UiSettings,
         gui_handler: impl FnMut(&mut T, &Context, &mut Scene) -> EngineUpdates,
         user_state: &mut T,
     ) -> bool {
@@ -451,6 +450,7 @@ impl GraphicsState {
             output_texture,
             width,
             height,
+            ui_settings,
             &mut resize_required,
         );
 
@@ -466,7 +466,7 @@ impl GraphicsState {
         //     self.egui_renderer.free_texture(x)
         // }
 
-        gui::process_engine_updates(self, &engine_updates, device, queue);
+        gui::process_engine_updates(self, ui_settings, &engine_updates, device, queue);
 
         queue.submit(Some(encoder.finish()));
         surface_texture.present();

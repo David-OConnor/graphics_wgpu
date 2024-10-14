@@ -1,4 +1,4 @@
-//! Handles window events, using Winit's system.
+//! Handles window initialization and events, using Winit.
 
 use std::time::Instant;
 
@@ -6,7 +6,7 @@ use winit::{
     application::ApplicationHandler,
     event::{DeviceEvent, DeviceId, WindowEvent},
     event_loop::ActiveEventLoop,
-    window::WindowId,
+    window::{Window, WindowId},
 };
 
 use crate::{system::State, EngineUpdates, Scene};
@@ -18,59 +18,67 @@ where
     FGui: FnMut(&mut T, &egui::Context, &mut Scene) -> EngineUpdates + 'static,
 {
     fn redraw(&mut self) {
+        if self.sys.is_none() || self.graphics.is_none() {
+            return;
+        }
+
+        let sys = &self.sys.as_ref().unwrap();
+        let graphics = &mut self.graphics.as_mut().unwrap();
+
         let now = Instant::now();
         self.dt = now - self.last_render_time;
         self.last_render_time = now;
 
         let dt_secs = self.dt.as_secs() as f32 + self.dt.subsec_micros() as f32 / 1_000_000.;
         let engine_updates =
-            (self.render_handler)(&mut self.user_state, &mut self.graphics.scene, dt_secs);
+            (self.render_handler)(&mut self.user_state, &mut graphics.scene, dt_secs);
 
         if engine_updates.meshes {
-            self.graphics.setup_vertices_indices(&self.sys.device);
-            self.graphics.setup_entities(&self.sys.device);
+            graphics.setup_vertices_indices(&sys.device);
+            graphics.setup_entities(&sys.device);
         }
 
         // Entities have been updated in the scene; update the buffers
         if engine_updates.entities {
-            self.graphics.setup_entities(&self.sys.device);
+            graphics.setup_entities(&sys.device);
         }
 
         if engine_updates.camera {
             // Entities have been updated in the scene; update the buffer.
-            self.graphics.update_camera(&self.sys.queue);
+            graphics.update_camera(&sys.queue);
         }
 
         if engine_updates.lighting {
             // Entities have been updated in the scene; update the buffer.
-            self.graphics.update_lighting(&self.sys.queue);
+            graphics.update_lighting(&sys.queue);
         }
 
         // Note that the GUI handler can also modify entities, but
         // we do that in the `init_graphics` module.
 
         // todo: move this into `render`?
-        match self.sys.surface.get_current_texture() {
+        match sys.surface.get_current_texture() {
             Ok(output_frame) => {
                 let output_view = output_frame
                     .texture
                     .create_view(&wgpu::TextureViewDescriptor::default());
 
-                let resize_required = self.graphics.render(
+                let resize_required = graphics.render(
                     output_frame,
                     &output_view,
-                    &self.sys.device,
-                    &self.sys.queue,
+                    &sys.device,
+                    &sys.queue,
                     self.dt,
-                    self.sys.surface_cfg.width,
-                    self.sys.surface_cfg.height,
+                    sys.surface_cfg.width,
+                    sys.surface_cfg.height,
+                    &mut self.ui_settings,
                     &mut self.gui_handler,
                     &mut self.user_state,
                 );
 
                 if resize_required {
                     println!("RESIZE req"); // todo temp
-                    self.resize(self.sys.size);
+                    self.resize(sys.size);
                 }
             }
             // todo: Does this happen when minimized?
@@ -79,13 +87,12 @@ where
             }
         }
 
-
         // todo? In the example
-        // self.graphics.egui_renderer.end_frame_and_draw(
-        //     &self.sys.device,
-        //     &self.sys.queue,
+        // graphics.egui_renderer.end_frame_and_draw(
+        //     &sys.device,
+        //     &sys.queue,
         //     &mut encoder,
-        //     &self.graphics.window,
+        //     &graphics.window,
         //     // &surface_view,
         //     // screen_descriptor,
         // );
@@ -98,32 +105,47 @@ where
     FEvent: FnMut(&mut T, DeviceEvent, &mut Scene, f32) -> EngineUpdates + 'static,
     FGui: FnMut(&mut T, &egui::Context, &mut Scene) -> EngineUpdates + 'static,
 {
-    fn resumed(&mut self, _event_loop: &ActiveEventLoop) {}
+    fn resumed(&mut self, event_loop: &ActiveEventLoop) {
+        let window = event_loop
+            .create_window(Window::default_attributes())
+            .unwrap();
+
+        self.init(window);
+    }
 
     fn window_event(
         &mut self,
         event_loop: &ActiveEventLoop,
-        window_id: WindowId,
+        _window_id: WindowId,
         event: WindowEvent,
     ) {
+        if self.sys.is_none() || self.graphics.is_none() {
+            return;
+        }
+
+        let sys = &mut self.sys.as_mut().unwrap();
+        let graphics = &mut self.graphics.as_mut().unwrap();
+
         // Let the EGUI renderer to process the event first. This step is required for the UI
         // to process inputs.
-        let _ = self.graphics.egui_state.on_window_event(&self.graphics.window, &event);
+        let _ = graphics
+            .egui_state
+            .on_window_event(&graphics.window, &event);
 
         match event {
             WindowEvent::RedrawRequested => {
                 self.redraw();
-                self.graphics.window.as_ref().request_redraw();
+                graphics.window.as_ref().request_redraw();
             }
             WindowEvent::CursorMoved { position, .. } => {
-                if position.x < self.graphics.ui_settings.size {
-                    self.sys.mouse_in_gui = true;
+                if position.x < self.ui_settings.size {
+                    sys.mouse_in_gui = true;
 
                     // We reset the inputs, since otherwise a held key that
                     // doesn't get the reset command will continue to execute.
-                    self.graphics.inputs_commanded = Default::default();
+                    graphics.inputs_commanded = Default::default();
                 } else {
-                    self.sys.mouse_in_gui = false;
+                    sys.mouse_in_gui = false;
                 }
             }
             WindowEvent::CloseRequested => {
@@ -132,8 +154,8 @@ where
             WindowEvent::Resized(physical_size) => {
                 self.resize(physical_size);
                 // Prevents inadvertent mouse-click-activated free-look.
-                self.graphics.inputs_commanded.free_look = false;
-                // self.graphics.window.resize(size); // todo??
+                graphics.inputs_commanded.free_look = false;
+                // graphics.window.resize(size); // todo??
             }
             // If the window scale changes, update the renderer size, and camera aspect ratio.
             WindowEvent::ScaleFactorChanged {
@@ -147,21 +169,21 @@ where
             // If the window is being moved, disable mouse inputs, eg so click+drag
             // doesn't cause a drag when moving the window using the mouse.
             WindowEvent::Moved(_) => {
-                self.sys.mouse_in_gui = true;
+                sys.mouse_in_gui = true;
                 // Prevents inadvertent mouse-click-activated free-look after moving the window.
-                self.graphics.inputs_commanded.free_look = false;
+                graphics.inputs_commanded.free_look = false;
             }
             WindowEvent::Occluded(_) => {
                 // Prevents inadvertent mouse-click-activated free-look after minimizing.
-                self.graphics.inputs_commanded.free_look = false;
+                graphics.inputs_commanded.free_look = false;
             }
             WindowEvent::Focused(_) => {
                 // Eg clicking the tile bar icon.
-                self.graphics.inputs_commanded.free_look = false;
+                graphics.inputs_commanded.free_look = false;
             }
             WindowEvent::CursorLeft { device_id: _ } => {
                 // todo: Not working
-                // self.graphics.inputs_commanded.free_look = false;
+                // graphics.inputs_commanded.free_look = false;
             }
             _ => {}
         }
@@ -173,35 +195,42 @@ where
         _device_id: DeviceId,
         event: DeviceEvent,
     ) {
-        if !self.sys.mouse_in_gui {
+        if self.sys.is_none() || self.graphics.is_none() {
+            return;
+        }
+
+        let sys = &self.sys.unwrap();
+        let graphics = &mut self.graphics.unwrap();
+
+        if !sys.mouse_in_gui {
             let dt_secs = self.dt.as_secs() as f32 + self.dt.subsec_micros() as f32 / 1_000_000.;
             let engine_updates = (self.event_handler)(
                 &mut self.user_state,
                 event.clone(),
-                &mut self.graphics.scene,
+                &mut graphics.scene,
                 dt_secs,
             );
 
             if engine_updates.meshes {
-                self.graphics.setup_vertices_indices(&self.sys.device);
-                self.graphics.setup_entities(&self.sys.device);
+                graphics.setup_vertices_indices(&sys.device);
+                graphics.setup_entities(&sys.device);
             }
 
             // Entities have been updated in the scene; update the buffers.
             if engine_updates.entities {
-                self.graphics.setup_entities(&self.sys.device);
+                graphics.setup_entities(&sys.device);
             }
 
             if engine_updates.camera {
                 // Entities have been updated in the scene; update the buffer.
-                self.graphics.update_camera(&self.sys.queue);
+                graphics.update_camera(&sys.queue);
             }
 
             if engine_updates.lighting {
-                self.graphics.update_lighting(&self.sys.queue);
+                graphics.update_lighting(&sys.queue);
             }
 
-            self.graphics.handle_input(event);
+            graphics.handle_input(event, &self.input_settings);
         }
     }
 

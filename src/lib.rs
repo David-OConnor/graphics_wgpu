@@ -9,7 +9,7 @@ mod meshes;
 mod system;
 mod texture;
 mod types;
-mod window_events;
+mod window;
 
 pub use camera::Camera;
 pub use input::InputsCommanded;
