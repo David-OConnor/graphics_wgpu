@@ -156,6 +156,7 @@ where
     }
 
     pub(crate) fn resize(&mut self, new_size: winit::dpi::PhysicalSize<u32>) {
+        println!("Resizing..."); // todo temp
         if new_size.width > 0 && new_size.height > 0 {
             self.sys.size = new_size;
             self.sys.surface_cfg.width = new_size.width;
@@ -213,7 +214,6 @@ pub fn run<T: 'static, FRender, FEvent, FGui>(
     FEvent: FnMut(&mut T, DeviceEvent, &mut Scene, f32) -> EngineUpdates + 'static,
     FGui: FnMut(&mut T, &egui::Context, &mut Scene) -> EngineUpdates + 'static,
 {
-    let mut _last_frame_inst = Instant::now();
     let (_frame_count, mut _accum_time) = (0, 0.0);
 
     let icon = match ui_settings.icon_path {
@@ -228,7 +228,7 @@ pub fn run<T: 'static, FRender, FEvent, FGui>(
         None => None,
     };
 
-    let event_loop = EventLoop::new().unwrap();
+    // let event_loop = EventLoop::new().unwrap();
 
     let window_attributes = WindowAttributes::default()
         .with_title(WINDOW_TITLE_INIT)
@@ -239,7 +239,7 @@ pub fn run<T: 'static, FRender, FEvent, FGui>(
         .with_window_icon(icon);
 
     // todo: ActiveEventLoop is the new way
-    let window = event_loop.create_window(window_attributes).unwrap();
+    // let window = event_loop.create_window(window_attributes).unwrap();
     // let window = event_loop_active.create_window(window_attributes).unwrap();
 
     let mut state: State<T, FRender, FEvent, FGui> = State::new(

@@ -66,17 +66,29 @@ where
                     self.sys.surface_cfg.height,
                     &mut self.gui_handler,
                     &mut self.user_state,
-                    &self.sys.surface,
                 );
 
                 if resize_required {
+                    println!("RESIZE req"); // todo temp
                     self.resize(self.sys.size);
                 }
             }
             // todo: Does this happen when minimized?
-            Err(_e) => {}
+            Err(e) => {
+                eprintln!("Error getting the current texture: {:?}", e);
+            }
         }
-        self.graphics.window.as_ref().request_redraw();
+
+
+        // todo? In the example
+        // self.graphics.egui_renderer.end_frame_and_draw(
+        //     &self.sys.device,
+        //     &self.sys.queue,
+        //     &mut encoder,
+        //     &self.graphics.window,
+        //     // &surface_view,
+        //     // screen_descriptor,
+        // );
     }
 }
 
@@ -101,6 +113,7 @@ where
         match event {
             WindowEvent::RedrawRequested => {
                 self.redraw();
+                self.graphics.window.as_ref().request_redraw();
             }
             WindowEvent::CursorMoved { position, .. } => {
                 if position.x < self.graphics.ui_settings.size {

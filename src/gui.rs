@@ -36,11 +36,12 @@ pub(crate) fn render_gui_pre_rpass<T>(
 
     let raw_input = g_state.egui_state.take_egui_input(&g_state.window);
     let full_output = g_state.egui_state.egui_ctx().run(raw_input, |ui| {
-        *engine_updates = gui_handler(
-            user_state,
-            g_state.egui_state.egui_ctx(),
-            &mut g_state.scene,
-        );
+        // todo: Put back
+        // *engine_updates = gui_handler(
+        //     user_state,
+        //     g_state.egui_state.egui_ctx(),
+        //     &mut g_state.scene,
+        // );
     });
 
     g_state
