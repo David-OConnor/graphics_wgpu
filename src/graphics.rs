@@ -12,11 +12,13 @@
 use std::{sync::Arc, time::Duration};
 
 use egui::Context;
-use egui_wgpu::Renderer;
 use lin_alg::f32::Vec3;
 use wgpu::{
-    self, util::DeviceExt, BindGroup, BindGroupLayout, Buffer, CommandEncoder, Device,
-    FragmentState, Queue, RenderPass, RenderPipeline, StoreOp, Surface, SurfaceConfiguration,
+    self,
+    util::{BufferInitDescriptor, DeviceExt},
+    BindGroup, BindGroupLayout, Buffer, BufferUsages, CommandEncoder, CommandEncoderDescriptor,
+    Device, FragmentState, Queue, RenderPass, RenderPassDepthStencilAttachment,
+    RenderPassDescriptor, RenderPipeline, StoreOp, Surface, SurfaceConfiguration, SurfaceTexture,
     TextureFormat, TextureView, VertexState,
 };
 use winit::{event::DeviceEvent, window::Window};
@@ -64,44 +66,42 @@ pub(crate) struct GraphicsState {
     // staging_belt: wgpu::util::StagingBelt, // todo: Do we want this? Probably in sys, not here.
     pub scene: Scene,
     mesh_mappings: Vec<(i32, u32, u32)>,
-    /// This is perhaps more ideal in `SystemState`, but we have it here for convenience.
-    /// todo: Move this.
     pub window: Arc<Window>,
 }
 
 impl GraphicsState {
     pub(crate) fn new(
-        device: &wgpu::Device,
+        device: &Device,
         surface_cfg: &SurfaceConfiguration,
         mut scene: Scene,
         window: Arc<Window>,
     ) -> Self {
-        let vertex_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+        let vertex_buf = device.create_buffer_init(&BufferInitDescriptor {
             label: Some("Vertex buffer"),
             contents: &[], // Populated later.
-            usage: wgpu::BufferUsages::VERTEX,
+            usage: BufferUsages::VERTEX,
         });
 
-        let index_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+        let index_buf = device.create_buffer_init(&BufferInitDescriptor {
             label: Some("Index buffer"),
             contents: &[], // Populated later.
-            usage: wgpu::BufferUsages::INDEX,
+            usage: BufferUsages::INDEX,
         });
 
         scene.camera.update_proj_mat();
 
-        let cam_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+        let cam_buf = device.create_buffer_init(&BufferInitDescriptor {
             label: Some("Camera buffer"),
             contents: &scene.camera.to_bytes(),
-            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+            usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
         });
 
-        let lighting_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+        let lighting_buf = device.create_buffer_init(&BufferInitDescriptor {
             label: Some("Lighting buffer"),
             contents: &scene.lighting.to_bytes(),
             // We use a storage buffer, since our lighting size is unknown by the shader;
             // this is due to the dynamic-sized point light array.
-            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+            usage: BufferUsages::STORAGE | BufferUsages::COPY_DST,
         });
         //
 
@@ -126,10 +126,10 @@ impl GraphicsState {
 
         // We initialize instances, the instance buffer and mesh mappings in `setup_entities`.
         // let instances = Vec::new();
-        let instance_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+        let instance_buf = device.create_buffer_init(&BufferInitDescriptor {
             label: Some("Instance buffer"),
             contents: &[], // empty on init
-            usage: wgpu::BufferUsages::VERTEX,
+            usage: BufferUsages::VERTEX,
         });
 
         // Placeholder value
@@ -172,7 +172,7 @@ impl GraphicsState {
     }
 
     /// todo: WIP to update meshes.
-    pub(crate) fn setup_vertices_indices(&mut self, device: &wgpu::Device) {
+    pub(crate) fn setup_vertices_indices(&mut self, device: &Device) {
         let mut vertices = Vec::new();
         let mut indices = Vec::new();
 
@@ -203,16 +203,16 @@ impl GraphicsState {
         }
 
         // We can't update using a queue due to buffer size mismatches.
-        let vertex_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+        let vertex_buf = device.create_buffer_init(&BufferInitDescriptor {
             label: Some("Vertex buffer"),
             contents: &vertex_data,
-            usage: wgpu::BufferUsages::VERTEX,
+            usage: BufferUsages::VERTEX,
         });
 
-        let index_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+        let index_buf = device.create_buffer_init(&BufferInitDescriptor {
             label: Some("Index buffer"),
             contents: &index_data,
-            usage: wgpu::BufferUsages::INDEX,
+            usage: BufferUsages::INDEX,
         });
 
         self.vertex_buf = vertex_buf;
@@ -221,7 +221,7 @@ impl GraphicsState {
 
     /// Currently, sets up entities (And the associated instance buf), but doesn't change
     /// meshes, lights, or the camera. The vertex and index buffers aren't changed; only the instances.
-    pub(crate) fn setup_entities(&mut self, device: &wgpu::Device) {
+    pub(crate) fn setup_entities(&mut self, device: &Device) {
         let mut instances = Vec::new();
 
         let mut mesh_mappings = Vec::new();
@@ -262,17 +262,17 @@ impl GraphicsState {
         }
 
         // We can't update using a queue due to buffer size mismatches.
-        let instance_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+        let instance_buf = device.create_buffer_init(&BufferInitDescriptor {
             label: Some("Instance buffer"),
             contents: &instance_data,
-            usage: wgpu::BufferUsages::VERTEX,
+            usage: BufferUsages::VERTEX,
         });
 
         self.instance_buf = instance_buf;
         self.mesh_mappings = mesh_mappings;
     }
 
-    pub(crate) fn update_camera(&mut self, queue: &wgpu::Queue) {
+    pub(crate) fn update_camera(&mut self, queue: &Queue) {
         queue.write_buffer(&self.camera_buf, 0, &self.scene.camera.to_bytes());
     }
 
@@ -304,7 +304,7 @@ impl GraphicsState {
             UiLayout::Bottom => (0., 0., width as f32, height as f32 - ui_size),
         };
 
-        let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+        let mut rpass = encoder.begin_render_pass(&RenderPassDescriptor {
             label: Some("Render pass"),
             color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                 view: output_view,
@@ -319,7 +319,7 @@ impl GraphicsState {
                     store: StoreOp::Store,
                 },
             })],
-            depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
+            depth_stencil_attachment: Some(RenderPassDepthStencilAttachment {
                 view: &self.depth_texture.view,
                 depth_ops: Some(wgpu::Operations {
                     load: wgpu::LoadOp::Clear(1.0),
@@ -363,9 +363,9 @@ impl GraphicsState {
     pub(crate) fn render<T>(
         &mut self,
         ui_size_prev: &mut f64,
-        surface_texture: wgpu::SurfaceTexture,
+        surface_texture: SurfaceTexture,
         output_texture: &TextureView,
-        device: &wgpu::Device,
+        device: &Device,
         queue: &Queue,
         dt: Duration,
         width: u32,
@@ -407,7 +407,7 @@ impl GraphicsState {
         // gpu. Most modern graphics frameworks expect commands to be stored in a command buffer
         // before being sent to the gpu. The encoder builds a command buffer that we can then
         // send to the gpu.
-        let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+        let mut encoder = device.create_command_encoder(&CommandEncoderDescriptor {
             label: Some("Render encoder"),
         });
 
@@ -462,11 +462,11 @@ impl GraphicsState {
 
 /// Create render pipelines.
 fn create_render_pipeline(
-    device: &wgpu::Device,
+    device: &Device,
     layout: &wgpu::PipelineLayout,
     shader: wgpu::ShaderModule,
     config: &SurfaceConfiguration,
-) -> wgpu::RenderPipeline {
+) -> RenderPipeline {
     device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
         label: Some("Render pipeline"),
         layout: Some(layout),
@@ -517,11 +517,7 @@ pub(crate) struct BindGroupData {
     // pub texture: BindGroup,
 }
 
-fn create_bindgroups(
-    device: &wgpu::Device,
-    cam_buf: &wgpu::Buffer,
-    lighting_buf: &wgpu::Buffer,
-) -> BindGroupData {
+fn create_bindgroups(device: &Device, cam_buf: &Buffer, lighting_buf: &Buffer) -> BindGroupData {
     // We only need vertex, not fragment info in the camera uniform.
     let layout_cam = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
         entries: &[wgpu::BindGroupLayoutEntry {

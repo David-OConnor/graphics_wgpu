@@ -1,5 +1,5 @@
 use image::GenericImageView;
-use wgpu::{TextureDescriptor, TextureFormat};
+use wgpu::{Device, Queue, TextureDescriptor, TextureFormat};
 
 use crate::system::{COLOR_FORMAT, DEPTH_FORMAT};
 
@@ -103,8 +103,8 @@ impl Texture {
     }
 
     pub fn from_image(
-        device: &wgpu::Device,
-        queue: &wgpu::Queue,
+        device: &Device,
+        queue: &Queue,
         img: &image::DynamicImage,
         label: Option<&str>,
         is_normal_map: bool,

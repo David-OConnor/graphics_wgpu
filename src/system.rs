@@ -122,7 +122,6 @@ where
 
         let size = window.inner_size();
 
-        // let surface = instance.create_surface(window.clone()).unwrap();
         let surface = self.instance.create_surface(window.clone()).unwrap();
 
         let (adapter, device, queue) = pollster::block_on(setup_async(&self.instance, &surface));
@@ -275,7 +274,7 @@ pub fn run<T: 'static, FRender, FEvent, FGui>(
 async fn setup_async(
     instance: &wgpu::Instance,
     surface: &Surface<'static>,
-) -> (wgpu::Adapter, wgpu::Device, wgpu::Queue) {
+) -> (Adapter, Device, Queue) {
     // The adapter is a handle to our actual graphics card. You can use this to get
     // information about the graphics card such as its name and what backend the
     // adapter uses. We use this to create our Device and Queue.

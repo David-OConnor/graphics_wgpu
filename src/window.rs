@@ -2,6 +2,7 @@
 
 use std::time::Instant;
 
+use wgpu::TextureViewDescriptor;
 use winit::{
     application::ApplicationHandler,
     event::{DeviceEvent, DeviceId, WindowEvent},
@@ -61,7 +62,7 @@ where
             Ok(output_frame) => {
                 let output_view = output_frame
                     .texture
-                    .create_view(&wgpu::TextureViewDescriptor::default());
+                    .create_view(&TextureViewDescriptor::default());
 
                 let resize_required = graphics.render(
                     &mut self.gui.as_mut().unwrap().ui_size_prev,
