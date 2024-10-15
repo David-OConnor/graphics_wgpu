@@ -19,9 +19,9 @@ use winit::{
     dpi::PhysicalSize,
     event::DeviceEvent,
     event_loop::EventLoop,
-    window::{Icon, Window, WindowAttributes},
+    window::{Icon, Window},
 };
-
+use winit::event_loop::ControlFlow;
 use crate::{
     graphics::GraphicsState,
     gui::GuiState,
@@ -33,10 +33,6 @@ use crate::{
 // todo: [Bgra8Unorm, Bgra8UnormSrgb, Rgba8Unorm, Rgba8UnormSrgb]. Chose this value from an unofficial example.
 pub const COLOR_FORMAT: TextureFormat = TextureFormat::Bgra8UnormSrgb;
 pub const DEPTH_FORMAT: TextureFormat = TextureFormat::Depth32Float;
-
-const WINDOW_TITLE_INIT: &str = "Graphics";
-const WINDOW_SIZE_X_INIT: f32 = 900.0;
-const WINDOW_SIZE_Y_INIT: f32 = 600.0;
 
 /// This struct contains state related to the 3D graphics. It is mostly constructed of types
 /// that are required by  the WGPU renderer.
@@ -212,16 +208,6 @@ where
     }
 }
 
-fn load_icon(path: &Path) -> Result<Icon, ImageError> {
-    let (icon_rgba, icon_width, icon_height) = {
-        let image = image::open(path)?.into_rgba8();
-        let (width, height) = image.dimensions();
-        let rgba = image.into_raw();
-        (rgba, width, height)
-    };
-    Ok(Icon::from_rgba(icon_rgba, icon_width, icon_height).expect("Failed to open icon"))
-}
-
 /// This is the entry point to the renderer. It's called by the application to initialize the event
 /// loop.
 pub fn run<T: 'static, FRender, FEvent, FGui>(
@@ -239,26 +225,6 @@ pub fn run<T: 'static, FRender, FEvent, FGui>(
 {
     let (_frame_count, mut _accum_time) = (0, 0.0);
 
-    let icon = match ui_settings.icon_path {
-        Some(ref p) => {
-            match load_icon(Path::new(&p)) {
-                Ok(p_) => Some(p_),
-                // eg can't find the path
-                Err(_) => None,
-            }
-        }
-        // No path specified
-        None => None,
-    };
-
-    let window_attributes = WindowAttributes::default()
-        .with_title(WINDOW_TITLE_INIT)
-        .with_inner_size(winit::dpi::LogicalSize::new(
-            WINDOW_SIZE_X_INIT,
-            WINDOW_SIZE_Y_INIT,
-        ))
-        .with_window_icon(icon);
-
     let mut state: State<T, FRender, FEvent, FGui> = State::new(
         scene,
         input_settings,
@@ -268,6 +234,11 @@ pub fn run<T: 'static, FRender, FEvent, FGui>(
         event_handler,
         gui_handler,
     );
+
+    let event_loop = EventLoop::new().unwrap();
+    event_loop.set_control_flow(ControlFlow::Poll);
+
+    event_loop.run_app(&mut state).expect("Failed to run app");
 }
 
 /// Quarantine for the Async part of the API

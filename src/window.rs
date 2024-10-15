@@ -1,7 +1,8 @@
 //! Handles window initialization and events, using Winit.
 
+use std::path::Path;
 use std::time::Instant;
-
+use image::ImageError;
 use wgpu::TextureViewDescriptor;
 use winit::{
     application::ApplicationHandler,
@@ -9,8 +10,22 @@ use winit::{
     event_loop::ActiveEventLoop,
     window::{Window, WindowId},
 };
-
+use winit::window::{Icon, WindowAttributes};
 use crate::{system::State, EngineUpdates, Scene};
+
+const WINDOW_TITLE_INIT: &str = "Graphics";
+const WINDOW_SIZE_X_INIT: f32 = 900.0;
+const WINDOW_SIZE_Y_INIT: f32 = 600.0;
+
+fn load_icon(path: &Path) -> Result<Icon, ImageError> {
+    let (icon_rgba, icon_width, icon_height) = {
+        let image = image::open(path)?.into_rgba8();
+        let (width, height) = image.dimensions();
+        let rgba = image.into_raw();
+        (rgba, width, height)
+    };
+    Ok(Icon::from_rgba(icon_rgba, icon_width, icon_height).expect("Failed to open icon"))
+}
 
 impl<T, FRender, FEvent, FGui> State<T, FRender, FEvent, FGui>
 where
@@ -101,8 +116,28 @@ where
         println!("RESUMED");
         // todo: Only re-init if not already inited?
 
+        let icon = match self.ui_settings.icon_path {
+            Some(ref p) => {
+                match load_icon(Path::new(&p)) {
+                    Ok(p_) => Some(p_),
+                    // eg can't find the path
+                    Err(_) => None,
+                }
+            }
+            // No path specified
+            None => None,
+        };
+
+        let attributes = WindowAttributes::default()
+            .with_title(WINDOW_TITLE_INIT)
+            .with_inner_size(winit::dpi::LogicalSize::new(
+                WINDOW_SIZE_X_INIT,
+                WINDOW_SIZE_Y_INIT,
+            ))
+            .with_window_icon(icon);
+
         let window = event_loop
-            .create_window(Window::default_attributes())
+            .create_window(attributes)
             .unwrap();
 
         self.init(window);
