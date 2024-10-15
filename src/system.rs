@@ -12,8 +12,8 @@ use std::{
 
 use image::ImageError;
 use wgpu::{
-    Adapter, Backends, Features, InstanceDescriptor, PowerPreference, Surface,
-    SurfaceConfiguration, TextureFormat,
+    Adapter, Backends, Device, Features, Instance, InstanceDescriptor, PowerPreference, Queue,
+    Surface, SurfaceConfiguration, TextureFormat,
 };
 use winit::{
     dpi::PhysicalSize,
@@ -24,6 +24,7 @@ use winit::{
 
 use crate::{
     graphics::GraphicsState,
+    gui::GuiState,
     texture::Texture,
     types::{EngineUpdates, InputSettings, Scene, UiLayout, UiSettings},
 };
@@ -37,16 +38,15 @@ const WINDOW_TITLE_INIT: &str = "Graphics";
 const WINDOW_SIZE_X_INIT: f32 = 900.0;
 const WINDOW_SIZE_Y_INIT: f32 = 600.0;
 
-pub(crate) struct SystemState {
-    pub instance: wgpu::Instance,
+/// This struct contains state related to the 3D graphics. It is mostly constructed of types
+/// that are required by  the WGPU renderer.
+pub(crate) struct RenderState {
     pub size: PhysicalSize<u32>,
     pub surface: Surface<'static>, // Sshare the same lifetime as the window, A/R.
     pub adapter: Adapter,
-    pub device: wgpu::Device,
-    pub queue: wgpu::Queue,
+    pub device: Device,
+    pub queue: Queue,
     pub surface_cfg: SurfaceConfiguration,
-    /// Used to disable inputs while the mouse is in the GUI section.
-    pub mouse_in_gui: bool, // todo: Is this how you want to handle this?
 }
 
 pub struct State<T: 'static, FRender, FEvent, FGui>
@@ -55,10 +55,12 @@ where
     FEvent: FnMut(&mut T, DeviceEvent, &mut Scene, f32) -> EngineUpdates + 'static,
     FGui: FnMut(&mut T, &egui::Context, &mut Scene) -> EngineUpdates + 'static,
 {
-    /// `sys` and `graphics` are only None at init; they require the `Window` event loop
+    pub instance: Instance,
+    /// `render` and `graphics`, and `gui` are only None at init; they require the `Window` event loop
     /// to be run.
-    pub sys: Option<SystemState>,
+    pub render: Option<RenderState>,
     pub graphics: Option<GraphicsState>,
+    pub gui: Option<GuiState>,
     pub user_state: T,
     pub render_handler: FRender,
     pub event_handler: FEvent,
@@ -90,9 +92,17 @@ where
         let last_render_time = Instant::now();
         let dt = Duration::new(0, 0);
 
+        // The instance is a handle to our GPU. Its main purpose is to create Adapters and Surfaces.
+        let instance = Instance::new(InstanceDescriptor {
+            backends: Backends::VULKAN,
+            ..Default::default()
+        });
+
         Self {
-            sys: None,
+            instance,
+            render: None,
             graphics: None,
+            gui: None,
             user_state,
             render_handler,
             event_handler,
@@ -107,22 +117,15 @@ where
 
     /// Initializes the renderer and GUI. We launch this from the Window's event loop.
     pub(crate) fn init(&mut self, window: Window) {
-        println!("Initializing grpahics and sys...");
-        let size = window.inner_size();
-
-        // The instance is a handle to our GPU. Its main purpose is to create Adapters and Surfaces.
-        let instance = wgpu::Instance::new(InstanceDescriptor {
-            backends: Backends::VULKAN,
-            ..Default::default()
-        });
-
-        // Seems to be required with the 2024 Winit API.
+        println!("Initializing graphics and sys...");
         let window = Arc::new(window);
 
-        // let surface = instance.create_surface(window.clone()).unwrap();
-        let surface = instance.create_surface(window.clone()).unwrap();
+        let size = window.inner_size();
 
-        let (adapter, device, queue) = pollster::block_on(setup_async(&instance, &surface));
+        // let surface = instance.create_surface(window.clone()).unwrap();
+        let surface = self.instance.create_surface(window.clone()).unwrap();
+
+        let (adapter, device, queue) = pollster::block_on(setup_async(&self.instance, &surface));
 
         // The surface is the part of the window that we draw to. We need it to draw directly to the
         // screen. Our window needs to implement raw-window-handle (opens new window)'s
@@ -148,37 +151,39 @@ where
 
         surface.configure(&device, &surface_cfg);
 
-        let sys = SystemState {
-            instance,
+        let texture_format = surface_cfg.format;
+
+        let render = RenderState {
             size,
             surface,
             adapter,
             device,
             queue,
             surface_cfg,
-            mouse_in_gui: false,
         };
 
         let graphics = GraphicsState::new(
-            &sys.device,
-            &sys.surface_cfg,
+            &render.device,
+            &render.surface_cfg,
             self.scene.clone(), // todo: Now we have two scene states... not good.
             // input_settings,
             // ui_settings,
-            window,
+            window.clone(),
         );
 
-        self.sys = Some(sys);
+        self.gui = Some(GuiState::new(window, &render.device, texture_format));
+
+        self.render = Some(render);
         self.graphics = Some(graphics);
     }
 
     pub(crate) fn resize(&mut self, new_size: PhysicalSize<u32>) {
-        if self.sys.is_none() || self.graphics.is_none() {
+        if self.render.is_none() || self.graphics.is_none() {
             return;
         }
 
         println!("Resizing..."); // todo temp
-        let mut sys = &mut self.sys.as_mut().unwrap();
+        let mut sys = &mut self.render.as_mut().unwrap();
         let mut graphics = &mut self.graphics.as_mut().unwrap();
 
         if new_size.width > 0 && new_size.height > 0 {

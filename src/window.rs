@@ -18,11 +18,11 @@ where
     FGui: FnMut(&mut T, &egui::Context, &mut Scene) -> EngineUpdates + 'static,
 {
     fn redraw(&mut self) {
-        if self.sys.is_none() || self.graphics.is_none() {
+        if self.render.is_none() || self.graphics.is_none() {
             return;
         }
 
-        let sys = &self.sys.as_ref().unwrap();
+        let sys = &self.render.as_ref().unwrap();
         let graphics = &mut self.graphics.as_mut().unwrap();
 
         let now = Instant::now();
@@ -64,6 +64,7 @@ where
                     .create_view(&wgpu::TextureViewDescriptor::default());
 
                 let resize_required = graphics.render(
+                    &mut self.gui.as_mut().unwrap().ui_size_prev,
                     output_frame,
                     &output_view,
                     &sys.device,
@@ -86,16 +87,6 @@ where
                 eprintln!("Error getting the current texture: {:?}", e);
             }
         }
-
-        // todo? In the example
-        // graphics.egui_renderer.end_frame_and_draw(
-        //     &sys.device,
-        //     &sys.queue,
-        //     &mut encoder,
-        //     &graphics.window,
-        //     // &surface_view,
-        //     // screen_descriptor,
-        // );
     }
 }
 
@@ -106,6 +97,9 @@ where
     FGui: FnMut(&mut T, &egui::Context, &mut Scene) -> EngineUpdates + 'static,
 {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
+        println!("RESUMED");
+        // todo: Only re-init if not already inited?
+
         let window = event_loop
             .create_window(Window::default_attributes())
             .unwrap();
@@ -119,33 +113,37 @@ where
         _window_id: WindowId,
         event: WindowEvent,
     ) {
-        if self.sys.is_none() || self.graphics.is_none() {
+        if self.render.is_none() || self.graphics.is_none() {
             return;
         }
 
-        let sys = &mut self.sys.as_mut().unwrap();
         let graphics = &mut self.graphics.as_mut().unwrap();
+        let gui = &mut self.gui.as_mut().unwrap();
 
-        // Let the EGUI renderer to process the event first. This step is required for the UI
-        // to process inputs.
-        let _ = graphics
-            .egui_state
-            .on_window_event(&graphics.window, &event);
+        //     if let Some(gui) = self.gui.as_mut() {
+        //     if let Some(graphics) = self.graphics.as_mut() {
+        //         let window = &graphics.window;
+        //         let _ = gui.egui_state.on_window_event(window, &event);
+        //     }
+        // }
+
+        let window = &graphics.window;
+        let _ = gui.egui_state.on_window_event(window, &event);
 
         match event {
             WindowEvent::RedrawRequested => {
                 self.redraw();
-                graphics.window.as_ref().request_redraw();
+                self.graphics.as_ref().unwrap().window.request_redraw();
             }
             WindowEvent::CursorMoved { position, .. } => {
                 if position.x < self.ui_settings.size {
-                    sys.mouse_in_gui = true;
+                    gui.mouse_in_gui = true;
 
                     // We reset the inputs, since otherwise a held key that
                     // doesn't get the reset command will continue to execute.
-                    graphics.inputs_commanded = Default::default();
+                    self.graphics.as_mut().unwrap().inputs_commanded = Default::default();
                 } else {
-                    sys.mouse_in_gui = false;
+                    gui.mouse_in_gui = false;
                 }
             }
             WindowEvent::CloseRequested => {
@@ -154,7 +152,7 @@ where
             WindowEvent::Resized(physical_size) => {
                 self.resize(physical_size);
                 // Prevents inadvertent mouse-click-activated free-look.
-                graphics.inputs_commanded.free_look = false;
+                self.graphics.as_mut().unwrap().inputs_commanded.free_look = false;
                 // graphics.window.resize(size); // todo??
             }
             // If the window scale changes, update the renderer size, and camera aspect ratio.
@@ -169,17 +167,17 @@ where
             // If the window is being moved, disable mouse inputs, eg so click+drag
             // doesn't cause a drag when moving the window using the mouse.
             WindowEvent::Moved(_) => {
-                sys.mouse_in_gui = true;
+                gui.mouse_in_gui = true;
                 // Prevents inadvertent mouse-click-activated free-look after moving the window.
-                graphics.inputs_commanded.free_look = false;
+                self.graphics.as_mut().unwrap().inputs_commanded.free_look = false;
             }
             WindowEvent::Occluded(_) => {
                 // Prevents inadvertent mouse-click-activated free-look after minimizing.
-                graphics.inputs_commanded.free_look = false;
+                self.graphics.as_mut().unwrap().inputs_commanded.free_look = false;
             }
             WindowEvent::Focused(_) => {
                 // Eg clicking the tile bar icon.
-                graphics.inputs_commanded.free_look = false;
+                self.graphics.as_mut().unwrap().inputs_commanded.free_look = false;
             }
             WindowEvent::CursorLeft { device_id: _ } => {
                 // todo: Not working
@@ -195,14 +193,15 @@ where
         _device_id: DeviceId,
         event: DeviceEvent,
     ) {
-        if self.sys.is_none() || self.graphics.is_none() {
+        if self.render.is_none() || self.graphics.is_none() {
             return;
         }
 
-        let sys = &self.sys.unwrap();
-        let graphics = &mut self.graphics.unwrap();
+        let sys = &self.render.as_ref().unwrap();
+        let graphics = &mut self.graphics.as_mut().unwrap();
+        let gui = &mut self.gui.as_mut().unwrap();
 
-        if !sys.mouse_in_gui {
+        if !gui.mouse_in_gui {
             let dt_secs = self.dt.as_secs() as f32 + self.dt.subsec_micros() as f32 / 1_000_000.;
             let engine_updates = (self.event_handler)(
                 &mut self.user_state,

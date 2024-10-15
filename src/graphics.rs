@@ -15,13 +15,15 @@ use egui::Context;
 use egui_wgpu::Renderer;
 use lin_alg::f32::Vec3;
 use wgpu::{
-    self, util::DeviceExt, BindGroup, BindGroupLayout, CommandEncoder, FragmentState, Queue,
-    RenderPass, StoreOp, Surface, SurfaceConfiguration, TextureView, VertexState,
+    self, util::DeviceExt, BindGroup, BindGroupLayout, Buffer, CommandEncoder, Device,
+    FragmentState, Queue, RenderPass, RenderPipeline, StoreOp, Surface, SurfaceConfiguration,
+    TextureFormat, TextureView, VertexState,
 };
 use winit::{event::DeviceEvent, window::Window};
 
 use crate::{
     gui,
+    gui::GuiState,
     input::{self, InputsCommanded},
     system::DEPTH_FORMAT,
     texture::Texture,
@@ -46,14 +48,15 @@ pub(crate) const FWD_VEC: Vec3 = Vec3 {
     z: 1.,
 };
 
+/// Code related to our specific engine. Buffers, texture data etc.
 pub(crate) struct GraphicsState {
-    pub vertex_buf: wgpu::Buffer,
-    pub index_buf: wgpu::Buffer,
-    instance_buf: wgpu::Buffer,
+    pub vertex_buf: Buffer,
+    pub index_buf: Buffer,
+    instance_buf: Buffer,
     pub bind_groups: BindGroupData,
-    camera_buf: wgpu::Buffer,
-    lighting_buf: wgpu::Buffer,
-    pub pipeline: wgpu::RenderPipeline,
+    camera_buf: Buffer,
+    lighting_buf: Buffer,
+    pub pipeline: RenderPipeline, // todo: Move to renderer.
     pub depth_texture: Texture,
     // pub input_settings: InputSettings,
     // pub ui_settings: UiSettings,
@@ -62,12 +65,8 @@ pub(crate) struct GraphicsState {
     pub scene: Scene,
     mesh_mappings: Vec<(i32, u32, u32)>,
     /// This is perhaps more ideal in `SystemState`, but we have it here for convenience.
-    /// todo: MOve it to system.
+    /// todo: Move this.
     pub window: Arc<Window>,
-    /// for GUI
-    pub egui_state: egui_winit::State,
-    pub egui_renderer: Renderer,
-    pub ui_size_prev: f64,
 }
 
 impl GraphicsState {
@@ -143,24 +142,6 @@ impl GraphicsState {
         window.request_inner_size(window_size);
         window.set_title(&scene.window_title);
 
-        let egui_context = Context::default();
-        let egui_state = egui_winit::State::new(
-            egui_context,
-            egui::viewport::ViewportId::ROOT,
-            &window,
-            Some(window.scale_factor() as f32),
-            None,
-            None,
-        );
-
-        let egui_renderer = Renderer::new(
-            device,
-            surface_cfg.format,
-            Some(DEPTH_FORMAT),
-            1,     // todo
-            false, // todo: Dithering?
-        );
-
         let mut result = Self {
             vertex_buf,
             index_buf,
@@ -174,9 +155,6 @@ impl GraphicsState {
             scene,
             inputs_commanded: Default::default(),
             mesh_mappings,
-            egui_state,
-            egui_renderer,
-            ui_size_prev: 0.,
             window,
         };
 
@@ -304,6 +282,7 @@ impl GraphicsState {
 
     fn setup_render_pass<'a>(
         &mut self,
+        ui_size_prev: &mut f64,
         encoder: &'a mut CommandEncoder,
         output_view: &TextureView,
         width: u32,
@@ -311,11 +290,12 @@ impl GraphicsState {
         ui_settings: &UiSettings,
         resize_required: &mut bool,
     ) -> RenderPass<'a> {
+        // Adjust the viewport size for 3D, based on how much size the UI is taking up.
         let ui_size = ui_settings.size as f32;
-        if self.ui_size_prev != ui_settings.size {
+        if *ui_size_prev != ui_settings.size {
             *resize_required = true;
         }
-        self.ui_size_prev = ui_settings.size;
+        *ui_size_prev = ui_settings.size;
 
         let (x, y, eff_width, eff_height) = match ui_settings.layout {
             UiLayout::Left => (ui_size, 0., width as f32 - ui_size, height as f32),
@@ -382,6 +362,7 @@ impl GraphicsState {
 
     pub(crate) fn render<T>(
         &mut self,
+        ui_size_prev: &mut f64,
         surface_texture: wgpu::SurfaceTexture,
         output_texture: &TextureView,
         device: &wgpu::Device,
@@ -432,6 +413,9 @@ impl GraphicsState {
 
         let mut engine_updates = Default::default();
 
+        // let raw_input = self.egui_state.take_egui_input(&self.window);
+        // self.egui_state.egui_ctx().begin_pass(raw_input);
+
         // todo: Put back
         // let (gui_full_output, tris, screen_descriptor) = gui::render_gui_pre_rpass(
         //     self,
@@ -446,6 +430,7 @@ impl GraphicsState {
         // );
 
         let mut rpass = self.setup_render_pass(
+            ui_size_prev,
             &mut encoder,
             output_texture,
             width,
