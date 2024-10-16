@@ -29,8 +29,6 @@ use crate::{
     types::{EngineUpdates, InputSettings, Scene, UiLayout, UiSettings},
 };
 
-// todo: Changed 2024; not sure how to auto-choose. From an error message, on my system, options are:
-// todo: [Bgra8Unorm, Bgra8UnormSrgb, Rgba8Unorm, Rgba8UnormSrgb]. Chose this value from an unofficial example.
 pub const COLOR_FORMAT: TextureFormat = TextureFormat::Bgra8UnormSrgb;
 pub const DEPTH_FORMAT: TextureFormat = TextureFormat::Depth32Float;
 

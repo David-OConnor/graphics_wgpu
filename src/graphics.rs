@@ -362,7 +362,7 @@ impl GraphicsState {
 
     pub(crate) fn render<T>(
         &mut self,
-        ui_size_prev: &mut f64,
+        gui: &mut GuiState,
         surface_texture: SurfaceTexture,
         output_texture: &TextureView,
         device: &Device,
@@ -371,6 +371,7 @@ impl GraphicsState {
         width: u32,
         height: u32,
         ui_settings: &mut UiSettings,
+        input_settings: &InputSettings,
         gui_handler: impl FnMut(&mut T, &Context, &mut Scene) -> EngineUpdates,
         user_state: &mut T,
     ) -> bool {
@@ -380,28 +381,27 @@ impl GraphicsState {
         // Note that camera settings adjusted by the application code are handled in
         // `update_camera`.
 
-        // todo: Put back
-        // match self.input_settings.initial_controls {
-        //     ControlScheme::FreeCamera => {
-        //         if self.inputs_commanded.inputs_present() {
-        //             let dt_secs = dt.as_secs() as f32 + dt.subsec_micros() as f32 / 1_000_000.;
-        //             input::adjust_camera(
-        //                 &mut self.scene.camera,
-        //                 &self.inputs_commanded,
-        //                 &self.input_settings,
-        //                 dt_secs,
-        //             );
-        //
-        //
-        //             queue.write_buffer(&self.camera_buf, 0, &self.scene.camera.to_bytes());
-        //
-        //             // Reset the mouse inputs; keyboard inputs are reset by their release event.
-        //             self.inputs_commanded.mouse_delta_x = 0.;
-        //             self.inputs_commanded.mouse_delta_y = 0.;
-        //         }
-        //     }
-        //     _ => (),
-        // }
+        match input_settings.initial_controls {
+            ControlScheme::FreeCamera => {
+                if self.inputs_commanded.inputs_present() {
+                    let dt_secs = dt.as_secs() as f32 + dt.subsec_micros() as f32 / 1_000_000.;
+                    input::adjust_camera(
+                        &mut self.scene.camera,
+                        &self.inputs_commanded,
+                        &input_settings,
+                        dt_secs,
+                    );
+
+
+                    queue.write_buffer(&self.camera_buf, 0, &self.scene.camera.to_bytes());
+
+                    // Reset the mouse inputs; keyboard inputs are reset by their release event.
+                    self.inputs_commanded.mouse_delta_x = 0.;
+                    self.inputs_commanded.mouse_delta_y = 0.;
+                }
+            }
+            _ => (),
+        }
 
         // We create a CommandEncoder to create the actual commands to send to the
         // gpu. Most modern graphics frameworks expect commands to be stored in a command buffer
@@ -416,21 +416,20 @@ impl GraphicsState {
         // let raw_input = self.egui_state.take_egui_input(&self.window);
         // self.egui_state.egui_ctx().begin_pass(raw_input);
 
-        // todo: Put back
-        // let (gui_full_output, tris, screen_descriptor) = gui::render_gui_pre_rpass(
-        //     self,
-        //     user_state,
-        //     device,
-        //     gui_handler,
-        //     &mut encoder,
-        //     queue,
-        //     width,
-        //     height,
-        //     &mut engine_updates,
-        // );
+        let (gui_full_output, tris, screen_descriptor) = gui.render_gui_pre_rpass(
+            self,
+            user_state,
+            device,
+            gui_handler,
+            &mut encoder,
+            queue,
+            width,
+            height,
+            &mut engine_updates,
+        );
 
         let mut rpass = self.setup_render_pass(
-            ui_size_prev,
+            &mut gui.ui_size_prev,
             &mut encoder,
             output_texture,
             width,
@@ -441,15 +440,13 @@ impl GraphicsState {
 
         let mut rpass = rpass.forget_lifetime();
 
-        // todo: Put back
-        // self.egui_renderer
-        //     .render(&mut rpass, &tris, &screen_descriptor);
+        gui.egui_renderer
+            .render(&mut rpass, &tris, &screen_descriptor);
         drop(rpass);
 
-        // todo: Put back
-        // for x in &gui_full_output.textures_delta.free {
-        //     self.egui_renderer.free_texture(x)
-        // }
+        for x in &gui_full_output.textures_delta.free {
+            gui.egui_renderer.free_texture(x)
+        }
 
         gui::process_engine_updates(self, ui_settings, &engine_updates, device, queue);
 

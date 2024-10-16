@@ -57,7 +57,7 @@ impl GuiState {
     /// This function contains code specific to rendering the GUI prior to the render pass.
     pub(crate) fn render_gui_pre_rpass<T>(
         &mut self,
-        window: &Window,
+        graphics: &mut GraphicsState,
         user_state: &mut T,
         device: &Device,
         mut gui_handler: impl FnMut(&mut T, &Context, &mut Scene) -> EngineUpdates,
@@ -69,25 +69,24 @@ impl GuiState {
     ) -> (FullOutput, Vec<ClippedPrimitive>, ScreenDescriptor) {
         let screen_descriptor = ScreenDescriptor {
             size_in_pixels: [width, height],
-            pixels_per_point: window.scale_factor() as f32,
+            pixels_per_point: graphics.window.scale_factor() as f32,
         };
 
         self.egui_state
             .egui_ctx()
             .set_pixels_per_point(screen_descriptor.pixels_per_point);
 
-        let raw_input = self.egui_state.take_egui_input(window);
+        let raw_input = self.egui_state.take_egui_input(&graphics.window);
         let full_output = self.egui_state.egui_ctx().run(raw_input, |ui| {
-            // todo: Put back
-            // *engine_updates = gui_handler(
-            //     user_state,
-            //     g_state.eself.egui_ctx(),
-            //     &mut g_state.scene,
-            // );
+            *engine_updates = gui_handler(
+                user_state,
+                self.egui_state.egui_ctx(),
+                &mut graphics.scene,
+            );
         });
 
         self.egui_state
-            .handle_platform_output(window, full_output.platform_output.clone()); // todo: Is this clone OK?
+            .handle_platform_output(&graphics.window, full_output.platform_output.clone()); // todo: Is this clone OK?
 
         let tris = self.egui_state.egui_ctx().tessellate(
             full_output.shapes.clone(), // todo: Is the clone OK?

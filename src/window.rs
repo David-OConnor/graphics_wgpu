@@ -80,7 +80,7 @@ where
                     .create_view(&TextureViewDescriptor::default());
 
                 let resize_required = graphics.render(
-                    &mut self.gui.as_mut().unwrap().ui_size_prev,
+                    &mut self.gui.as_mut().unwrap(),
                     output_frame,
                     &output_view,
                     &sys.device,
@@ -89,6 +89,7 @@ where
                     sys.surface_cfg.width,
                     sys.surface_cfg.height,
                     &mut self.ui_settings,
+                    &self.input_settings,
                     &mut self.gui_handler,
                     &mut self.user_state,
                 );
