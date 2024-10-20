@@ -55,7 +55,6 @@ where
         process_engine_updates(
             &updates_render,
             graphics,
-            &mut self.ui_settings,
             &self.render.as_ref().unwrap().device,
             &self.render.as_ref().unwrap().queue,
         );
@@ -160,7 +159,7 @@ where
                 self.graphics.as_ref().unwrap().window.request_redraw();
             }
             WindowEvent::CursorMoved { position, .. } => {
-                if position.x < self.ui_settings.size {
+                if position.x < gui.size as f64 {
                     gui.mouse_in_gui = true;
 
                     // We reset the inputs, since otherwise a held key that
@@ -226,6 +225,7 @@ where
 
         if !gui.mouse_in_gui {
             let dt_secs = self.dt.as_secs() as f32 + self.dt.subsec_micros() as f32 / 1_000_000.;
+
             let updates_event = (self.event_handler)(
                 &mut self.user_state,
                 event.clone(),
@@ -233,25 +233,13 @@ where
                 dt_secs,
             );
 
-            process_engine_updates(
-                &updates_event,
-                graphics,
-                &mut self.ui_settings,
-                &render.device,
-                &render.queue,
-            );
+            process_engine_updates(&updates_event, graphics, &render.device, &render.queue);
+
             graphics.handle_input(event, &self.input_settings);
         }
     }
 
-    fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {
+    fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {}
 
-        // todo?
-        // (self.gui_handler)(args)
-    }
-
-    fn exiting(&mut self, _event_loop: &ActiveEventLoop) {
-        // We must drop the context here.
-        // self.context = None;
-    }
+    fn exiting(&mut self, _event_loop: &ActiveEventLoop) {}
 }

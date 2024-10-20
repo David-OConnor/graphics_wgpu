@@ -281,21 +281,14 @@ impl GraphicsState {
 
     fn setup_render_pass<'a>(
         &mut self,
-        ui_size_prev: &mut f64,
+        ui_size: f32,
         encoder: &'a mut CommandEncoder,
         output_view: &TextureView,
         width: u32,
         height: u32,
         ui_settings: &UiSettings,
-        resize_required: &mut bool,
     ) -> RenderPass<'a> {
         // Adjust the viewport size for 3D, based on how much size the UI is taking up.
-        let ui_size = ui_settings.size as f32;
-        if *ui_size_prev != ui_settings.size {
-            *resize_required = true;
-        }
-        *ui_size_prev = ui_settings.size;
-
         let (x, y, eff_width, eff_height) = match ui_settings.layout {
             UiLayout::Left => (ui_size, 0., width as f32 - ui_size, height as f32),
             UiLayout::Right => (0., 0., width as f32 - ui_size, height as f32),
@@ -433,13 +426,12 @@ impl GraphicsState {
         );
 
         let mut rpass = self.setup_render_pass(
-            &mut gui.ui_size_prev,
+            gui.size,
             &mut encoder,
             output_texture,
             width,
             height,
             ui_settings,
-            &mut resize_required,
         );
 
         let mut rpass = rpass.forget_lifetime();
@@ -452,7 +444,7 @@ impl GraphicsState {
             gui.egui_renderer.free_texture(x)
         }
 
-        process_engine_updates(&updates_gui, self, ui_settings, device, queue);
+        process_engine_updates(&updates_gui, self, device, queue);
 
         unsafe {
             if i % 100 == 0 {
@@ -461,15 +453,6 @@ impl GraphicsState {
         }
 
         // todo: This queue line is likely the problem! Is your queue just getting bigger??
-
-        let ef = encoder.finish();
-
-        unsafe {
-            if i % 100 == 0 {
-                println!("B: {:?}", start_time.elapsed().as_micros());
-            }
-        }
-
         queue.submit(Some(encoder.finish()));
 
         unsafe {

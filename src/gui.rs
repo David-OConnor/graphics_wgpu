@@ -14,16 +14,16 @@ use crate::{
     graphics::GraphicsState,
     system::DEPTH_FORMAT,
     types::{EngineUpdates, Scene},
-    UiSettings,
 };
 
 /// State related to the GUI.
 pub(crate) struct GuiState {
     pub egui_state: egui_winit::State,
     pub egui_renderer: Renderer,
-    pub ui_size_prev: f64,
     /// Used to disable inputs while the mouse is in the GUI section.
     pub mouse_in_gui: bool,
+    /// We store this, so we know if we need to perform a resize if it changes.
+    pub size: f32,
 }
 
 impl GuiState {
@@ -49,8 +49,8 @@ impl GuiState {
         Self {
             egui_state,
             egui_renderer,
-            ui_size_prev: 0.,
             mouse_in_gui: false,
+            size: 0.,
         }
     }
 
@@ -79,6 +79,14 @@ impl GuiState {
         let raw_input = self.egui_state.take_egui_input(&graphics.window);
         let full_output = self.egui_state.egui_ctx().run(raw_input, |ui| {
             *updates_gui = gui_handler(user_state, self.egui_state.egui_ctx(), &mut graphics.scene);
+
+            // todo: Use Y if layout is top/bottom.
+            let new_size = ui.used_size().x;
+
+            // todo: Run resize/rescale if this changes.
+            if self.size != new_size {
+                self.size = new_size;
+            }
         });
 
         self.egui_state

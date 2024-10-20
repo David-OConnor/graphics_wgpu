@@ -178,6 +178,7 @@ where
 
         let mut sys = &mut self.render.as_mut().unwrap();
         let mut graphics = &mut self.graphics.as_mut().unwrap();
+        let mut gui = &mut self.gui.as_mut().unwrap();
 
         if new_size.width > 0 && new_size.height > 0 {
             sys.size = new_size;
@@ -187,12 +188,12 @@ where
 
             let (eff_width, eff_height) = match self.ui_settings.layout {
                 UiLayout::Left | UiLayout::Right => (
-                    sys.surface_cfg.width as f32 - self.ui_settings.size as f32,
+                    sys.surface_cfg.width as f32 - gui.size,
                     sys.surface_cfg.height as f32,
                 ),
                 _ => (
                     sys.surface_cfg.width as f32,
-                    sys.surface_cfg.height as f32 - self.ui_settings.size as f32,
+                    sys.surface_cfg.height as f32 - gui.size,
                 ),
             };
 
@@ -221,7 +222,9 @@ pub fn run<T: 'static, FRender, FEvent, FGui>(
     FEvent: FnMut(&mut T, DeviceEvent, &mut Scene, f32) -> EngineUpdates + 'static,
     FGui: FnMut(&mut T, &egui::Context, &mut Scene) -> EngineUpdates + 'static,
 {
-    let (_frame_count, mut _accum_time) = (0, 0.0);
+    let (_frame_count, _accum_time) = (0, 0.0);
+
+    println!("Settings: {:?}", ui_settings);
 
     let mut state: State<T, FRender, FEvent, FGui> = State::new(
         scene,
@@ -282,7 +285,6 @@ async fn setup_async(
 pub(crate) fn process_engine_updates(
     engine_updates: &EngineUpdates,
     g_state: &mut GraphicsState,
-    ui_settings: &mut UiSettings,
     device: &Device,
     queue: &Queue,
 ) {
@@ -304,6 +306,4 @@ pub(crate) fn process_engine_updates(
         // Entities have been updated in the scene; update the buffer.
         g_state.update_lighting(queue);
     }
-
-    ui_settings.size = engine_updates.ui_size as f64;
 }
