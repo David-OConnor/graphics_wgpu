@@ -66,7 +66,7 @@ impl GuiState {
         width: u32,
         height: u32,
         updates_gui: &mut EngineUpdates,
-    ) -> (FullOutput, Vec<ClippedPrimitive>, ScreenDescriptor) {
+    ) -> (FullOutput, Vec<ClippedPrimitive>, ScreenDescriptor, bool) {
         let screen_descriptor = ScreenDescriptor {
             size_in_pixels: [width, height],
             pixels_per_point: graphics.window.scale_factor() as f32,
@@ -76,6 +76,8 @@ impl GuiState {
             .egui_ctx()
             .set_pixels_per_point(screen_descriptor.pixels_per_point);
 
+        let mut resize_required = false;
+
         let raw_input = self.egui_state.take_egui_input(&graphics.window);
         let full_output = self.egui_state.egui_ctx().run(raw_input, |ui| {
             *updates_gui = gui_handler(user_state, self.egui_state.egui_ctx(), &mut graphics.scene);
@@ -83,8 +85,8 @@ impl GuiState {
             // todo: Use Y if layout is top/bottom.
             let new_size = ui.used_size().x;
 
-            // todo: Run resize/rescale if this changes.
             if self.size != new_size {
+                resize_required = true;
                 self.size = new_size;
             }
         });
@@ -105,6 +107,6 @@ impl GuiState {
         self.egui_renderer
             .update_buffers(device, queue, encoder, &tris, &screen_descriptor);
 
-        (full_output, tris, screen_descriptor)
+        (full_output, tris, screen_descriptor, resize_required)
     }
 }

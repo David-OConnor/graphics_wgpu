@@ -375,8 +375,6 @@ impl GraphicsState {
         }
         let start_time = std::time::Instant::now(); // todo temp
 
-        let mut resize_required = false;
-
         // Adjust camera inputs using the in-engine control scheme.
         // Note that camera settings adjusted by the application code are handled in
         // `update_camera`.
@@ -413,7 +411,7 @@ impl GraphicsState {
 
         let mut updates_gui = Default::default();
 
-        let (gui_full_output, tris, screen_descriptor) = gui.render_gui_pre_rpass(
+        let (gui_full_output, tris, screen_descriptor, resize_required) = gui.render_gui_pre_rpass(
             self,
             user_state,
             device,
@@ -462,6 +460,7 @@ impl GraphicsState {
         }
 
         surface_texture.present();
+
         resize_required
     }
 }
