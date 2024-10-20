@@ -18,10 +18,10 @@ use wgpu::{
 use winit::{
     dpi::PhysicalSize,
     event::DeviceEvent,
-    event_loop::EventLoop,
+    event_loop::{ControlFlow, EventLoop},
     window::{Icon, Window},
 };
-use winit::event_loop::ControlFlow;
+
 use crate::{
     graphics::GraphicsState,
     gui::GuiState,
@@ -171,11 +171,11 @@ where
     }
 
     pub(crate) fn resize(&mut self, new_size: PhysicalSize<u32>) {
+        println!("Resizing");
         if self.render.is_none() || self.graphics.is_none() {
             return;
         }
 
-        println!("Resizing..."); // todo temp
         let mut sys = &mut self.render.as_mut().unwrap();
         let mut graphics = &mut self.graphics.as_mut().unwrap();
 

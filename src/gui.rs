@@ -78,11 +78,8 @@ impl GuiState {
 
         let raw_input = self.egui_state.take_egui_input(&graphics.window);
         let full_output = self.egui_state.egui_ctx().run(raw_input, |ui| {
-            *engine_updates = gui_handler(
-                user_state,
-                self.egui_state.egui_ctx(),
-                &mut graphics.scene,
-            );
+            *engine_updates =
+                gui_handler(user_state, self.egui_state.egui_ctx(), &mut graphics.scene);
         });
 
         self.egui_state

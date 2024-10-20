@@ -55,44 +55,10 @@ impl Texture {
         }
     }
 
-    // /// Create a 2d texture for the GUI.
-    // pub fn create_gui_texture(
-    //     device: &wgpu::Device,
-    //     config: &wgpu::SurfaceConfiguration,
-    //     label: &str,
-    // ) -> Self {
-    //     let size = wgpu::Extent3d {
-    //         width: config.width,
-    //         height: config.height,
-    //         depth_or_array_layers: 1,
-    //     };
-    //
-    //     let desc = wgpu::TextureDescriptor {
-    //         label: Some(label),
-    //         size: size,
-    //         mip_level_count: 1,
-    //         sample_count: 1,
-    //         dimension: wgpu::TextureDimension::D2,
-    //         format: wgpu::TextureFormat::Rgba8UnormSrgb,
-    //         usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
-    //     };
-    //
-    //     let texture = device.create_texture(&desc);
-    //
-    //     let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
-    //
-    //     let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
-    //         label: Some(format!("{}_sampler", label_base).as_str()),
-    //         mag_filter: wgpu::FilterMode::Linear,
-    //         min_filter: wgpu::FilterMode::Linear,
-    //         ..Default::default()
-    //     });
-    // }
-
     #[allow(dead_code)]
     pub fn from_bytes(
-        device: &wgpu::Device,
-        queue: &wgpu::Queue,
+        device: &Device,
+        queue: &Queue,
         bytes: &[u8],
         label: &str,
         is_normal_map: bool,

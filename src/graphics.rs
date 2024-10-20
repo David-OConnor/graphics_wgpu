@@ -16,10 +16,10 @@ use lin_alg::f32::Vec3;
 use wgpu::{
     self,
     util::{BufferInitDescriptor, DeviceExt},
-    BindGroup, BindGroupLayout, Buffer, BufferUsages, CommandEncoder, CommandEncoderDescriptor,
-    Device, FragmentState, Queue, RenderPass, RenderPassDepthStencilAttachment,
-    RenderPassDescriptor, RenderPipeline, StoreOp, Surface, SurfaceConfiguration, SurfaceTexture,
-    TextureFormat, TextureView, VertexState,
+    BindGroup, BindGroupLayout, BindingType, Buffer, BufferBindingType, BufferUsages,
+    CommandEncoder, CommandEncoderDescriptor, Device, FragmentState, Queue, RenderPass,
+    RenderPassDepthStencilAttachment, RenderPassDescriptor, RenderPipeline, ShaderStages, StoreOp,
+    Surface, SurfaceConfiguration, SurfaceTexture, TextureFormat, TextureView, VertexState,
 };
 use winit::{event::DeviceEvent, window::Window};
 
@@ -136,10 +136,7 @@ impl GraphicsState {
         let mesh_mappings = Vec::new();
 
         // todo: Logical (scaling by device?) vs physical pixels
-        let window_size = winit::dpi::LogicalSize::new(scene.window_size.0, scene.window_size.1);
-
-        // window.set_inner_size(window_size);
-        window.request_inner_size(window_size);
+        // let window_size = winit::dpi::LogicalSize::new(scene.window_size.0, scene.window_size.1);
         window.set_title(&scene.window_title);
 
         let mut result = Self {
@@ -360,6 +357,7 @@ impl GraphicsState {
         rpass
     }
 
+    /// Note:  `resize_required`, the return, is to handle changes in GUI size.
     pub(crate) fn render<T>(
         &mut self,
         gui: &mut GuiState,
@@ -391,7 +389,6 @@ impl GraphicsState {
                         &input_settings,
                         dt_secs,
                     );
-
 
                     queue.write_buffer(&self.camera_buf, 0, &self.scene.camera.to_bytes());
 
@@ -519,9 +516,9 @@ fn create_bindgroups(device: &Device, cam_buf: &Buffer, lighting_buf: &Buffer) -
     let layout_cam = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
         entries: &[wgpu::BindGroupLayoutEntry {
             binding: 0,
-            visibility: wgpu::ShaderStages::VERTEX | wgpu::ShaderStages::FRAGMENT,
-            ty: wgpu::BindingType::Buffer {
-                ty: wgpu::BufferBindingType::Uniform,
+            visibility: ShaderStages::VERTEX | ShaderStages::FRAGMENT,
+            ty: BindingType::Buffer {
+                ty: BufferBindingType::Uniform,
                 // The dynamic field indicates whether this buffer will change size or
                 // not. This is useful if we want to store an array of things in our uniforms.
                 has_dynamic_offset: false,
@@ -544,9 +541,9 @@ fn create_bindgroups(device: &Device, cam_buf: &Buffer, lighting_buf: &Buffer) -
     let layout_lighting = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
         entries: &[wgpu::BindGroupLayoutEntry {
             binding: 0,
-            visibility: wgpu::ShaderStages::FRAGMENT,
-            ty: wgpu::BindingType::Buffer {
-                ty: wgpu::BufferBindingType::Storage { read_only: true }, // todo read-only?
+            visibility: ShaderStages::FRAGMENT,
+            ty: BindingType::Buffer {
+                ty: BufferBindingType::Storage { read_only: true }, // todo read-only?
                 has_dynamic_offset: false,
                 min_binding_size: None,
             },
@@ -587,8 +584,8 @@ fn create_bindgroups(device: &Device, cam_buf: &Buffer, lighting_buf: &Buffer) -
         entries: &[
             wgpu::BindGroupLayoutEntry {
                 binding: 0,
-                visibility: wgpu::ShaderStages::FRAGMENT,
-                ty: wgpu::BindingType::Texture {
+                visibility: ShaderStages::FRAGMENT,
+                ty: BindingType::Texture {
                     multisampled: false,
                     view_dimension: wgpu::TextureViewDimension::D2,
                     sample_type: wgpu::TextureSampleType::Float { filterable: true },
@@ -597,10 +594,10 @@ fn create_bindgroups(device: &Device, cam_buf: &Buffer, lighting_buf: &Buffer) -
             },
             wgpu::BindGroupLayoutEntry {
                 binding: 1,
-                visibility: wgpu::ShaderStages::FRAGMENT,
+                visibility: ShaderStages::FRAGMENT,
                 // This should match the filterable field of the
                 // corresponding Texture entry above.
-                ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                ty: BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
                 count: None,
             },
         ],

@@ -1,16 +1,16 @@
 //! Handles window initialization and events, using Winit.
 
-use std::path::Path;
-use std::time::Instant;
+use std::{path::Path, time::Instant};
+
 use image::ImageError;
 use wgpu::TextureViewDescriptor;
 use winit::{
     application::ApplicationHandler,
     event::{DeviceEvent, DeviceId, WindowEvent},
     event_loop::ActiveEventLoop,
-    window::{Window, WindowId},
+    window::{Icon, Window, WindowAttributes, WindowId},
 };
-use winit::window::{Icon, WindowAttributes};
+
 use crate::{system::State, EngineUpdates, Scene};
 
 const WINDOW_TITLE_INIT: &str = "Graphics";
@@ -95,14 +95,12 @@ where
                 );
 
                 if resize_required {
-                    println!("RESIZE req"); // todo temp
+                    println!("Resize requested from GUI");
                     self.resize(sys.size);
                 }
             }
-            // todo: Does this happen when minimized?
-            Err(e) => {
-                eprintln!("Error getting the current texture: {:?}", e);
-            }
+            // This occurs when minimized.
+            Err(_e) => (),
         }
     }
 }
@@ -114,7 +112,7 @@ where
     FGui: FnMut(&mut T, &egui::Context, &mut Scene) -> EngineUpdates + 'static,
 {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
-        println!("RESUMED");
+        println!("Engine resumed; rebuilding window, render, and graphics state.");
         // todo: Only re-init if not already inited?
 
         let icon = match self.ui_settings.icon_path {
@@ -137,9 +135,7 @@ where
             ))
             .with_window_icon(icon);
 
-        let window = event_loop
-            .create_window(attributes)
-            .unwrap();
+        let window = event_loop.create_window(attributes).unwrap();
 
         self.init(window);
     }
@@ -190,7 +186,6 @@ where
                 self.resize(physical_size);
                 // Prevents inadvertent mouse-click-activated free-look.
                 self.graphics.as_mut().unwrap().inputs_commanded.free_look = false;
-                // graphics.window.resize(size); // todo??
             }
             // If the window scale changes, update the renderer size, and camera aspect ratio.
             WindowEvent::ScaleFactorChanged {
@@ -198,8 +193,8 @@ where
                 inner_size_writer,
                 ..
             } => {
-                // todo: Address this.
-                // self.resize(scale_factor); // todo: Changed in 2024
+                // Note: This appears to not come up, nor is it required. (Oct 2024)
+                println!("Scale factor changed");
             }
             // If the window is being moved, disable mouse inputs, eg so click+drag
             // doesn't cause a drag when moving the window using the mouse.
@@ -217,8 +212,8 @@ where
                 self.graphics.as_mut().unwrap().inputs_commanded.free_look = false;
             }
             WindowEvent::CursorLeft { device_id: _ } => {
-                // todo: Not working
-                // graphics.inputs_commanded.free_look = false;
+                // todo: Not working?
+                graphics.inputs_commanded.free_look = false;
             }
             _ => {}
         }
