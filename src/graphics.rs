@@ -383,15 +383,17 @@ impl GraphicsState {
             ControlScheme::FreeCamera => {
                 if self.inputs_commanded.inputs_present() {
                     let dt_secs = dt.as_secs() as f32 + dt.subsec_micros() as f32 / 1_000_000.;
-                    input::adjust_camera(
+
+                    let cam_changed = input::adjust_camera(
                         &mut self.scene.camera,
                         &self.inputs_commanded,
                         &input_settings,
                         dt_secs,
                     );
 
-                    // todo temp
-                    queue.write_buffer(&self.camera_buf, 0, &self.scene.camera.to_bytes());
+                    if cam_changed {
+                        queue.write_buffer(&self.camera_buf, 0, &self.scene.camera.to_bytes());
+                    }
 
                     // Reset the mouse inputs; keyboard inputs are reset by their release event.
                     self.inputs_commanded.mouse_delta_x = 0.;

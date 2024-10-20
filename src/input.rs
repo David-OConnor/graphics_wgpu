@@ -146,14 +146,14 @@ pub(crate) fn add_input_cmd(event: DeviceEvent, inputs: &mut InputsCommanded) {
     }
 }
 
-/// Adjust the camera orientation and position.
+/// Adjust the camera orientation and position. Return if there was a change, so we know to update the buffer.
 /// todo: copyied from `peptide`'s Bevy interface.
 pub fn adjust_camera(
     cam: &mut Camera,
     inputs: &InputsCommanded,
     input_settings: &InputSettings,
     dt: f32,
-) {
+) -> bool {
     let mut move_amt: f32 = input_settings.move_sens * dt;
     let rotate_amt: f32 = input_settings.rotate_sens * dt;
     let mut rotate_key_amt: f32 = input_settings.rotate_key_sens * dt;
@@ -228,4 +228,6 @@ pub fn adjust_camera(
     if cam_rotated {
         cam.orientation = rotation * cam.orientation;
     }
+
+    cam_moved || cam_rotated
 }
