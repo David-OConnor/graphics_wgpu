@@ -65,7 +65,7 @@ impl GuiState {
         queue: &Queue,
         width: u32,
         height: u32,
-        engine_updates: &mut EngineUpdates,
+        updates_gui: &mut EngineUpdates,
     ) -> (FullOutput, Vec<ClippedPrimitive>, ScreenDescriptor) {
         let screen_descriptor = ScreenDescriptor {
             size_in_pixels: [width, height],
@@ -78,8 +78,7 @@ impl GuiState {
 
         let raw_input = self.egui_state.take_egui_input(&graphics.window);
         let full_output = self.egui_state.egui_ctx().run(raw_input, |ui| {
-            *engine_updates =
-                gui_handler(user_state, self.egui_state.egui_ctx(), &mut graphics.scene);
+            *updates_gui = gui_handler(user_state, self.egui_state.egui_ctx(), &mut graphics.scene);
         });
 
         self.egui_state
@@ -100,34 +99,4 @@ impl GuiState {
 
         (full_output, tris, screen_descriptor)
     }
-}
-
-/// In each render, process engine updates from the GUI handler callback, from the application.
-pub(crate) fn process_engine_updates(
-    g_state: &mut GraphicsState,
-    ui_settings: &mut UiSettings,
-    engine_updates: &EngineUpdates,
-    device: &Device,
-    queue: &Queue,
-) {
-    if engine_updates.meshes {
-        g_state.setup_vertices_indices(device);
-        g_state.setup_entities(device);
-    }
-
-    if engine_updates.entities {
-        g_state.setup_entities(device);
-    }
-
-    if engine_updates.camera {
-        // Entities have been updated in the scene; update the buffer.
-        g_state.update_camera(queue);
-    }
-
-    if engine_updates.lighting {
-        // Entities have been updated in the scene; update the buffer.
-        g_state.update_lighting(queue);
-    }
-
-    ui_settings.size = engine_updates.ui_size as f64;
 }

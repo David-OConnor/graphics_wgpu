@@ -27,7 +27,7 @@ use crate::{
     gui,
     gui::GuiState,
     input::{self, InputsCommanded},
-    system::DEPTH_FORMAT,
+    system::{process_engine_updates, DEPTH_FORMAT},
     texture::Texture,
     types::{
         ControlScheme, EngineUpdates, InputSettings, Instance, Scene, UiLayout, UiSettings, Vertex,
@@ -270,10 +270,12 @@ impl GraphicsState {
     }
 
     pub(crate) fn update_camera(&mut self, queue: &Queue) {
+        // todo temp
         queue.write_buffer(&self.camera_buf, 0, &self.scene.camera.to_bytes());
     }
 
-    pub(crate) fn update_lighting(&mut self, queue: &wgpu::Queue) {
+    pub(crate) fn update_lighting(&mut self, queue: &Queue) {
+        // todo temp
         queue.write_buffer(&self.lighting_buf, 0, &self.scene.lighting.to_bytes());
     }
 
@@ -357,6 +359,7 @@ impl GraphicsState {
         rpass
     }
 
+    /// The entry point to 3D and GUI rendering.
     /// Note:  `resize_required`, the return, is to handle changes in GUI size.
     pub(crate) fn render<T>(
         &mut self,
@@ -373,6 +376,12 @@ impl GraphicsState {
         gui_handler: impl FnMut(&mut T, &Context, &mut Scene) -> EngineUpdates,
         user_state: &mut T,
     ) -> bool {
+        static mut i: usize = 0; // todo temp
+        unsafe {
+            i += 1;
+        }
+        let start_time = std::time::Instant::now(); // todo temp
+
         let mut resize_required = false;
 
         // Adjust camera inputs using the in-engine control scheme.
@@ -390,6 +399,7 @@ impl GraphicsState {
                         dt_secs,
                     );
 
+                    // todo temp
                     queue.write_buffer(&self.camera_buf, 0, &self.scene.camera.to_bytes());
 
                     // Reset the mouse inputs; keyboard inputs are reset by their release event.
@@ -408,10 +418,7 @@ impl GraphicsState {
             label: Some("Render encoder"),
         });
 
-        let mut engine_updates = Default::default();
-
-        // let raw_input = self.egui_state.take_egui_input(&self.window);
-        // self.egui_state.egui_ctx().begin_pass(raw_input);
+        let mut updates_gui = Default::default();
 
         let (gui_full_output, tris, screen_descriptor) = gui.render_gui_pre_rpass(
             self,
@@ -422,7 +429,7 @@ impl GraphicsState {
             queue,
             width,
             height,
-            &mut engine_updates,
+            &mut updates_gui,
         );
 
         let mut rpass = self.setup_render_pass(
@@ -445,11 +452,33 @@ impl GraphicsState {
             gui.egui_renderer.free_texture(x)
         }
 
-        gui::process_engine_updates(self, ui_settings, &engine_updates, device, queue);
+        process_engine_updates(&updates_gui, self, ui_settings, device, queue);
+
+        unsafe {
+            if i % 100 == 0 {
+                println!("\nA: {:?}", start_time.elapsed().as_micros());
+            }
+        }
+
+        // todo: This queue line is likely the problem! Is your queue just getting bigger??
+
+        let ef = encoder.finish();
+
+        unsafe {
+            if i % 100 == 0 {
+                println!("B: {:?}", start_time.elapsed().as_micros());
+            }
+        }
 
         queue.submit(Some(encoder.finish()));
-        surface_texture.present();
 
+        unsafe {
+            if i % 100 == 0 {
+                println!("C: {:?}", start_time.elapsed().as_micros());
+            }
+        }
+
+        surface_texture.present();
         resize_required
     }
 }

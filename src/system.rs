@@ -277,3 +277,33 @@ async fn setup_async(
 
     (adapter, device, queue)
 }
+
+/// Process engine updates from render, GUI, or events.
+pub(crate) fn process_engine_updates(
+    engine_updates: &EngineUpdates,
+    g_state: &mut GraphicsState,
+    ui_settings: &mut UiSettings,
+    device: &Device,
+    queue: &Queue,
+) {
+    if engine_updates.meshes {
+        g_state.setup_vertices_indices(device);
+        g_state.setup_entities(device);
+    }
+
+    if engine_updates.entities {
+        g_state.setup_entities(device);
+    }
+
+    if engine_updates.camera {
+        // Entities have been updated in the scene; update the buffer.
+        g_state.update_camera(queue);
+    }
+
+    if engine_updates.lighting {
+        // Entities have been updated in the scene; update the buffer.
+        g_state.update_lighting(queue);
+    }
+
+    ui_settings.size = engine_updates.ui_size as f64;
+}

@@ -11,7 +11,10 @@ use winit::{
     window::{Icon, Window, WindowAttributes, WindowId},
 };
 
-use crate::{system::State, EngineUpdates, Scene};
+use crate::{
+    system::{process_engine_updates, State},
+    EngineUpdates, Scene,
+};
 
 const WINDOW_TITLE_INIT: &str = "Graphics";
 const WINDOW_SIZE_X_INIT: f32 = 900.0;
@@ -46,28 +49,16 @@ where
         self.last_render_time = now;
 
         let dt_secs = self.dt.as_secs() as f32 + self.dt.subsec_micros() as f32 / 1_000_000.;
-        let engine_updates =
+        let updates_render =
             (self.render_handler)(&mut self.user_state, &mut graphics.scene, dt_secs);
 
-        if engine_updates.meshes {
-            graphics.setup_vertices_indices(&sys.device);
-            graphics.setup_entities(&sys.device);
-        }
-
-        // Entities have been updated in the scene; update the buffers
-        if engine_updates.entities {
-            graphics.setup_entities(&sys.device);
-        }
-
-        if engine_updates.camera {
-            // Entities have been updated in the scene; update the buffer.
-            graphics.update_camera(&sys.queue);
-        }
-
-        if engine_updates.lighting {
-            // Entities have been updated in the scene; update the buffer.
-            graphics.update_lighting(&sys.queue);
-        }
+        process_engine_updates(
+            &updates_render,
+            graphics,
+            &mut self.ui_settings,
+            &self.render.as_ref().unwrap().device,
+            &self.render.as_ref().unwrap().queue,
+        );
 
         // Note that the GUI handler can also modify entities, but
         // we do that in the `init_graphics` module.
@@ -75,14 +66,14 @@ where
         // todo: move this into `render`?
         match sys.surface.get_current_texture() {
             Ok(output_frame) => {
-                let output_view = output_frame
+                let surface_texture = output_frame
                     .texture
                     .create_view(&TextureViewDescriptor::default());
 
                 let resize_required = graphics.render(
                     &mut self.gui.as_mut().unwrap(),
                     output_frame,
-                    &output_view,
+                    &surface_texture,
                     &sys.device,
                     &sys.queue,
                     self.dt,
@@ -229,38 +220,26 @@ where
             return;
         }
 
-        let sys = &self.render.as_ref().unwrap();
+        let render = &self.render.as_ref().unwrap();
         let graphics = &mut self.graphics.as_mut().unwrap();
         let gui = &mut self.gui.as_mut().unwrap();
 
         if !gui.mouse_in_gui {
             let dt_secs = self.dt.as_secs() as f32 + self.dt.subsec_micros() as f32 / 1_000_000.;
-            let engine_updates = (self.event_handler)(
+            let updates_event = (self.event_handler)(
                 &mut self.user_state,
                 event.clone(),
                 &mut graphics.scene,
                 dt_secs,
             );
 
-            if engine_updates.meshes {
-                graphics.setup_vertices_indices(&sys.device);
-                graphics.setup_entities(&sys.device);
-            }
-
-            // Entities have been updated in the scene; update the buffers.
-            if engine_updates.entities {
-                graphics.setup_entities(&sys.device);
-            }
-
-            if engine_updates.camera {
-                // Entities have been updated in the scene; update the buffer.
-                graphics.update_camera(&sys.queue);
-            }
-
-            if engine_updates.lighting {
-                graphics.update_lighting(&sys.queue);
-            }
-
+            process_engine_updates(
+                &updates_event,
+                graphics,
+                &mut self.ui_settings,
+                &render.device,
+                &render.queue,
+            );
             graphics.handle_input(event, &self.input_settings);
         }
     }
