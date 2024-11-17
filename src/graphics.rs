@@ -271,12 +271,12 @@ impl GraphicsState {
 
     pub(crate) fn update_camera(&mut self, queue: &Queue) {
         // todo temp
-        queue.write_buffer(&self.camera_buf, 0, &self.scene.camera.to_bytes());
+        // queue.write_buffer(&self.camera_buf, 0, &self.scene.camera.to_bytes());
     }
 
     pub(crate) fn update_lighting(&mut self, queue: &Queue) {
         // todo temp
-        queue.write_buffer(&self.lighting_buf, 0, &self.scene.lighting.to_bytes());
+        // queue.write_buffer(&self.lighting_buf, 0, &self.scene.lighting.to_bytes());
     }
 
     fn setup_render_pass<'a>(
@@ -392,7 +392,7 @@ impl GraphicsState {
                     );
 
                     if cam_changed {
-                        queue.write_buffer(&self.camera_buf, 0, &self.scene.camera.to_bytes());
+                        // queue.write_buffer(&self.camera_buf, 0, &self.scene.camera.to_bytes());
                     }
 
                     // Reset the mouse inputs; keyboard inputs are reset by their release event.
@@ -425,6 +425,9 @@ impl GraphicsState {
             &mut updates_gui,
         );
 
+        // todo: This rpass code does not contribute to the performance problem.
+        // let resize_required = false; // todo temp
+
         let mut rpass = self.setup_render_pass(
             gui.size,
             &mut encoder,
@@ -438,7 +441,7 @@ impl GraphicsState {
 
         gui.egui_renderer
             .render(&mut rpass, &tris, &screen_descriptor);
-        drop(rpass);
+        drop(rpass); // Ends the render pass.
 
         for x in &gui_full_output.textures_delta.free {
             gui.egui_renderer.free_texture(x)
@@ -447,18 +450,18 @@ impl GraphicsState {
         process_engine_updates(&updates_gui, self, device, queue);
 
         unsafe {
-            if i % 100 == 0 {
-                println!("\nA: {:?}", start_time.elapsed().as_micros());
-            }
+            // if i % 100 == 0 {
+                // println!("\nA: {:?}", start_time.elapsed().as_micros());
+            // }
         }
 
         // todo: This queue line is likely the problem! Is your queue just getting bigger??
         queue.submit(Some(encoder.finish()));
 
         unsafe {
-            if i % 100 == 0 {
-                println!("C: {:?}", start_time.elapsed().as_micros());
-            }
+            // if i % 100 == 0 {
+                // println!("C: {:?}", start_time.elapsed().as_micros());
+            // }
         }
 
         surface_texture.present();

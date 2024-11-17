@@ -12,7 +12,7 @@ pub struct Texture {
 impl Texture {
     /// Create a 2d texture for the depth stencil.
     pub fn create_depth_texture(
-        device: &wgpu::Device,
+        device: &Device,
         config: &wgpu::SurfaceConfiguration,
         label: &str,
     ) -> Self {
@@ -68,6 +68,7 @@ impl Texture {
         Self::from_image(device, queue, &img, Some(label), is_normal_map)
     }
 
+    #[allow(dead_code)]
     pub fn from_image(
         device: &Device,
         queue: &Queue,
@@ -84,16 +85,16 @@ impl Texture {
             height: dimensions.1,
             depth_or_array_layers: 1,
         };
-        let texture = device.create_texture(&wgpu::TextureDescriptor {
+        let texture = device.create_texture(&TextureDescriptor {
             label,
             size,
             mip_level_count: 1,
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
             format: if is_normal_map {
-                wgpu::TextureFormat::Rgba8Unorm
+                TextureFormat::Rgba8Unorm
             } else {
-                wgpu::TextureFormat::Rgba8UnormSrgb
+                TextureFormat::Rgba8UnormSrgb
             },
             usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
             view_formats: &[], // todo?
