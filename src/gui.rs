@@ -14,6 +14,7 @@ use crate::{
     graphics::GraphicsState,
     system::DEPTH_FORMAT,
     types::{EngineUpdates, Scene},
+    UiLayout,
 };
 
 /// State related to the GUI.
@@ -66,6 +67,7 @@ impl GuiState {
         width: u32,
         height: u32,
         updates_gui: &mut EngineUpdates,
+        layout: UiLayout,
     ) -> (FullOutput, Vec<ClippedPrimitive>, ScreenDescriptor, bool) {
         let screen_descriptor = ScreenDescriptor {
             size_in_pixels: [width, height],
@@ -82,8 +84,10 @@ impl GuiState {
         let full_output = self.egui_state.egui_ctx().run(raw_input, |ui| {
             *updates_gui = gui_handler(user_state, self.egui_state.egui_ctx(), &mut graphics.scene);
 
-            // todo: Use Y if layout is top/bottom.
-            let new_size = ui.used_size().x;
+            let new_size = match layout {
+                UiLayout::Left | UiLayout::Right => ui.used_size().x,
+                _ => ui.used_size().y,
+            };
 
             if self.size != new_size {
                 resize_required = true;

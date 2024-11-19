@@ -12,8 +12,8 @@ use std::{
 
 use image::ImageError;
 use wgpu::{
-    Adapter, Backends, Device, Features, Instance, InstanceDescriptor, PowerPreference, Queue,
-    Surface, SurfaceConfiguration, TextureFormat,
+    Adapter, Backends, Buffer, Device, Features, Instance, InstanceDescriptor, PowerPreference,
+    Queue, Surface, SurfaceConfiguration, TextureFormat,
 };
 use winit::{
     dpi::PhysicalSize,
@@ -171,7 +171,6 @@ where
     }
 
     pub(crate) fn resize(&mut self, new_size: PhysicalSize<u32>) {
-        println!("Resizing");
         if self.render.is_none() || self.graphics.is_none() {
             return;
         }
@@ -203,6 +202,11 @@ where
                 Texture::create_depth_texture(&sys.device, &sys.surface_cfg, "Depth texture");
 
             graphics.scene.camera.update_proj_mat();
+
+            // todo: Not working; still need to change the camera from an input for the new aspect ratio
+            // todo to take effect.
+            sys.queue
+                .write_buffer(&graphics.camera_buf, 0, &self.scene.camera.to_bytes());
         }
     }
 }

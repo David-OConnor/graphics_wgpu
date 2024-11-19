@@ -56,7 +56,7 @@ pub(crate) struct GraphicsState {
     pub index_buf: Buffer,
     instance_buf: Buffer,
     pub bind_groups: BindGroupData,
-    camera_buf: Buffer,
+    pub camera_buf: Buffer,
     lighting_buf: Buffer,
     pub pipeline: RenderPipeline, // todo: Move to renderer.
     pub depth_texture: Texture,
@@ -270,13 +270,11 @@ impl GraphicsState {
     }
 
     pub(crate) fn update_camera(&mut self, queue: &Queue) {
-        // todo temp
-        // queue.write_buffer(&self.camera_buf, 0, &self.scene.camera.to_bytes());
+        queue.write_buffer(&self.camera_buf, 0, &self.scene.camera.to_bytes());
     }
 
     pub(crate) fn update_lighting(&mut self, queue: &Queue) {
-        // todo temp
-        // queue.write_buffer(&self.lighting_buf, 0, &self.scene.lighting.to_bytes());
+        queue.write_buffer(&self.lighting_buf, 0, &self.scene.lighting.to_bytes());
     }
 
     fn setup_render_pass<'a>(
@@ -289,7 +287,7 @@ impl GraphicsState {
         ui_settings: &UiSettings,
     ) -> RenderPass<'a> {
         // Adjust the viewport size for 3D, based on how much size the UI is taking up.
-        let (x, y, eff_width, eff_height) = match ui_settings.layout {
+        let (x, y, mut eff_width, mut eff_height) = match ui_settings.layout {
             UiLayout::Left => (ui_size, 0., width as f32 - ui_size, height as f32),
             UiLayout::Right => (0., 0., width as f32 - ui_size, height as f32),
             UiLayout::Top => (0., ui_size, width as f32, height as f32 - ui_size),
@@ -368,6 +366,7 @@ impl GraphicsState {
         input_settings: &InputSettings,
         gui_handler: impl FnMut(&mut T, &Context, &mut Scene) -> EngineUpdates,
         user_state: &mut T,
+        layout: UiLayout,
     ) -> bool {
         static mut i: usize = 0; // todo temp
         unsafe {
@@ -392,7 +391,7 @@ impl GraphicsState {
                     );
 
                     if cam_changed {
-                        // queue.write_buffer(&self.camera_buf, 0, &self.scene.camera.to_bytes());
+                        queue.write_buffer(&self.camera_buf, 0, &self.scene.camera.to_bytes());
                     }
 
                     // Reset the mouse inputs; keyboard inputs are reset by their release event.
@@ -423,10 +422,10 @@ impl GraphicsState {
             width,
             height,
             &mut updates_gui,
+            layout,
         );
 
         // todo: This rpass code does not contribute to the performance problem.
-        // let resize_required = false; // todo temp
 
         let mut rpass = self.setup_render_pass(
             gui.size,
@@ -451,7 +450,7 @@ impl GraphicsState {
 
         unsafe {
             // if i % 100 == 0 {
-                // println!("\nA: {:?}", start_time.elapsed().as_micros());
+            // println!("\nA: {:?}", start_time.elapsed().as_micros());
             // }
         }
 
@@ -460,7 +459,7 @@ impl GraphicsState {
 
         unsafe {
             // if i % 100 == 0 {
-                // println!("C: {:?}", start_time.elapsed().as_micros());
+            // println!("C: {:?}", start_time.elapsed().as_micros());
             // }
         }
 

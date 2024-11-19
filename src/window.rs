@@ -69,6 +69,8 @@ where
                     .texture
                     .create_view(&TextureViewDescriptor::default());
 
+                let layout = self.ui_settings.layout;
+
                 let resize_required = graphics.render(
                     &mut self.gui.as_mut().unwrap(),
                     output_frame,
@@ -82,6 +84,7 @@ where
                     &self.input_settings,
                     &mut self.gui_handler,
                     &mut self.user_state,
+                    layout,
                 );
 
                 if resize_required {
