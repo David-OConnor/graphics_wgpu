@@ -3,6 +3,12 @@ name = "graphics"
 version = "0.3.0"
 authors = ["David O'Connor <the_alchemist@fastmail.com>"]
 edition = "2021"
+keywords = [ "graphics", "engine" ]
+categories = [
+    "rendering",
+    "graphics",
+]
+
 
 [dependencies]
 wgpu = "^22.1.0"
