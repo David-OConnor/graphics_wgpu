@@ -8,6 +8,10 @@ categories = [
     "rendering",
     "graphics",
 ]
+repository = "https://github.com/David-OConnor/graphics_wgpu"
+documentation = "https://docs.rs/graphics"
+readme = "README.md"
+license = "MIT"
 
 
 [dependencies]
@@ -24,5 +28,3 @@ winit = "^0.30.5"
 egui = "^0.29.1"
 egui-wgpu = "^0.29.1"
 egui-winit = "^0.29.1"
-
-
