@@ -1,14 +1,15 @@
 [package]
 name = "graphics"
-version = "0.2.0"
-authors = ["David O'Connor <david.alan.oconnor@gmail.com>"]
+version = "0.3.0"
+authors = ["David O'Connor <the_alchemist@fastmail.com>"]
 edition = "2021"
 
 [dependencies]
 wgpu = "^22.1.0"
-lin-alg = { package = "lin-alg2", path = "../lin_alg", features = ["computer_graphics"] }
+lin-alg = { package = "lin-alg2", version = "^1.0", features = ["computer_graphics"] }
+#lin-alg = { package = "lin-alg2", path = "../lin_alg", features = ["computer_graphics"] }
 
-pollster = "^0.3.0"  # For 2 WGPU init fns that use async.
+pollster = "^0.4.0"  # For 2 WGPU init fns that use async.
 
 image = "^0.25.2" # For loading textures
 obj = "^0.10.2"  # For loading OBJ meshes.

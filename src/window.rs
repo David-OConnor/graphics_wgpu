@@ -8,17 +8,10 @@ use winit::{
     application::ApplicationHandler,
     event::{DeviceEvent, DeviceId, WindowEvent},
     event_loop::ActiveEventLoop,
-    window::{Icon, Window, WindowAttributes, WindowId},
+    window::{Icon, WindowAttributes, WindowId},
 };
 
-use crate::{
-    system::{process_engine_updates, State},
-    EngineUpdates, Scene,
-};
-
-const WINDOW_TITLE_INIT: &str = "Graphics";
-const WINDOW_SIZE_X_INIT: f32 = 900.0;
-const WINDOW_SIZE_Y_INIT: f32 = 600.0;
+use crate::{system::{process_engine_updates, State}, EngineUpdates, Scene, UiLayout};
 
 fn load_icon(path: &Path) -> Result<Icon, ImageError> {
     let (icon_rgba, icon_width, icon_height) = {
@@ -121,10 +114,10 @@ where
         };
 
         let attributes = WindowAttributes::default()
-            .with_title(WINDOW_TITLE_INIT)
+            .with_title(&self.scene.window_title)
             .with_inner_size(winit::dpi::LogicalSize::new(
-                WINDOW_SIZE_X_INIT,
-                WINDOW_SIZE_Y_INIT,
+                self.scene.window_size.0,
+                self.scene.window_size.1,
             ))
             .with_window_icon(icon);
 
@@ -162,7 +155,13 @@ where
                 self.graphics.as_ref().unwrap().window.request_redraw();
             }
             WindowEvent::CursorMoved { position, .. } => {
-                if position.x < gui.size as f64 {
+                let mouse_in_gui = match self.ui_settings.layout {
+                    UiLayout::Left => position.x < gui.size as f64,
+                    UiLayout::Right => position.x > window.inner_size().width as f64 - gui.size as f64,
+                    UiLayout::Top => position.y < gui.size as f64,
+                    UiLayout::Bottom => position.y >  window.inner_size().height as f64 - gui.size as f64,
+                };
+                if mouse_in_gui {
                     gui.mouse_in_gui = true;
 
                     // We reset the inputs, since otherwise a held key that
