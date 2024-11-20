@@ -2,6 +2,7 @@
 name = "graphics"
 version = "0.3.0"
 authors = ["David O'Connor <the_alchemist@fastmail.com>"]
+description = "A simple 3D graphics engine with integrated GUI"
 edition = "2021"
 keywords = [ "graphics", "engine" ]
 categories = [
