@@ -164,6 +164,7 @@ impl GraphicsState {
     pub(crate) fn handle_input(&mut self, event: DeviceEvent, input_settings: &InputSettings) {
         match input_settings.initial_controls {
             ControlScheme::FreeCamera => input::add_input_cmd(event, &mut self.inputs_commanded),
+            // todo: Handle the others.
             _ => (),
         }
     }

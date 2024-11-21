@@ -4,7 +4,7 @@ A 3D rendering engine for rust programs, with GUI integration
 [![Crate](https://img.shields.io/crates/v/graphics.svg)](https://crates.io/crates/graphics)
 [![Docs](https://docs.rs/graphics/badge.svg)](https://docs.rs/graphics)
 
-A minimal graphics engine for rust programs. It's a framework for building PC applications that have 3D graphics, and an
+It's a framework for building PC applications that have 3D graphics, and an
 EGUI user interface. It uses the WGPU toolkit, and Vulkan backend. It works on Windows, Linux, and Mac, but does not
 support web.
 
@@ -13,10 +13,10 @@ This is intended as a personal tool for use in various projects, including wave-
 It currently does not include practical documentation or usage examples.
 
 It includes built in FPS-style (Amplified for 6 DOF) camera controls. (WSAD + Space for up, C for down, Q and E for roll.
-Mouse to look). This can be overridden by the application with arbitrary controls. (See the `event_handler` parameter to
+Mouse for pitch and yaw). This can be overridden by the application with arbitrary controls. (See the `event_handler` parameter to
 `graphics::run()`)
 
-Example boilerplate below. Calling `render(state)` starts an event loop. This currently performs no actions from (mouse, keyboard etc) events and each frame; actions are driven from the UI, and from the engine's built-in control scheme for moving the camera.
+Example boilerplate below. Calling `render(state)` starts an event loop. The application can interact with the engine through the `_handler` callbacks; each frame, each hardware event, or through the GUI. Each of these return an `EngineUpdates` struct, which determines if entities, meshes, lighting, or the camera needs to be refreshed.
 
 ```rust
 //! This module integrations this application with the graphics engine.
@@ -46,6 +46,7 @@ pub const BODY_SPHERE_SIZE: f32 = 0.1;
 pub const BODY_SHINYNESS: f32 = 2.;
 pub const BODY_COLOR: Color = (0., 1.0, 0.5);
 
+/// This runs whenever an event (e.g. keyboard, mouse etc) occurs, and provides information on the event.
 fn event_handler(
     _state: &mut State,
     _event: DeviceEvent,
@@ -55,7 +56,7 @@ fn event_handler(
     EngineUpdates::default()
 }
 
-/// This runs each frame. Currently, no updates.
+/// This runs each frame.
 fn render_handler(_state: &mut State, _scene: &mut Scene, _dt: f32) -> EngineUpdates {
     EngineUpdates::default()
 }

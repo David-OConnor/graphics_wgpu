@@ -214,17 +214,19 @@ where
 /// This is the entry point to the renderer. It's called by the application to initialize the event
 /// loop. It maintains ownership of the user state, and can be interacted with through the `_handler`
 /// callback functions.
+///
+/// `user_state` is arbitrary application state, to maintain ownership of.
+/// `render_handler` allows application code to run each frame.
+/// `event_handler` allows application code to handle device events, such as user input.
+/// `gui_handler` is where the EGUI code is written to describe the UI.
 pub fn run<T: 'static, FRender, FEvent, FGui>(
-    /// This is arbitrary application state, to maintain ownership of.
+
     user_state: T,
     scene: Scene,
     input_settings: InputSettings,
     ui_settings: UiSettings,
-    /// This allows application code to run each frame.
     render_handler: FRender,
-    /// This allows application code to handle device events, such as user input.
     event_handler: FEvent,
-    /// This is where the EGUI code is written to describe the UI.
     gui_handler: FGui,
 ) where
     FRender: FnMut(&mut T, &mut Scene, f32) -> EngineUpdates + 'static,

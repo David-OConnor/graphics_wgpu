@@ -2,9 +2,9 @@
 name = "graphics"
 version = "0.3.0"
 authors = ["David O'Connor <the_alchemist@fastmail.com>"]
-description = "A simple 3D graphics engine with integrated GUI"
+description = "A 3D rendering engine for rust programs, with GUI integration"
 edition = "2021"
-keywords = [ "graphics", "engine" ]
+keywords = ["graphics", "engine", "gui", "render", "wgpu"]
 categories = [
     "rendering",
     "graphics",
