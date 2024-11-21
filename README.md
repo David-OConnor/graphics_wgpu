@@ -1,7 +1,7 @@
 # WGPU Graphics
 
-[![Crate](https://img.shields.io/crates/v/lin-alg2.svg)](https://crates.io/crates/graphics)
-[![Docs](https://docs.rs/lin-alg2/badge.svg)](https://docs.rs/graphics)
+[![Crate](https://img.shields.io/crates/v/graphics.svg)](https://crates.io/crates/graphics)
+[![Docs](https://docs.rs/graphics/badge.svg)](https://docs.rs/graphics)
 
 A minimal graphics engine for rust programs. It's a framework for building PC applications that have 3D graphics, and an
 EGUI user interface. It uses the WGPU toolkit, and Vulkan backend. It works on Windows, Linux, and Mac, but does not
