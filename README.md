@@ -1,4 +1,5 @@
-# WGPU Graphics
+# Graphics
+A 3D rendering engine for rust programs, with GUI integration 
 
 [![Crate](https://img.shields.io/crates/v/graphics.svg)](https://crates.io/crates/graphics)
 [![Docs](https://docs.rs/graphics/badge.svg)](https://docs.rs/graphics)
@@ -7,8 +8,7 @@ A minimal graphics engine for rust programs. It's a framework for building PC ap
 EGUI user interface. It uses the WGPU toolkit, and Vulkan backend. It works on Windows, Linux, and Mac, but does not
 support web.
 
-This is intended as a personal tool for use in various projects, including wave-function viewing, n-body simulations, and a 
-protein viewer. I'm publishing this in case others find use in it directly, or in the source code as an example.
+This is intended as a personal tool for use in various projects, including wave-function viewing, n-body simulations, and a protein viewer. I'm publishing this in case others find use in it directly, or in the source code as an example.
 
 It currently does not include practical documentation or usage examples.
 
@@ -16,8 +16,7 @@ It includes built in FPS-style (Amplified for 6 DOF) camera controls. (WSAD + Sp
 Mouse to look). This can be overridden by the application with arbitrary controls. (See the `event_handler` parameter to
 `graphics::run()`)
 
-Example boilerplate below. Calling `render(state)` starts an event loop. This currently performs no actions from (mouse, keyboard etc)
-events and each frame; actions are driven from the UI, and from the engine's built-in control scheme for moving the camera.
+Example boilerplate below. Calling `render(state)` starts an event loop. This currently performs no actions from (mouse, keyboard etc) events and each frame; actions are driven from the UI, and from the engine's built-in control scheme for moving the camera.
 
 ```rust
 //! This module integrations this application with the graphics engine.
@@ -151,6 +150,8 @@ pub fn render(state: State) {
         )
     }
 
+    // This starts the main event loop; program intereactions from here on out will 
+    // be handled by one of the `_handler` callbacks defined above.
     graphics::run(
         state,
         scene,
@@ -160,5 +161,11 @@ pub fn render(state: State) {
         event_handler,
         ui_handler,
     );
+}
+
+struct State {} // Set this up however you'd like.
+
+fn main() {
+    render(State {});
 }
 ```

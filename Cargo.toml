@@ -9,7 +9,7 @@ categories = [
     "rendering",
     "graphics",
 ]
-repository = "https://github.com/David-OConnor/graphics_wgpu"
+repository = "https://github.com/David-OConnor/graphics"
 documentation = "https://docs.rs/graphics"
 readme = "README.md"
 license = "MIT"

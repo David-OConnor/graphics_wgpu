@@ -11,7 +11,10 @@ use winit::{
     window::{Icon, WindowAttributes, WindowId},
 };
 
-use crate::{system::{process_engine_updates, State}, EngineUpdates, Scene, UiLayout};
+use crate::{
+    system::{process_engine_updates, State},
+    EngineUpdates, Scene, UiLayout,
+};
 
 fn load_icon(path: &Path) -> Result<Icon, ImageError> {
     let (icon_rgba, icon_width, icon_height) = {
@@ -157,9 +160,13 @@ where
             WindowEvent::CursorMoved { position, .. } => {
                 let mouse_in_gui = match self.ui_settings.layout {
                     UiLayout::Left => position.x < gui.size as f64,
-                    UiLayout::Right => position.x > window.inner_size().width as f64 - gui.size as f64,
+                    UiLayout::Right => {
+                        position.x > window.inner_size().width as f64 - gui.size as f64
+                    }
                     UiLayout::Top => position.y < gui.size as f64,
-                    UiLayout::Bottom => position.y >  window.inner_size().height as f64 - gui.size as f64,
+                    UiLayout::Bottom => {
+                        position.y > window.inner_size().height as f64 - gui.size as f64
+                    }
                 };
                 if mouse_in_gui {
                     gui.mouse_in_gui = true;
