@@ -295,6 +295,8 @@ impl GraphicsState {
             UiLayout::Bottom => (0., 0., width as f32, height as f32 - ui_size),
         };
 
+        // println!("X: {x}, Y: {y} w: {eff_width} h: {eff_height} UI size: {ui_size}");
+
         let mut rpass = encoder.begin_render_pass(&RenderPassDescriptor {
             label: Some("Render pass"),
             color_attachments: &[Some(wgpu::RenderPassColorAttachment {
@@ -454,6 +456,9 @@ impl GraphicsState {
             // println!("\nA: {:?}", start_time.elapsed().as_micros());
             // }
         }
+
+        // let queue_len = queue.length;
+        // println!("QUEUE: {:?}", queue_len);
 
         // todo: This queue line is likely the problem! Is your queue just getting bigger??
         queue.submit(Some(encoder.finish()));

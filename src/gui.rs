@@ -84,10 +84,15 @@ impl GuiState {
         let full_output = self.egui_state.egui_ctx().run(raw_input, |ui| {
             *updates_gui = gui_handler(user_state, self.egui_state.egui_ctx(), &mut graphics.scene);
 
-            let new_size = match layout {
+            let mut new_size = match layout {
                 UiLayout::Left | UiLayout::Right => ui.used_size().x,
                 _ => ui.used_size().y,
             };
+
+            // This error doesn't make much sense, but seems to occur when there is no GUI.
+            if new_size == f32::NEG_INFINITY {
+                new_size = 0.;
+            }
 
             if self.size != new_size {
                 resize_required = true;
