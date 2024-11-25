@@ -205,8 +205,8 @@ where
 
             // todo: Not working; still need to change the camera from an input for the new aspect ratio
             // todo to take effect.
-            sys.queue
-                .write_buffer(&graphics.camera_buf, 0, &self.scene.camera.to_bytes());
+            // sys.queue
+            //     .write_buffer(&graphics.camera_buf, 0, &self.scene.camera.to_bytes());
         }
     }
 }
@@ -235,8 +235,6 @@ pub fn run<T: 'static, FRender, FEvent, FGui>(
 {
     let (_frame_count, _accum_time) = (0, 0.0);
 
-    println!("Settings: {:?}", ui_settings);
-
     let mut state: State<T, FRender, FEvent, FGui> = State::new(
         scene,
         input_settings,
@@ -255,7 +253,7 @@ pub fn run<T: 'static, FRender, FEvent, FGui>(
 
 /// Quarantine for the Async part of the API
 async fn setup_async(
-    instance: &wgpu::Instance,
+    instance: &Instance,
     surface: &Surface<'static>,
 ) -> (Adapter, Device, Queue) {
     // The adapter is a handle to our actual graphics card. You can use this to get

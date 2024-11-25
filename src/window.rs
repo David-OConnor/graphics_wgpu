@@ -136,6 +136,7 @@ where
         event: WindowEvent,
     ) {
         if self.render.is_none() || self.graphics.is_none() {
+            // This may occur prior to init.
             return;
         }
 
