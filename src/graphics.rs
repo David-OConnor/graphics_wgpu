@@ -236,6 +236,7 @@ impl GraphicsState {
                     orientation: entity.orientation,
                     scale: entity.scale,
                     color: Vec3::new(entity.color.0, entity.color.1, entity.color.2),
+                    opacity: entity.opacity,
                     shinyness: entity.shinyness,
                 });
                 instance_count_this_mesh += 1;

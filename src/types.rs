@@ -8,6 +8,7 @@ use crate::{camera::Camera, lighting::Lighting};
 pub const F32_SIZE: usize = 4;
 
 pub const VEC3_SIZE: usize = 3 * F32_SIZE;
+pub const VEC4_SIZE: usize = 4 * F32_SIZE;
 pub const VEC3_UNIFORM_SIZE: usize = 4 * F32_SIZE;
 pub const MAT4_SIZE: usize = 16 * F32_SIZE;
 pub const MAT3_SIZE: usize = 9 * F32_SIZE;
@@ -15,7 +16,7 @@ pub const MAT3_SIZE: usize = 9 * F32_SIZE;
 pub const VERTEX_SIZE: usize = 14 * F32_SIZE;
 // Note that position, orientation, and scale are combined into a single 4x4 transformation
 // matrix. Note that unlike uniforms, we don't need alignment padding, and can use Vec3 directly.
-pub const INSTANCE_SIZE: usize = MAT4_SIZE + MAT3_SIZE + VEC3_SIZE + F32_SIZE;
+pub const INSTANCE_SIZE: usize = MAT4_SIZE + MAT3_SIZE + VEC4_SIZE + F32_SIZE;
 
 #[derive(Clone, Copy, Debug)]
 /// Example attributes: https://github.com/bevyengine/bevy/blob/main/crates/bevy_render/src/mesh/mesh/mod.rs#L56
@@ -125,6 +126,7 @@ pub struct Instance {
     pub orientation: Quaternion,
     pub scale: f32,
     pub color: Vec3,
+    pub opacity: f32,
     pub shinyness: f32,
 }
 
@@ -195,7 +197,7 @@ impl Instance {
                 },
                 // Shinyness
                 wgpu::VertexAttribute {
-                    offset: (MAT4_SIZE + MAT3_SIZE + VEC3_SIZE) as wgpu::BufferAddress,
+                    offset: (MAT4_SIZE + MAT3_SIZE + VEC4_SIZE) as wgpu::BufferAddress,
                     shader_location: 13,
                     format: wgpu::VertexFormat::Float32,
                 },
@@ -218,10 +220,11 @@ impl Instance {
         result[MAT4_SIZE..MAT4_SIZE + MAT3_SIZE].clone_from_slice(&normal_mat.to_bytes());
 
         // todo: fn to convert Vec3 to byte array?
-        let mut color_buf = [0; VEC3_SIZE];
+        let mut color_buf = [0; VEC4_SIZE];
         color_buf[0..F32_SIZE].clone_from_slice(&self.color.x.to_ne_bytes());
         color_buf[F32_SIZE..2 * F32_SIZE].clone_from_slice(&self.color.y.to_ne_bytes());
         color_buf[2 * F32_SIZE..3 * F32_SIZE].clone_from_slice(&self.color.z.to_ne_bytes());
+        color_buf[3 * F32_SIZE..4 * F32_SIZE].clone_from_slice(&self.opacity.to_ne_bytes());
 
         result[MAT4_SIZE + MAT3_SIZE..INSTANCE_SIZE - F32_SIZE].clone_from_slice(&color_buf);
         // todo
@@ -256,6 +259,7 @@ pub struct Entity {
     pub orientation: Quaternion,
     pub scale: f32, // 1.0 is original.
     pub color: (f32, f32, f32),
+    pub opacity: f32,
     pub shinyness: f32, // 0 to 1.
 }
 
@@ -274,6 +278,7 @@ impl Entity {
             orientation,
             scale,
             color,
+            opacity: 1.,
             shinyness,
         }
     }

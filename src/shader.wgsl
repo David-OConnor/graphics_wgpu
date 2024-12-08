@@ -47,7 +47,8 @@ struct InstanceIn {
     @location(9) normal_matrix_0: vec3<f32>,
     @location(10) normal_matrix_1: vec3<f32>,
     @location(11) normal_matrix_2: vec3<f32>,
-    @location(12) color: vec3<f32>, // Len 3: No alpha.
+//    @location(12) color: vec3<f32>, // Len 3: No alpha.
+    @location(12) color: vec4<f32>, // Len 4; includes alpha.
     @location(13) shinyness: f32,
 }
 
@@ -125,7 +126,8 @@ fn vs_main(
 //    result.tangent_light_position = tangent_matrix * light.position;
     result.normal = world_normal;
 
-    result.color = vec4<f32>(instance.color, 1.);
+//    result.color = vec4<f32>(instance.color, 1.);
+    result.color = instance.color;
     result.shinyness = instance.shinyness;
     result.world_posit = world_posit.xyz;
 
