@@ -203,8 +203,10 @@ fn fs_main(vertex: VertexOut) -> @location(0) vec4<f32> {
 //    var result = (ambient + diffuse + specular) * vertex.color;
 
     // Process alpha separately.
-    var lightingColor = ambient.rgb + diffuse.rgb + specular.rgb;
-    var result = vec4<f32>(lightingColor * vertex.color.rgb, vertex.color.a);
+    var result = vec4<f32>(
+        (ambient.rgb + diffuse.rgb + specular.rgb) * vertex.color.rgb,
+        vertex.color.a
+    );
 
     return result;
 }

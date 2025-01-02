@@ -19,7 +19,7 @@ use wgpu::{
     BindGroup, BindGroupLayout, BindingType, Buffer, BufferBindingType, BufferUsages,
     CommandEncoder, CommandEncoderDescriptor, Device, FragmentState, Queue, RenderPass,
     RenderPassDepthStencilAttachment, RenderPassDescriptor, RenderPipeline, ShaderStages, StoreOp,
-    Surface, SurfaceConfiguration, SurfaceTexture, TextureFormat, TextureView, VertexState,
+    SurfaceConfiguration, SurfaceTexture,  TextureView, VertexState,
 };
 use winit::{event::DeviceEvent, window::Window};
 
@@ -488,15 +488,37 @@ fn create_render_pipeline(
         layout: Some(layout),
         vertex: VertexState {
             module: &shader,
-            entry_point: "vs_main",
+            entry_point: Some("vs_main"),
             compilation_options: Default::default(),
             buffers: &[Vertex::desc(), Instance::desc()],
         },
+        // fragment: Some(FragmentState {
+        //     module: &shader,
+        //     entry_point: "fs_main",
+        //     compilation_options: Default::default(),
+        //     targets: &[Some(config.format.into())],
+        // }),
         fragment: Some(FragmentState {
             module: &shader,
-            entry_point: "fs_main",
+            entry_point: Some("fs_main"),
             compilation_options: Default::default(),
-            targets: &[Some(config.format.into())],
+            // This configures with alpha blending. (?)
+            targets: &[Some(wgpu::ColorTargetState {
+                format: config.format, // Ensure this is a format with alpha (e.g., `wgpu::TextureFormat::Rgba8Unorm`)
+                blend: Some(wgpu::BlendState {
+                    color: wgpu::BlendComponent {
+                        src_factor: wgpu::BlendFactor::SrcAlpha,
+                        dst_factor: wgpu::BlendFactor::OneMinusSrcAlpha,
+                        operation: wgpu::BlendOperation::Add,
+                    },
+                    alpha: wgpu::BlendComponent {
+                        src_factor: wgpu::BlendFactor::One,
+                        dst_factor: wgpu::BlendFactor::OneMinusSrcAlpha,
+                        operation: wgpu::BlendOperation::Add,
+                    },
+                }),
+                write_mask: wgpu::ColorWrites::ALL,
+            })],
         }),
         primitive: wgpu::PrimitiveState {
             topology: wgpu::PrimitiveTopology::TriangleList,

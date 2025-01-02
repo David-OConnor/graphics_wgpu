@@ -1,6 +1,6 @@
 [package]
 name = "graphics"
-version = "0.3.0"
+version = "0.3.1"
 authors = ["David O'Connor <the_alchemist@fastmail.com>"]
 description = "A 3D rendering engine for rust programs, with GUI integration"
 edition = "2021"
@@ -17,8 +17,8 @@ license = "MIT"
 
 
 [dependencies]
-wgpu = "^22.1.0"
-lin_alg = { version = "^1.0", features = ["computer_graphics"] }
+wgpu = "^23.0.1"
+lin_alg = { version = "^1.0.1", features = ["computer_graphics"] }
 #lin_alg = { path = "../lin_alg", features = ["computer_graphics"] }
 
 pollster = "^0.4.0"  # For 2 WGPU init fns that use async.
@@ -27,6 +27,6 @@ image = "^0.25.2" # For loading textures
 obj = "^0.10.2"  # For loading OBJ meshes.
 
 winit = "^0.30.5"
-egui = "^0.29.1"
-egui-wgpu = "^0.29.1"
-egui-winit = "^0.29.1"
+egui = "^0.30.0"
+egui-wgpu = "^0.30.0"
+egui-winit = "^0.30.0"

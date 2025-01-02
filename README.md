@@ -4,11 +4,13 @@ A 3D rendering engine for rust programs, with GUI integration
 [![Crate](https://img.shields.io/crates/v/graphics.svg)](https://crates.io/crates/graphics)
 [![Docs](https://docs.rs/graphics/badge.svg)](https://docs.rs/graphics)
 
-It's a framework for building PC applications that have 3D graphics, and an
+This library is a framework for building PC applications that have 3D graphics, and an
 EGUI user interface. It uses the WGPU toolkit, and Vulkan backend. It works on Windows, Linux, and Mac, but does not
 support web.
 
-This is intended as a personal tool for use in various projects, including wave-function viewing, n-body simulations, and a protein viewer. I'm publishing this in case others find use in it directly, or in the source code as an example.
+This is intended as a general-purpose 3D visualization tool. Example use cases including wave-function viewing, n-body simulations, and protein structure visualization. It's also been used to visualize UAS attitude in preflight software.
+
+![WF lab screenshot](screenshots/psi_lab_2024.png)
 
 It currently does not include practical documentation or usage examples.
 
